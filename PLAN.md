@@ -72,10 +72,12 @@ Sacred Rule 3: this ships before the pretty screens, not after.
 
 ## Milestone 3 — The screens
 
-- [x] **9. Palette pinned** — done 2026-08-30, his own four hexes, recorded in `docs/ui-guidelines.md`
-  `start C:/Users/USER/.claude/skills/design-studio/tools/palette-picker.html`, pick one of the 28.
-  Sacred Rule 9: pinned by him, and not "improved" later.
-  **Verify:** the chosen palette written into `docs/ui-guidelines.md`.
+- [x] **9. Palette pinned** — done 2026-08-30
+  Mutalib brought his own four hexes from a reference image rather than using the picker:
+  `#A8DCE7` `#101422` `#FFFFFF` `#272B3B`. Gap roles grown from `palette.py --seed "#A8DCE7"
+  --dark`. Sacred Rule 9: pinned by him, canon, not "improved" later.
+  **Verified:** full token set, measured contrast for every information-carrying pair, and the two
+  rules that fall out of it, written into `docs/ui-guidelines.md`.
 
 - [ ] **10. design-studio pass, then Home screen**
   Studio tier: house-taste, 2–3 galleries, `/taste` on the best one, direction line. Then build:
