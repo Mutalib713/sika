@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug builds only. The manifest merger adds this receiver to the debug variant; it is
+  absent from release entirely, along with the class itself.
+
+  It exists because SMS_RECEIVED is a protected broadcast that adb cannot send, and this
+  machine has no emulator. See DebugSmsReceiver for the full reasoning.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!--
+          ⚠ Exported with no permission, and lint is right to object in general — an
+          unprotected exported receiver is something any app on the phone can trigger.
+
+          Suppressed on this element only, never project-wide, for two reasons:
+
+          1. It has to be reachable from `adb shell`, which runs as uid 2000 and holds no
+             special permission. A permission requirement here would make it unusable for
+             the only purpose it has.
+          2. It does not exist in a release build. This file lives in src/debug, so neither
+             the receiver nor its class is in the shipped APK.
+
+          If Sika is ever published, check this is still true rather than trusting the
+          comment.
+        -->
+        <receiver
+            android:name=".sms.DebugSmsReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver" />
+    </application>
+
+</manifest>

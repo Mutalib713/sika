@@ -6,10 +6,8 @@ import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.data.toEntity
-import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
-import gh.mutalib.sika.parser.Shape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -55,7 +53,7 @@ object Sweeper {
                     // Sacred Rule 7: held, not dropped. It goes in with parsedOk = false so
                     // it surfaces in the review queue rather than vanishing. There is no
                     // txId to dedupe on, so the message body itself is the key.
-                    rows += unparsedRow(sms, result.reason)
+                    rows += SmsIngest.unparsedRow(sms.body, sms.receivedAt, result.reason)
                 }
                 // OTPs, fraud warnings, bundle adverts. Counted so the sweep can say how
                 // much noise it discarded, but never stored — a review queue full of
@@ -110,30 +108,6 @@ object Sweeper {
         }
     }
 
-    /**
-     * A placeholder row for a message the parser refused, so it appears in the review queue.
-     *
-     * Every money field is zero and [TransactionEntity.parsedOk] is false, so it is excluded
-     * from every total, every report and the reconciliation walk. It exists to be looked at,
-     * not to be counted.
-     *
-     * The synthetic id is derived from the message body, so re-sweeping the same unreadable
-     * message does not pile up duplicates of it either.
-     */
-    private fun unparsedRow(sms: RawSms, reason: String) = TransactionEntity(
-        txId = "unparsed:${sms.receivedAt}:${sms.body.hashCode()}",
-        occurredAt = sms.receivedAt,
-        direction = Direction.OUT,
-        shape = Shape.PAYMENT_MADE,
-        amount = 0,
-        fee = 0,
-        tax = null,
-        counterparty = reason,
-        reference = null,
-        balanceAfter = null,
-        rawBody = sms.body,
-        parsedOk = false,
-    )
 }
 
 /**

@@ -13,6 +13,9 @@ import android.provider.Telephony
  * nothing else — no bodies — because the app has to find out what MoMo's sender ID is
  * before it can filter on it.
  */
+/** MTN Ghana's transaction sender ID. Measured from the real inbox, not guessed. */
+const val MOMO_SENDER = "MobileMoney"
+
 object SmsInbox {
 
     /**
@@ -27,7 +30,15 @@ object SmsInbox {
      * Narrow on purpose. Sacred Rule 2 says only MoMo messages are ever read, and every
      * extra pattern here is another slice of the inbox loaded for no reason.
      */
-    private val MOMO_PATTERNS = listOf("MobileMoney")
+    private val MOMO_PATTERNS = listOf(MOMO_SENDER)
+
+    /**
+     * The single gate both routes go through. [SmsReceiver] calls it on every incoming text,
+     * so this is where Sacred Rule 2 is actually enforced for live messages — anything that
+     * fails here has its body left unread.
+     */
+    fun isMomoSender(address: String): Boolean =
+        MOMO_PATTERNS.any { it.equals(address, ignoreCase = true) }
 
     /**
      * Every sender in the inbox with a message count — **addresses only, no bodies.**

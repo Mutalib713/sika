@@ -1,0 +1,73 @@
+package gh.mutalib.sika.sms
+
+import android.content.Context
+import android.util.Log
+import gh.mutalib.sika.TAG
+import gh.mutalib.sika.data.SikaDatabase
+import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.data.toEntity
+import gh.mutalib.sika.parser.Direction
+import gh.mutalib.sika.parser.MomoParser
+import gh.mutalib.sika.parser.ParseResult
+import gh.mutalib.sika.parser.Shape
+
+/**
+ * One message in, one row (or nothing) out.
+ *
+ * **Both routes share this classification on purpose.** The live receiver calls [ingest]
+ * per message; [Sweeper] batches its inserts for speed but builds rows through the same
+ * parser and the same [unparsedRow]. They must not drift: a shape the sweep understands and
+ * the receiver does not would mean a transaction that only appears once you open the app,
+ * which is the kind of difference nobody notices until the totals disagree.
+ */
+object SmsIngest {
+
+    /** @return true if this message became a new row. */
+    suspend fun ingest(context: Context, body: String, receivedAt: Long, source: String): Boolean {
+        val dao = SikaDatabase.get(context).transactions()
+
+        val row = when (val result = MomoParser.parse(body)) {
+            is ParseResult.Parsed -> result.transaction.toEntity(receivedAt, body)
+            // Sacred Rule 7: held for review, never guessed at.
+            is ParseResult.Unrecognised -> unparsedRow(body, receivedAt, result.reason)
+            // OTPs, adverts, failed payments. Not money — dropped, not queued.
+            is ParseResult.NotATransaction -> {
+                Log.i(TAG, "$source: ignored — ${result.reason}")
+                return false
+            }
+        }
+
+        val id = dao.insert(row)
+        val isNew = id != -1L
+        Log.i(
+            TAG,
+            "$source: ${if (isNew) "recorded" else "already had"} ${row.shape} " +
+                "${row.direction} ${row.amount}p to '${row.counterparty}' txId=${row.txId}",
+        )
+        return isNew
+    }
+
+    /**
+     * A placeholder row for a message the parser refused, so it appears in the review queue.
+     *
+     * Every money field is zero and `parsedOk` is false, so it is excluded from every total,
+     * every report and the reconciliation walk. It exists to be looked at, not counted.
+     *
+     * The synthetic id comes from the body, so re-reading the same unreadable message —
+     * which the sweep does on every launch — does not pile up duplicates of it either.
+     */
+    fun unparsedRow(body: String, receivedAt: Long, reason: String) = TransactionEntity(
+        txId = "unparsed:$receivedAt:${body.hashCode()}",
+        occurredAt = receivedAt,
+        direction = Direction.OUT,
+        shape = Shape.PAYMENT_MADE,
+        amount = 0,
+        fee = 0,
+        tax = null,
+        counterparty = reason,
+        reference = null,
+        balanceAfter = null,
+        rawBody = body,
+        parsedOk = false,
+    )
+}

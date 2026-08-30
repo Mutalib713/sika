@@ -76,7 +76,20 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   needs a manual uninstall on the phone first.
 - **No emulator.** SMS behaviour must be verified on the real Pixel with real messages. An emulator
   can fake an SMS, but it cannot reproduce doze, battery optimisation, or MTN's real wording.
-- `adb shell am broadcast` can inject a fake SMS for testing without waiting for a real transaction.
+- ⚠ **`adb shell am broadcast` CANNOT inject a real SMS.** `SMS_RECEIVED` is a protected
+  broadcast — `SecurityException: not allowed to send broadcast … from uid=2000`. There is no
+  emulator here either, so `adb emu sms send` is unavailable. Use the debug-only injector, which
+  runs the identical ingestion path:
+  ```bash
+  adb shell "am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS -n gh.mutalib.sika/.sms.DebugSmsReceiver --es body 'Payment for GHS1.00 to TEST  .Current Balance: GHS 99.00. Transaction Id: 90000000001. Fee charged: GHS0.00,Tax Charged 0.'"
+  ```
+  ⚠ **Quote the whole `am` command for the DEVICE's shell.** Passing `--es body "..."` with only
+  local quotes lets the words split, and the broadcast silently takes the second word as the
+  package (`pkg=for`) instead of failing.
+- ⚠ **Never pipe a long-running gradle command into `Select-Object -First N` in PowerShell.**
+  `-First` closes the pipeline as soon as it has enough lines, which kills `gradlew` mid-run and
+  reports exit 255 on a build that was passing. Use `Select-String` alone, or `Select-Object -Last`.
+  This produced two false "test run failed" results on 2026-08-30.
 
 ## Gotchas specific to this app
 

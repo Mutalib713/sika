@@ -79,15 +79,18 @@ private sealed interface State {
 private fun SweepScreen(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val granted = remember {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) ==
-            PackageManager.PERMISSION_GRANTED
+        SMS_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
     }
     var state by remember {
         mutableStateOf<State>(if (granted) State.Sweeping else State.NeedsPermission)
     }
 
-    val ask = rememberLauncher { allowed ->
-        state = if (allowed) State.Sweeping else State.Denied
+    val ask = rememberLauncher { results ->
+        // Both or neither. READ_SMS without RECEIVE_SMS gives a ledger that only updates
+        // when the app is opened; RECEIVE_SMS without READ_SMS gives no history at all.
+        state = if (results.values.all { it }) State.Sweeping else State.Denied
     }
 
     LaunchedEffect(state) {
@@ -102,7 +105,7 @@ private fun SweepScreen(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when (val s = state) {
-            State.NeedsPermission -> Ask(onAsk = { ask(Manifest.permission.READ_SMS) })
+            State.NeedsPermission -> Ask(onAsk = { ask(SMS_PERMISSIONS) })
             State.Denied -> Blocked()
             State.Sweeping -> {
                 CircularProgressIndicator(color = Accent)
@@ -152,13 +155,22 @@ private fun Report(r: SweepReport) {
 
 // ------------------------------------------------------------------ small shared pieces
 
+/**
+ * READ_SMS reads the history and powers the sweep; RECEIVE_SMS wakes the app when a message
+ * arrives. Separate runtime permissions despite sharing a group, and Sika needs both.
+ */
+private val SMS_PERMISSIONS = arrayOf(
+    Manifest.permission.READ_SMS,
+    Manifest.permission.RECEIVE_SMS,
+)
+
 @Composable
-private fun rememberLauncher(onResult: (Boolean) -> Unit): (String) -> Unit {
+private fun rememberLauncher(onResult: (Map<String, Boolean>) -> Unit): (Array<String>) -> Unit {
     val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
+        ActivityResultContracts.RequestMultiplePermissions(),
         onResult,
     )
-    return { permission -> launcher.launch(permission) }
+    return { permissions -> launcher.launch(permissions) }
 }
 
 @Composable

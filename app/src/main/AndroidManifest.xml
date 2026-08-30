@@ -32,6 +32,15 @@
     <uses-permission android:name="android.permission.READ_SMS" />
 
     <!--
+      RECEIVE_SMS: the live route (PLAN task 6). This is what lets a transaction be recorded
+      the moment MoMo texts, without the app being opened.
+
+      A separate permission from READ_SMS despite sharing a group — one reads history, the
+      other wakes the app on arrival. Both are requested at runtime.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+    <!--
       required="true", not the required="false" lint suggests.
 
       Lint asks for this tag so an app does not accidentally exclude tablets and ChromeOS,
@@ -72,6 +81,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          The live route. Declared here rather than registered in code, which is what lets
+          Android start the app for a message when nothing of Sika is running.
+
+          android:permission restricts who may deliver this broadcast to holders of
+          BROADCAST_SMS — which in practice is the system alone. Without it, any app on the
+          phone could fabricate a transaction and Sika would record it as real money.
+
+          exported="true" is required: the sender is the OS, not this app.
+
+          Note on implicit broadcasts: Android 8 stopped most of them waking manifest-declared
+          receivers, and this would not work at all if SMS_RECEIVED were not on the
+          exemption list. It is, which is the only reason the design works.
+        -->
+        <receiver
+            android:name=".sms.SmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
