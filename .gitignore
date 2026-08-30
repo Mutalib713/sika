@@ -1,0 +1,40 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+build/
+release/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+out/
+proguard/
+
+# Signing — never commit keys
+*.jks
+*.keystore
+keystore.properties
+
+# Real transaction data — never commit
+*.csv
+/samples/real/
+sika-export-*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+*.swp
+*~
+.vscode/
