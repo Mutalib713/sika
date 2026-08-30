@@ -70,9 +70,14 @@ Explicit exclusions. No session builds these "helpfully."
   none return a transaction history, all lookups are by a reference ID your own code generated,
   `getBalance()` returns the *merchant* float, and production credentials require MTN KYC approval)
 - Statement PDF import — the `*170#` statement is a manual audit in v1, not an app feature
-- Budgets, spending limits, savings goals
+- Budgets, spending limits, savings goals — these belong to Sika App (web), not to the phone
 - Multi-currency — GHS only
-- Cloud sync, accounts, login, any server whatsoever
+- **On-device AI models** (Gemma 3 1B via MediaPipe, Gemini Nano) — evaluated and rejected
+  2026-08-30. AI is the wrong tool for parsing a *known, fixed* format: it is non-deterministic, it
+  cannot be covered by golden tests, it hallucinates digits, a 529 MB model does not fit a
+  ten-second broadcast window, and Gemini Nano needs Tensor G3+ which the Pixel 6 Pro is not.
+  Possible v2 role: a fallback that guesses at *unrecognised* shapes and routes them to the review
+  queue flagged as a guess. Never the primary parser.
 - Play Store publication
 - Debt tracking, bill splitting, recurring transactions
 - Home screen widgets
@@ -82,9 +87,13 @@ Explicit exclusions. No session builds these "helpfully."
 
 Decisions no future session may reopen without Mutalib's explicit say-so.
 
-1. **No server, ever, in v1.** Nothing leaves the phone. No analytics, no crash-reporting SDK.
-   Enforced by the OS, not by discipline: the `INTERNET` permission is deliberately absent from the
-   manifest, so the app *cannot* phone home even by accident.
+1. **Offline-first, always. The local Room database is the source of truth on the phone.**
+   *Amended 2026-08-30 with Mutalib's approval, replacing the original "no server, ever, in v1."*
+   The app parses and writes locally and works completely with no connection. Sync to Supabase is
+   an **additive layer**, shipped only after the parser is proven correct against months of real
+   messages, and it never becomes a dependency — losing the server must never stop the app
+   recording a transaction. No analytics, no crash-reporting SDK, ever. The `INTERNET` permission
+   stays out of the manifest until the sync task begins, and goes in only then.
 2. **Only MoMo messages are ever read.** The app filters to the MoMo sender and ignores every other
    SMS, for any reason, forever.
 3. **Reconciliation ships in v1, not later.** A money app that cannot check its own arithmetic does
@@ -121,9 +130,28 @@ unmaintained SMS plugin, a second language, a bridge back to Kotlin anyway) all 
 | Charts | **Hand-drawn on Compose `Canvas`** | One breakdown bar and one comparison. A charting library is more dependency than it is worth |
 | Build | Gradle / Android Studio, `minSdk 31`, `targetSdk 36` | Pixel 6 Pro shipped on API 31; no reason to support older |
 | Distribution | **Sideloaded APK over adb** | No Play Store, therefore no review, no permissions declaration form, no privacy policy |
-| Backend | **None** | Not cheap — absent |
+| Backend | **None until the sync task** | Local Room database is the source of truth; Supabase is a mirror, added last |
 
-**Cost: GHS 0 per month, permanently. There is no infrastructure to pay for.**
+**Cost: GHS 0 per month for the phone app. Supabase free tier when sync lands.**
+
+### Relationship to Sika App (web)
+
+Path 2, chosen by Mutalib 2026-08-30, sequenced offline-first on my recommendation.
+
+Sika-the-Android-app is the **automatic feed**. Sika App (web) is the **budgeting brain** — budgets,
+envelopes, savings goals, the AI coach, semester mode. The web product's own answer to ingestion was
+*"paste any MoMo SMS and the AI logs it"*, metered at 50 free parses a month and ₵5/month for
+unlimited. The phone does the same job automatically, unlimited, offline, with four regular
+expressions and no model at all. That is the whole reason these two belong together.
+
+**Sequencing is deliberate and not negotiable:** parser → local ledger → proven against months of
+real messages → *then* sync. Building sync, auth and the parser at once means that when a number
+looks wrong, nothing tells you which of the three is lying.
+
+The web app is a **separate project with its own PROFILE.md and its own repo.** The only thing the
+two share is the transaction shape in Section 8 — and since the web code is gone and being rebuilt,
+that shape is now ours to define correctly (`txId` unique, `balanceAfter`, `rawBody`) rather than
+inherited from a schema that had none of them.
 
 ## 8. DATA MODEL
 
