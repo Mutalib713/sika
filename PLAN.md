@@ -72,7 +72,7 @@ Sacred Rule 3: this ships before the pretty screens, not after.
 
 ## Milestone 3 — The screens
 
-- [ ] **9. Palette pinned** *(Mutalib's action, can happen any time before task 10)*
+- [x] **9. Palette pinned** — done 2026-08-30, his own four hexes, recorded in `docs/ui-guidelines.md`
   `start C:/Users/USER/.claude/skills/design-studio/tools/palette-picker.html`, pick one of the 28.
   Sacred Rule 9: pinned by him, and not "improved" later.
   **Verify:** the chosen palette written into `docs/ui-guidelines.md`.
