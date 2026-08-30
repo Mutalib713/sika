@@ -93,6 +93,34 @@ The risky heart. No UI in this milestone at all.
   A second sweep added **0 new rows**. 147 transactions produced 141 rows, so the unique index
   caught **6 genuine duplicates** MTN had sent twice.
 
+- [x] **6. ⚠ Live BroadcastReceiver** — stage 1 done 2026-08-30, stage 2 awaiting a real transaction
+  `SmsReceiver` declared in the manifest for `SMS_RECEIVED`, protected by
+  `android:permission="android.permission.BROADCAST_SMS"` so only the system can deliver it —
+  without that, any app on the phone could fabricate a transaction and Sika would record it as
+  real money. Multipart parts are concatenated, because MoMo alerts run past 160 characters and
+  reading only `parts[0]` would drop the fee, balance and transaction id off the end while still
+  matching a shape. `goAsync()` plus a coroutine keeps the Room write off the main thread's ~10s
+  budget.
+
+  ⚠ **The verification this task specified is impossible.** `SMS_RECEIVED` is a *protected
+  broadcast* — `adb shell am broadcast` is refused with `SecurityException … from uid=2000` — and
+  there is no emulator on this machine. So a **debug-only injector** (`src/debug`, absent from
+  release builds entirely) feeds a body through the identical ingestion path.
+
+  **Stage 1 verified, with the app force-stopped:**
+  ```
+  debug-inject: recorded PAYMENT_FOR OUT 100p to 'TASK SIX TEST' txId=90000000001
+  debug-inject: already had PAYMENT_FOR OUT 100p to 'TASK SIX TEST' txId=90000000001
+  ```
+  The app was closed, Android started it for the broadcast, and the second injection was refused
+  by the dedupe. Test row cleared afterwards; ledger rebuilt to 141 rows from real messages only.
+  `check: PASS`, 20/20 golden tests, 9/9 instrumented.
+
+  - [ ] **Stage 2 — the live test.** Buy GHS 1 of airtime (or any small transaction) with the app
+        closed and `adb logcat -s Sika` running. A `live:` line must appear without the app being
+        opened. This is the only step that exercises PDU decoding and Android's real wake-up
+        behaviour, and neither can be faked.
+
 ## Milestone 2 — Trust
 
 Sacred Rule 3: this ships before the pretty screens, not after.
