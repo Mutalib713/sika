@@ -21,9 +21,6 @@ He is a beginner who ships real projects. Never infer his level from his output.
 
 ## Commands
 
-> The Gradle project itself lands in Phase 3 (walking skeleton). Until then these are the contract,
-> not yet runnable.
-
 ```bash
 ./gradlew check              # THE check command: lint + unit tests. Must pass before any install.
 ./gradlew testDebugUnitTest  # parser golden tests only, fast loop
@@ -85,8 +82,13 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
 
 - **The space after `GHS` is optional and changes within a single message.** `GHS 5.00` and
   `GHS0.50` appear in the same SMS. Every amount pattern needs `\s*`.
-- **A trailing full stop will be swallowed by a greedy number pattern.** `Fee charged: GHS0.50.`
-  yields `"0.50."` and crashes conversion. This bit us on the very first run against real data.
+- ⚠ **Write the decimal point as a literal `\.` followed by digits — never a character class.**
+  `[\d.]+` matches the sentence's trailing full stop too, so `Fee charged: GHS0.50.` yields
+  `"0.50."`. Be precise about the cause: `\d+` *cannot* do this, because a full stop is not a
+  digit — only a class containing the dot can. (The looser explanation was in this file until
+  mutation testing at task 3 disproved it.)
+  **And the failure is silent in Kotlin.** The Python probe crashed; the app's parser just returns
+  a fee of **zero**, which reconciliation then treats as valid arithmetic.
 - **Only one of the four known shapes carries a timestamp.** Dates come from Android's SMS
   timestamp, never from the body. Sacred Rule 5.
 - **The inbox sweep re-reads messages it has already processed, every single time.** Without the
