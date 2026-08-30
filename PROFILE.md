@@ -165,6 +165,29 @@ unmaintained SMS plugin, a second language, a bridge back to Kotlin anyway) all 
 
 **Cost: GHS 0 per month for the phone app. Supabase free tier when sync lands.**
 
+### Implementation decisions
+
+Settled 2026-08-30 so no session re-derives them.
+
+| Decision | Choice | Why it matters |
+|---|---|---|
+| App structure | One Activity, Compose screens, a ViewModel each, one Repository over Room | Matches Wird; nothing exotic |
+| Receiver threading | `goAsync()` + coroutine; **never** a Room write on the main thread | Android allows the receiver ~10 s; a main-thread write freezes the phone |
+| Parser structure | Each message shape is its own object in a list of matchers | Task 5 *will* find new shapes. Adding one must mean adding a file, not editing a branching chain |
+| Room migrations | A migration written from version 1, every schema change | Without it, every update wipes the history that is the whole point by month three |
+| Backup | Export **and import** CSV, in the same task | Risk #3: labels are the only irreplaceable data. Export alone lets you *look* at them after a wipe, not recover them |
+| Month boundary | Calendar month, Africa/Accra (UTC+0), explicit in code | No DST, so simple — but it must be stated, not assumed |
+
+### Direction (design-studio, set 2026-08-30)
+
+- **Tone:** a calm ledger, not a finance dashboard. Factual, quiet, slightly serious. It tells you
+  the truth and does not nag.
+- **Type pairing:** one grotesque for everything, but **amounts always in tabular figures** so
+  columns line up down a list. A money app whose numbers wobble reads as untrustworthy.
+- **Colour world:** aqua `#A8DCE7` on deep navy-ink `#101422`. Dark only.
+- **Signature move:** **the reconciliation strip.** The app tells you when its own numbers do not
+  add up. Nothing else in this category does that.
+
 ### There is no web app
 
 Decided 2026-08-30. Sika App (web / CediSmart) is **not being rebuilt** — its code is gone
@@ -231,6 +254,23 @@ Everything lives in one Room database in the app's private folder. No other app 
 
 `counterparty` (UNIQUE), `label`, `createdAt`. This is the learn-once table that makes labelling
 decay toward zero work.
+
+### `categories`
+
+`id`, `name` (UNIQUE), `sortOrder`, `isDefault`, `isProtected`.
+
+**A table, not a hardcoded list** — decided 2026-08-30. Seeded on first run with nine starters
+chosen from Mutalib's own spending and student life in Accra:
+
+> **Food · Transport · Data · Airtime · Rent · Provisions · Printing · Sent home · Other**
+
+- **The user adds more with a `+`**, everywhere a category can be chosen. No trip to Settings.
+- **`Other` is protected** — always present, cannot be renamed or deleted, and is where everything
+  unclassified lands.
+- **Deleting a category reassigns its transactions to `Other`**, never deletes them. Losing a
+  category must never lose money.
+- The one-tap cash-out prompt shows the **four most-used** categories plus *Choose…*, because a
+  notification with nine buttons is a notification nobody taps.
 
 ### Confirmed message shapes
 

@@ -72,6 +72,9 @@ Sacred Rule 3: this ships before the pretty screens, not after.
 
 ## Milestone 3 — The screens
 
+Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visual exploration:
+[`docs/stitch-prompt.md`](docs/stitch-prompt.md) — its output is a reference, not shippable code.
+
 - [x] **9. Palette pinned** — done 2026-08-30
   Mutalib brought his own four hexes from a reference image rather than using the picker:
   `#A8DCE7` `#101422` `#FFFFFF` `#272B3B`. Gap roles grown from `palette.py --seed "#A8DCE7"
@@ -106,10 +109,11 @@ Sacred Rule 3: this ships before the pretty screens, not after.
   **Verify:** set the device clock to 23:58 on the last of a month, watch it fire, confirm it
   reschedules for the following month.
 
-- [ ] **15. Settings + CSV export**
-  Permission state, the list of learned rules, export to CSV. Risk #3: your labels are the only
-  irreplaceable data.
-  **Verify:** export, open the file, confirm every row and every label is present.
+- [ ] **15. Settings + CSV export *and import***
+  Permission state, categories, learned rules, export to CSV **and import back**. Risk #3: your
+  labels are the only irreplaceable data, and export alone lets you look at them after a wipe
+  rather than recover them.
+  **Verify:** export, wipe the app's data, import, confirm every row *and every label* returns.
 
 - [ ] **16. Error and empty states**
   Permission denied, no messages found, nothing this month, reconciliation gap detected.
