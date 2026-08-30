@@ -14,7 +14,7 @@ Phase 1 — spec written. No code yet.
 
 - [x] Phase 0 — idea interrogated, verdict: build
 - [x] Phase 1 — `PROFILE.md`
-- [ ] Phase 2 — `PLAN.md`
+- [x] Phase 2 — `PLAN.md`
 - [ ] Phase 3 — walking skeleton
 - [ ] Phase 4 — build loop
 - [ ] Phase 5 — harden

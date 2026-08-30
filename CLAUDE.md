@@ -64,8 +64,12 @@ There is no deploy. There is no server, no host, no Play Store.
 
 ## Sacred Rules (copied from PROFILE.md — do not reopen without Mutalib's say-so)
 
-1. **No server, ever, in v1.** Nothing leaves the phone. The `INTERNET` permission is deliberately
-   absent from the manifest so this is enforced by Android, not by good intentions.
+1. **Offline-first, always. The phone is the only place the ledger lives.** No Supabase, no sync,
+   no account, no server the app depends on, no analytics, no crash-reporting SDK. `INTERNET` is
+   absent from the manifest in v1, so this is enforced by Android rather than by good intentions.
+   The one permitted network call is the optional Gemini insight request at v1.1 — see rule 12.
+   *(Sync to Supabase was raised as "Path 2", approved, and dropped the same day when the web app
+   was cut. Do not resurrect it without a new reason.)*
 2. **Only MoMo messages are ever read.** Every other SMS is ignored, for any reason, forever.
 3. **Reconciliation ships in v1, not later.** A money app that cannot check its own arithmetic does
    not ship.
@@ -78,6 +82,10 @@ There is no deploy. There is no server, no host, no Play Store.
    Mutalib, and is not "improved" later.
 10. **No AI attribution** in any commit, PR, or repo artifact. Ever.
 11. **Every task ends with a plain-words walkthrough.**
+12. **The LLM never sees the ledger.** Any Gemini call sends only an aggregate summary built
+    locally — category totals, percentage changes, days remaining. Never raw rows, counterparty
+    names, phone numbers, transaction IDs or balances. Google's free tier may train on submitted
+    content. Arithmetic insights are primary and must keep working with the LLM off or unreachable.
 
 ## Working rules
 

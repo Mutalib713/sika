@@ -59,6 +59,26 @@ category; he changed something because of it.
 9. **Settings** — permission state, list of learned rules, CSV export.
 10. **Error and empty states** as first-class screens, not afterthoughts.
 
+### v1.1 — recorded now so it is not forgotten, and not built until v1 is solid
+
+Approved 2026-08-30. These are the web app's features, absorbed and reordered. Every one is pure
+arithmetic on data v1 already collects, so all of them work offline.
+
+11. **Budgets with 80% alerts** — a monthly limit per label, a notification when you cross 80%.
+    Answers the question that comes right after *"where did it go"*: **am I overspending?**
+12. **Semester ranges** — the KNUST academic calendar as date ranges, so "this semester" is a real
+    period. Fits the original framing: he wants this for when he is *in school*.
+13. **Insights** — short sentences generated from arithmetic. Primary path, always available.
+14. **Gemini insights (optional second layer)** — open-ended questions only, governed by Sacred
+    Rule 12. This is the first and only task that adds the `INTERNET` permission.
+
+Deliberately *not* scheduled: savings goals (fuzzy on MoMo-only data — money you simply did not
+spend never appears as saved), debt/IOU tracking (mostly manual entry).
+
+**Why this is a separate milestone and not v1:** the success metric is *"still running and still
+correct in three months."* Three screens has a real chance of that. Fourteen features does not, and
+risk #4 is this becoming project number seven.
+
 ## 5. NOT IN V1
 
 Explicit exclusions. No session builds these "helpfully."
@@ -70,7 +90,10 @@ Explicit exclusions. No session builds these "helpfully."
   none return a transaction history, all lookups are by a reference ID your own code generated,
   `getBalance()` returns the *merchant* float, and production credentials require MTN KYC approval)
 - Statement PDF import — the `*170#` statement is a manual audit in v1, not an app feature
-- Budgets, spending limits, savings goals — these belong to Sika App (web), not to the phone
+- Budgets, spending limits, savings goals, semester ranges, insights — **deferred to v1.1, not
+  discarded.** See the v1.1 milestone under Section 4.
+- **Cloud sync, Supabase, accounts, login, any server the app depends on** — raised as Path 2,
+  approved, then dropped the same day when the web app was cut. Sacred Rule 1.
 - Multi-currency — GHS only
 - **On-device AI models** (Gemma 3 1B via MediaPipe, Gemini Nano) — evaluated and rejected
   2026-08-30. AI is the wrong tool for parsing a *known, fixed* format: it is non-deterministic, it
@@ -87,13 +110,15 @@ Explicit exclusions. No session builds these "helpfully."
 
 Decisions no future session may reopen without Mutalib's explicit say-so.
 
-1. **Offline-first, always. The local Room database is the source of truth on the phone.**
-   *Amended 2026-08-30 with Mutalib's approval, replacing the original "no server, ever, in v1."*
-   The app parses and writes locally and works completely with no connection. Sync to Supabase is
-   an **additive layer**, shipped only after the parser is proven correct against months of real
-   messages, and it never becomes a dependency — losing the server must never stop the app
-   recording a transaction. No analytics, no crash-reporting SDK, ever. The `INTERNET` permission
-   stays out of the manifest until the sync task begins, and goes in only then.
+1. **Offline-first, always. The phone is the only place the ledger lives.**
+   *Final form, 2026-08-30. Path 2 (sync to Supabase) was approved and then dropped the same day
+   when the web app was cut — with no web app there was nothing to feed, and the ledger already
+   rebuilds from the SMS inbox. Do not resurrect it without a new reason.*
+   No Supabase. No sync. No account, no login, no server the app depends on. No analytics, no
+   crash-reporting SDK. The app must work completely with the network off, forever.
+   **The one permitted network call** is the optional Gemini insight request (v1.1+), governed by
+   Sacred Rule 12. `INTERNET` stays out of the manifest until that task is built — **v1 ships
+   without it.**
 2. **Only MoMo messages are ever read.** The app filters to the MoMo sender and ignores every other
    SMS, for any reason, forever.
 3. **Reconciliation ships in v1, not later.** A money app that cannot check its own arithmetic does
@@ -108,6 +133,12 @@ Decisions no future session may reopen without Mutalib's explicit say-so.
    Mutalib, and is not "improved" later.
 10. **No AI attribution** in any commit, PR, or repo artifact. Ever.
 11. **Every task ends with a plain-words walkthrough** of what was built and how it works.
+12. **The LLM never sees the ledger.** Any Gemini call sends only an aggregate summary the app
+    builds locally — category totals, percentage changes, days remaining. **Never** raw rows, never
+    counterparty names or phone numbers, never transaction IDs, never balances. Google's Gemini
+    free tier *may use submitted content to improve their models*, so anything sent must be
+    harmless if it were. Arithmetic insights are the primary path and must keep working with the
+    LLM switched off, out of quota, or unreachable.
 
 ## 7. STACK & ARCHITECTURE
 
@@ -134,24 +165,42 @@ unmaintained SMS plugin, a second language, a bridge back to Kotlin anyway) all 
 
 **Cost: GHS 0 per month for the phone app. Supabase free tier when sync lands.**
 
-### Relationship to Sika App (web)
+### There is no web app
 
-Path 2, chosen by Mutalib 2026-08-30, sequenced offline-first on my recommendation.
+Decided 2026-08-30. Sika App (web / CediSmart) is **not being rebuilt** — its code is gone
+(`nonydev27/sika-app` contains only `.next/` build cache and `node_modules`, no source, and the dev
+source maps carry no `sourcesContent`, so it is not recoverable). Android only.
 
-Sika-the-Android-app is the **automatic feed**. Sika App (web) is the **budgeting brain** — budgets,
-envelopes, savings goals, the AI coach, semester mode. The web product's own answer to ingestion was
-*"paste any MoMo SMS and the AI logs it"*, metered at 50 free parses a month and ₵5/month for
-unlimited. The phone does the same job automatically, unlimited, offline, with four regular
-expressions and no model at all. That is the whole reason these two belong together.
+The web product's features are not lost, they are **absorbed and reordered** — see v1.1 below. Its
+own answer to ingestion was *"paste any MoMo SMS and the AI logs it"*, metered at 50 free parses a
+month and ₵5/month for unlimited. The phone does that job automatically, unlimited, offline, with
+four regular expressions and no model at all.
 
-**Sequencing is deliberate and not negotiable:** parser → local ledger → proven against months of
-real messages → *then* sync. Building sync, auth and the parser at once means that when a number
-looks wrong, nothing tells you which of the three is lying.
+Recovered architecture, kept only as a record of what existed: 7 pages (landing, login, signup,
+onboarding, dashboard, insights, settings, statement), 3 API routes (`/api/statement`,
+`/api/usage`, `/api/ai/cache-status`), 8 components (`ai/ChatWidget`, `dashboard/AppTour`,
+`BackgroundAnalysis`, `Sidebar`, `UsageBanner`, `landing/Hero`, `Features`, `Navbar`). Next.js +
+TypeScript + the Anthropic SDK.
 
-The web app is a **separate project with its own PROFILE.md and its own repo.** The only thing the
-two share is the transaction shape in Section 8 — and since the web code is gone and being rebuilt,
-that shape is now ours to define correctly (`txId` unique, `balanceAfter`, `rawBody`) rather than
-inherited from a schema that had none of them.
+### Insights engine (v1.1)
+
+**Arithmetic first, always.** Nearly everything a money coach tells a student is subtraction and a
+calendar, not intelligence:
+
+- *"You spent GHS 340 on food this month — 28% more than last month."*
+- *"You're 82% through your transport budget with 11 days left."*
+- *"You cashed out GHS 200 in August and never said what it was for."*
+- *"At this rate you run out on the 24th."*
+
+These are more trustworthy than an LLM's version, because arithmetic cannot invent a number.
+
+**Gemini as the optional second layer**, for open-ended questions and phrasing only. Note it is the
+**cloud Gemini API**, not on-device: Gemini Nano needs Tensor G3+ and the Pixel 6 Pro is Tensor G1.
+Free tier is 1,500 requests/day and 15/minute at no cost and no card — far beyond what one person
+needs — but free-tier content **may be used by Google to train their models**, which is exactly why
+Sacred Rule 12 exists. The API key ships inside the APK; acceptable *only* because this app is
+sideloaded to one phone and never published. If it is ever published, that key must move behind a
+proxy or be removed.
 
 ## 8. DATA MODEL
 
@@ -216,7 +265,7 @@ The only external surface is Android permissions:
 | `READ_SMS` | runtime, granted once | read the inbox for backfill and catch-up |
 | `RECEIVE_SMS` | runtime, granted once | wake on new messages |
 | `POST_NOTIFICATIONS` | runtime (Android 13+) | cash-out prompt, monthly report |
-| `INTERNET` | **deliberately absent** | makes Sacred Rule 1 an OS guarantee, not a promise |
+| `INTERNET` | **absent in v1** | makes Sacred Rule 1 an OS guarantee rather than a promise. Enters the manifest only at v1.1 task 14 (Gemini insights), and nowhere else |
 
 ## 10. CONSTRAINTS
 
