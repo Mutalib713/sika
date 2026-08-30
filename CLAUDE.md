@@ -86,6 +86,15 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   ⚠ **Quote the whole `am` command for the DEVICE's shell.** Passing `--es body "..."` with only
   local quotes lets the words split, and the broadcast silently takes the second word as the
   package (`pkg=for`) instead of failing.
+- ⚠⚠ **NEVER `am force-stop` the app before a live SMS test.** A force-stopped app is in
+  Android's **stopped state** and receives *no broadcasts at all* until it is launched again
+  (`dumpsys package … | grep stopped=`). Force-stopping to prove "the app is closed" is exactly
+  what stops the receiver working, and it cost a real transaction on 2026-08-30.
+  **Correct setup:** launch the app once, then press HOME. `stopped=false`, app backgrounded,
+  Android free to kill the process — which is the real-world state being tested.
+  ⚠ And note why the debug injector cannot catch this: `adb`'s `am broadcast` sets
+  `FLAG_INCLUDE_STOPPED_PACKAGES`, so it reaches a stopped app that a real SMS never would.
+  The injector proves the ledger path; only a real transaction proves delivery.
 - ⚠ **`connectedDebugAndroidTest` UNINSTALLS the app when it finishes.** Standard AGP behaviour,
   and it silently undoes an earlier `installDebug`. On 2026-08-30 this cost a live-receiver test:
   the app was gone from the phone when the real transaction arrived, so nothing fired and the

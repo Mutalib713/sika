@@ -393,6 +393,7 @@ Established in Phase 0, with their mitigations already inside v1 scope.
 | **Label rot** — corrections stop, "Other" swells, reports stop answering anything | learn-once rules table | V1 scope 4 |
 | **Corrections are the only irreplaceable data** — the ledger rebuilds from the inbox, the labels do not | CSV export | V1 scope 9 |
 | **Becoming project #7** alongside Wird, Thrum, pixel-routines, techdey and the portfolio | v1 held to three screens | V1 scope |
+| ⚠ **A force-stop silently disables recording.** Android puts a force-stopped app in the *stopped state*, where it receives no broadcasts until opened again. Tapping "Force stop" in Settings, or some battery-saver behaviour, would stop Sika recording with no visible sign | The inbox sweep catches up everything missed on the next launch, and reconciliation reveals any gap. Discovered 2026-08-30 at PLAN task 6 | V1 scope 1, Sacred Rule 3 |
 
 ### Open questions
 
