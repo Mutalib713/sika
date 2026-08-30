@@ -86,6 +86,12 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   ⚠ **Quote the whole `am` command for the DEVICE's shell.** Passing `--es body "..."` with only
   local quotes lets the words split, and the broadcast silently takes the second word as the
   package (`pkg=for`) instead of failing.
+- ⚠ **`connectedDebugAndroidTest` UNINSTALLS the app when it finishes.** Standard AGP behaviour,
+  and it silently undoes an earlier `installDebug`. On 2026-08-30 this cost a live-receiver test:
+  the app was gone from the phone when the real transaction arrived, so nothing fired and the
+  first diagnosis looked like a permissions problem. **Always run connected tests BEFORE
+  `installDebug`, never after** — and re-grant the SMS permissions afterwards, because the
+  uninstall takes those with it.
 - ⚠ **Never pipe a long-running gradle command into `Select-Object -First N` in PowerShell.**
   `-First` closes the pipeline as soon as it has enough lines, which kills `gradlew` mid-run and
   reports exit 255 on a build that was passing. Use `Select-String` alone, or `Select-Object -Last`.
