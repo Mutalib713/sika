@@ -165,9 +165,44 @@ class ParserTest {
     // ------------------------------------------------------------- refusing to guess
 
     @Test
-    fun `an unknown shape is refused, not guessed`() {
-        val r = MomoParser.parse("Your MTN data bundle of 5GB is now active. Enjoy!")
+    fun `an unknown shape that carries money goes to the review queue`() {
+        // Amount and transaction id present, but no shape matches. This is the case the
+        // review queue exists for — it might be money, so a human must look.
+        val r = MomoParser.parse(
+            "Reversal of GHS 30.00 completed. Transaction ID: 12345678901. New balance GHS 60.00",
+        )
         assertTrue("expected Unrecognised, got $r", r is ParseResult.Unrecognised)
+    }
+
+    /**
+     * ⚠ **The real messages from the first sweep of Mutalib's inbox, 2026-08-30.**
+     *
+     * 465 messages matched a MoMo-ish sender and only 118 were transactions. These four are
+     * why: MTN sends OTPs, fraud warnings and adverts from the same senders. Treating them
+     * as "could not read" buried the review queue under 347 adverts.
+     *
+     * Note the second one especially — it quotes **GHS 1,800**. An amount alone cannot be
+     * the test for whether something is money; it needs a transaction id too.
+     */
+    @Test
+    fun `otps and adverts are not transactions and are never queued`() {
+        val notMoney = listOf(
+            "<#> FRAUD ALERT: This OTP gives access to your wallet. Anyone asking for this " +
+                "code is trying to fraudulently gain access to your funds. DO NOT SHARE IT " +
+                "OR YOUR PIN WITH ANYONE. MTN",
+            "Dear customer, enjoy an overdraft of up to GHS 1,800 for your MoMo transactions. " +
+                "Opt in to MoMo Boost by dialing *170# option 5 > 3 > 4 or using the MoMo App.",
+            "Go cashless with MoMoPay. Pay any merchant using ID or QR Code and get 300MB FREE. " +
+                "Dial *170#, select MoMoPay or use the MoMoApp",
+            "Need more data? Upgrade to a bigger Just4U bundle get more data at a better price.",
+        )
+        for (body in notMoney) {
+            val r = MomoParser.parse(body)
+            assertTrue(
+                "should be NotATransaction, got $r for: ${body.take(50)}",
+                r is ParseResult.NotATransaction,
+            )
+        }
     }
 
     @Test
@@ -179,8 +214,11 @@ class ParserTest {
     }
 
     @Test
-    fun `an empty message is refused`() {
-        assertTrue(MomoParser.parse("") is ParseResult.Unrecognised)
+    fun `an empty message is not a transaction, not a review item`() {
+        // It has no amount and no id, so it is noise rather than unreadable money. This
+        // assertion was `Unrecognised` until the first real sweep split the two cases —
+        // an empty body has nothing for a human to review.
+        assertTrue(MomoParser.parse("") is ParseResult.NotATransaction)
     }
 
     private fun parsed(body: String): ParsedTransaction {

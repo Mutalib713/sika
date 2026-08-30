@@ -58,6 +58,25 @@ data class ParsedTransaction(
 sealed interface ParseResult {
     data class Parsed(val transaction: ParsedTransaction) : ParseResult
 
-    /** [reason] is written for a human reading the review queue, not for a log file. */
+    /**
+     * It looks like money — it carries a GHS amount **and** a transaction id — but no known
+     * shape matched. **This is what the review queue is for.** Sacred Rule 7.
+     *
+     * [reason] is written for a human reading that queue, not for a log file.
+     */
     data class Unrecognised(val reason: String) : ParseResult
+
+    /**
+     * Not a transaction at all: an OTP, a fraud warning, a bundle advert.
+     *
+     * ⚠ **A distinct case from [Unrecognised], and the distinction was learned from real
+     * data.** The first sweep of Mutalib's inbox on 2026-08-30 found 465 messages from
+     * MoMo-ish senders, of which only 118 were transactions. Treating the other 347 as
+     * "could not read" filed every MTN advert into the review queue as though it might be
+     * money, burying the handful of messages that genuinely need a human.
+     *
+     * A review queue full of adverts is a review queue nobody opens, and then Sacred
+     * Rule 7 quietly stops working. These are dropped, not queued.
+     */
+    data class NotATransaction(val reason: String) : ParseResult
 }

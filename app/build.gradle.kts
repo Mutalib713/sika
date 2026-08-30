@@ -97,6 +97,19 @@ android {
             // would make `check` fail forever on a fix nobody can apply. Delete this
             // entry the day KSP supports AGP 9.
             "AndroidGradlePluginVersion",
+            // ⚠ "Consider whether this feature really is required." Considered — it is.
+            //
+            // These two checks contradict each other for an SMS app. Omit the
+            // <uses-feature android.hardware.telephony> tag and lint raises
+            // PermissionImpliesUnsupportedChromeOsHardware; declare it required="true" and
+            // lint raises this one instead. The only state satisfying both is
+            // required="false", which would be a false statement: Sika's entire input is
+            // SMS, so on a device with no modem it has nothing to do at all.
+            //
+            // Both checks exist to protect app-store reach on tablets and ChromeOS. Sika is
+            // sideloaded to one Pixel and never published, so that concern does not apply,
+            // and the truthful manifest is worth more than the silent warning.
+            "UnnecessaryRequiredFeature",
             // No app icon yet, on purpose. The icon comes out of the design pass at PLAN
             // task 10, where the palette is Mutalib's to choose — picking a placeholder
             // here is how a default quietly becomes the brand.

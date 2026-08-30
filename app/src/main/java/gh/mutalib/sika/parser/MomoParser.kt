@@ -19,7 +19,13 @@ object MomoParser {
 
     fun parse(body: String): ParseResult {
         val matcher = matchers.firstOrNull { it.pattern.containsMatchIn(body) }
-            ?: return ParseResult.Unrecognised("No known MoMo message shape matched.")
+            ?: return if (looksLikeMoney(body)) {
+                ParseResult.Unrecognised("Carries an amount and a transaction ID, but no known shape matched.")
+            } else {
+                // An OTP, a fraud warning, a bundle advert. Not money, so not the review
+                // queue's problem. See ParseResult.NotATransaction for why this case exists.
+                ParseResult.NotATransaction("No amount and no transaction ID — not a transaction.")
+            }
 
         val m = matcher.pattern.find(body)!!
 
@@ -126,6 +132,19 @@ private val TX_ID = Regex("""(?:Financial Transaction Id|Transaction ID)\s*:\s*(
 
 /** Captures `-` as well as a number, so [parseMoney] can reject it and yield null. */
 private val TAX = Regex("""(?:Tax was\s+GHS\s*|Tax charged\s*:\s*GHS\s*|Tax charged\s*:\s*)(-|\d[\d,]*(?:\.\d{1,2})?)""", IGNORE)
+
+/**
+ * Does this message carry money at all?
+ *
+ * The test for whether an unmatched message belongs in the review queue. It requires
+ * **both** a GHS amount and a transaction id, because MTN's adverts quote amounts freely —
+ * *"enjoy an overdraft of up to GHS 1,800"* — so an amount on its own proves nothing. Only
+ * a real transaction carries an id.
+ */
+private fun looksLikeMoney(body: String): Boolean =
+    HAS_AMOUNT.containsMatchIn(body) && TX_ID.containsMatchIn(body)
+
+private val HAS_AMOUNT = Regex("""GHS\s*\d""", IGNORE)
 
 /** `Reference: -.` and `Reference: 1.` both appear in real data. */
 private val REFERENCE = Regex("""Reference\s*:\s*([^.]*)\.""", IGNORE)

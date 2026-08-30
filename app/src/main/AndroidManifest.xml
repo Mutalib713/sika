@@ -17,6 +17,37 @@
     -->
 
     <!--
+      READ_SMS: the inbox sweep and the first-run backfill (PLAN task 5). This is what
+      lets months of history appear the day the app is installed, and what catches any
+      message the live receiver missed.
+
+      Sacred Rule 2 is a promise the app keeps, not one Android enforces: this permission
+      grants access to every message on the phone, and Sika filters to the MoMo sender in
+      the query itself so nothing else is ever loaded. That asymmetry is exactly what the
+      Reddit commenter meant by "a big privacy surface" — worth knowing, and the reason
+      this app is sideloaded to one phone rather than published.
+
+      RECEIVE_SMS and the broadcast receiver arrive at task 6, not here.
+    -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!--
+      required="true", not the required="false" lint suggests.
+
+      Lint asks for this tag so an app does not accidentally exclude tablets and ChromeOS,
+      and its default suggestion is `required="false"` meaning "runs fine without a modem".
+      That would be false here: Sika's entire input is SMS, so on a device with no
+      telephony it has nothing to do. Declaring the truth is better than declaring the
+      thing that makes the warning go away.
+
+      No practical cost — this app is sideloaded to one Pixel and is never published, so
+      store filtering does not apply.
+    -->
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="true" />
+
+    <!--
       Backup is off twice over, and both halves are deliberate. Android's automatic cloud
       backup would copy the ledger to Google Drive, and device transfer would send it to a
       new phone — the OS doing on the app's behalf exactly what the missing INTERNET

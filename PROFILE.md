@@ -320,6 +320,29 @@ what lets a real discrepancy hide inside it.
 As integer pesewas the comparison is exact: a flagged gap is always real, and a clean row is
 always genuinely clean. GHS 10.00 is `1000`.
 
+### ⚠ Six MORE shapes, found by the first real sweep (2026-08-30, PLAN task 5)
+
+The four above covered **118 of ~157 real transactions — about 75%**. The first sweep of Mutalib's
+actual inbox found six further shapes. Written down here *before* the parser is touched, per the
+task-5 rule: every unknown becomes a golden test first.
+
+**Sender is `MobileMoney`, exactly.** All 118 parsed transactions came from it. Narrowing the filter
+from three loose patterns to that one address dropped the messages read from 465 to 301 while losing
+nothing.
+
+| # | Shape | Dir | Seen | The trap in it |
+|---|---|---|---|---|
+| 5 | `Payment for GHS{amt} to {payee} .Current Balance: GHS {bal}. Transaction Id: {id}. Fee charged: GHS{fee},Tax Charged {tax}.` | OUT | ×20 | **A third capitalisation — `Transaction Id`.** `Tax Charged 0` has no colon. Sometimes `..` before Current Balance. Payees seen: Other Networks, Bills.INV, GCB Bank ova, MTN BUNDLE |
+| 6 | `Cash In received for GHS {amt} from {who}. Current Balance GHS {bal} Available Balance GHS {bal}. Transaction ID: {id}. Fee charged: GHS {fee}.` | **IN** | ×7 | **`Current Balance GHS` has NO COLON.** This is why the shared balance pattern missed it entirely |
+| 7 | `Your payment of GHS {amt} to {payee} has failed at {ts}. … TRANSACTION FEE IS 0` | **none** | ×9 | **No money moved.** Shape 1's exact wording with `has failed` instead of `has been completed` — must never be counted |
+| 8 | `You have exceeded your daily transaction limit. INTEROPERABILITY PULL OVA failed to send GHS {amt} to your account. … Financial transaction Id: {id}` | **none** | ×1 | Failed inbound. Also note lowercase `transaction Id` |
+| 9 | `You have transferred GHS {amt} to {payee} from your mobile money account {acct} at {ts}. Your new balance: {bal} GHS.` | OUT | ×1 | ⚠ **The balance is written `4652.89 GHS` — number first, currency after.** Every other shape is `GHS 4652.89` |
+| 10 | `Y'ello. You have Paid GHS {amt} to Merchant {id} on your mobile money account at {ts}. … Your new balance: GHS {bal} . Fee was GHS {fee} .` | OUT | ×1 | MoMoPay merchant payment. **`GHS 40` with no decimal part at all** |
+
+**Shapes 7 and 8 are the dangerous ones.** A failed payment moved no money, and counting one would
+overstate spending with no way to notice. Shape 1's pattern requires `has been completed`, which is
+the only reason nine failed payments were not silently added to the ledger as real spending.
+
 ### Parser landmines already measured — do not re-learn these
 
 - The space after `GHS` is optional and **changes within a single message** (`GHS 5.00` … `GHS0.50`)
