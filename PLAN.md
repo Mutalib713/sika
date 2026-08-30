@@ -21,10 +21,15 @@ wrong you should only ever have one suspect.
   **Verified:** `.\check.ps1` → `check: PASS`, exit 0. Lint "No issues found", ParserTest 1/1
   passed, `app/build/generated/ksp` present so KSP genuinely ran.
 
-- [ ] **2. The app runs on the Pixel**
-  One screen, an empty state saying there is nothing yet. No permissions requested. No parser.
-  **Verify:** `./gradlew installDebug`, the app opens on the phone, `adb logcat -s Sika` shows it
-  start. This is "live on the real host" — from here every task ships to a device.
+- [x] **2. The app runs on the Pixel** — done 2026-08-30
+  The designed "Nothing yet this month" empty state from `docs/screens.md`, on the pinned palette.
+  No permissions requested, no parser, no SMS access. `TAG = "Sika"` established as the single
+  logcat tag for the whole app.
+  **Verified on the real device** (Pixel 6 Pro, `raven`, `1A131FDEE006MD`):
+  `check: PASS` → `installDebug` exit 0 → `versionName=0.1` installed →
+  `topResumedActivity=gh.mutalib.sika/.MainActivity` →
+  `I Sika: MainActivity started — no ledger yet, nothing to show`.
+  This is "live on the real host": from here every task ships to a device.
 
 ## Milestone 1 — The parser
 
