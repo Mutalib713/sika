@@ -103,7 +103,9 @@ object Sweeper {
                 .entries.sortedByDescending { e -> e.value }
                 .forEach { (prefix, n) ->
                     val full = unrecognised.first { it.body.startsWith(prefix) }.body
-                    Log.w(TAG, "shape x$n: ${full.take(230)}")
+                    // Truncated: full bodies carry counterparty names and account
+                    // numbers, and logcat is readable by anyone with the phone.
+                    Log.w(TAG, "shape x$n: ${full.take(200)}")
                 }
         }
     }

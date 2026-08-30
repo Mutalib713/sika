@@ -21,6 +21,21 @@ enum class Shape {
 
     /** `Your payment of GHS x to MTN AIRTIME has been completed …` — airtime, bundles, bills. */
     BILL_AIRTIME,
+
+    /**
+     * `Payment for GHSx to y .Current Balance: …` — the commonest outgoing shape in
+     * Mutalib's real inbox (×20). Bank transfers, other networks, bills, bundles.
+     */
+    PAYMENT_FOR,
+
+    /** `Cash In received for GHS x from y. Current Balance GHS …` — a deposit at an agent. */
+    CASH_IN,
+
+    /** `You have transferred GHS x to y from your mobile money account …` — cross-network. */
+    TRANSFER,
+
+    /** `Y'ello. You have Paid GHS x to Merchant nnn …` — MoMoPay at a till. */
+    MERCHANT_PAY,
 }
 
 /**

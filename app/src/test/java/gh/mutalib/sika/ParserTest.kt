@@ -115,6 +115,122 @@ class ParserTest {
         assertEquals(0L, t.tax)
     }
 
+    // ------------------------- the six shapes the first real sweep found (PLAN task 5b)
+
+    /*
+     * Real messages from Mutalib's inbox, captured 2026-08-30. **Business names, phone
+     * numbers and his MoMo account number are redacted** — everything that decides parsing
+     * (wording, spacing, punctuation, amounts, ids) is exactly as MTN sent it.
+     */
+
+    @Test
+    fun `shape 5 - Payment for, the commonest outgoing shape`() {
+        // ×20 in the real inbox, and none of them were being recorded.
+        val t = parsed(
+            "Payment for GHS5.00 to Other Networks  .Current Balance: GHS 44.79. " +
+                "Transaction Id: 87543030119. Fee charged: GHS0.00,Tax Charged 0." +
+                "Download the MoMo App for a Faster & Easier Experience.",
+        )
+        assertEquals(Shape.PAYMENT_FOR, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        assertEquals(500L, t.amount)
+        assertEquals(0L, t.fee)
+        assertEquals(4479L, t.balanceAfter)
+        assertEquals("Other Networks", t.counterparty)
+        // ⚠ A THIRD capitalisation of the id label: `Transaction Id`.
+        assertEquals("87543030119", t.txId)
+        // ⚠ `Tax Charged 0` — no colon at all, unlike `Tax charged: 0` in shape 4.
+        assertEquals(0L, t.tax)
+    }
+
+    @Test
+    fun `shape 5 - a payee whose own name contains a full stop`() {
+        // `Bills.INV ..Current Balance` — two dots, and one of them belongs to the payee.
+        val t = parsed(
+            "Payment for GHS25.00 to Bills.INV ..Current Balance: GHS 149.29. " +
+                "Transaction Id: 88216564395. Fee charged: GHS0.00,Tax Charged 0.",
+        )
+        assertEquals("Bills.INV", t.counterparty)
+        assertEquals(2500L, t.amount)
+        assertEquals(14_929L, t.balanceAfter)
+    }
+
+    @Test
+    fun `shape 6 - Cash In, money arriving`() {
+        val t = parsed(
+            "Cash In received for GHS 100.00 from AGENT NAME REDACTED. " +
+                "Current Balance GHS 102.07 Available Balance GHS 102.07. " +
+                "Transaction ID: 83681775075. Fee charged: GHS 0. " +
+                "Cash in (Deposit) is a free transaction on MTN Mobile Money.",
+        )
+        assertEquals(Shape.CASH_IN, t.shape)
+        assertEquals(Direction.IN, t.direction)
+        assertEquals(10_000L, t.amount)
+        assertEquals(0L, t.fee)
+        // ⚠ `Current Balance GHS 102.07` — NO COLON. This is why the shared balance
+        // pattern missed all seven of these.
+        assertEquals(10_207L, t.balanceAfter)
+        assertEquals("AGENT NAME REDACTED", t.counterparty)
+    }
+
+    @Test
+    fun `shape 7 - a FAILED payment moved no money and is never a transaction`() {
+        // ⚠ The most dangerous find of the sweep. Nine of these. Shape 1's exact wording
+        // apart from `has failed` in place of `has been completed` — and they carry a real
+        // amount AND a real transaction id, so the looksLikeMoney test alone would have
+        // filed them as reviewable money.
+        val r = MomoParser.parse(
+            "Your payment of GHS 5.00 to MTN AIRTIME  has failed at 2026-07-15 15:47:43. " +
+                "Reference: -. Financial Transaction Id: 85436498944. " +
+                "External Transaction Id: 85436498944. TRANSACTION FEE IS 0",
+        )
+        assertTrue("a failed payment must never be counted, got $r", r is ParseResult.NotATransaction)
+    }
+
+    @Test
+    fun `shape 8 - an exceeded limit is a failure, not income`() {
+        val r = MomoParser.parse(
+            "You have exceeded your daily transaction limit. INTEROPERABILITY PULL OVA " +
+                "failed to send GHS 990.00 to your account. Go to my wallet to check your " +
+                "wallet limit. Financial transaction Id: 86187286967. Transaction Fee is 0.",
+        )
+        // GHS 990 that never arrived. Counting it would invent income out of nothing.
+        assertTrue("expected NotATransaction, got $r", r is ParseResult.NotATransaction)
+    }
+
+    @Test
+    fun `shape 9 - transferred, with the balance written backwards`() {
+        val t = parsed(
+            "You have transferred GHS 10.00  to Other Networks   from your mobile money " +
+                "account 000000000 at 2026-07-19 09:37:20. Your new balance: 4652.89 GHS. " +
+                "Message from sender: airtime:Telecel:0000000000:6. Message to receiver: . " +
+                "Financial Transaction Id: 85672169720.",
+        )
+        assertEquals(Shape.TRANSFER, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        assertEquals(1000L, t.amount)
+        assertEquals("Other Networks", t.counterparty)
+        // ⚠ `4652.89 GHS` — the number comes FIRST here. Every other shape writes
+        // `GHS 4652.89`, so the normal pattern reads this as no balance at all.
+        assertEquals(465_289L, t.balanceAfter)
+    }
+
+    @Test
+    fun `shape 10 - MoMoPay at a merchant, amount with no decimals`() {
+        val t = parsed(
+            "Y'ello. You have Paid GHS 40 to Merchant 104901 on your mobile money account " +
+                "at 202608184348. Message from sender: 1. Your new balance: GHS 106.39 . " +
+                "Fee was GHS 0.50 . Financial Transaction Id: 84997229749.",
+        )
+        assertEquals(Shape.MERCHANT_PAY, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        // ⚠ `GHS 40` with no decimal part — forty cedis, not forty pesewas.
+        assertEquals(4000L, t.amount)
+        assertEquals(50L, t.fee)
+        assertEquals(10_639L, t.balanceAfter)
+        assertEquals("Merchant 104901", t.counterparty)
+    }
+
     // ------------------------------------------------------- the landmines, on their own
 
     @Test

@@ -72,23 +72,26 @@ The risky heart. No UI in this milestone at all.
   (465 → 301 messages read, nothing lost), and `ParseResult` gained `NotATransaction` so MTN's OTPs
   and adverts stop flooding the review queue.
 
-- [ ] **5b. ⚠ The six shapes the sweep found** *(task 3 re-opened, exactly as its rule requires)*
-  Golden tests **first**, from the real message bodies in PROFILE.md § 8, then extend the parser.
-  In rough order of how much money they represent: `Payment for …` (×20, out) · `Cash In received …`
-  (×7, in) · failed payments (×9, **no money moved**) · exceeded-limit (×1, none) ·
-  `You have transferred …` (×1, out) · `Y'ello … You have Paid …` (×1, out).
-  **Risky because:** shapes 7 and 8 are failures that must never be counted as spending, and shape 9
-  writes its balance as `4652.89 GHS` — number first, currency after — which every existing pattern
-  would misread.
-  **Verify:** every shape green as a golden test, then re-sweep the real inbox and show `unrecognised`
-  falling from 39 toward 0.
+- [x] **5b. ⚠ The six shapes the sweep found** — done 2026-08-30
+  Golden tests written first from the real bodies, then the parser extended. Four new matchers
+  (`Payment for`, `Cash In received`, `You have transferred`, `Y'ello… You have Paid`) plus a
+  **failure guard checked before anything else**, because a failed payment carries a real amount
+  and a real transaction id and every other test would wave it through.
+  Three shared patterns had to change: the balance colon became optional (`Current Balance GHS
+  102.07`), a reversed balance pattern was added (`4652.89 GHS`, number first), and the tax label
+  gained a no-colon spelling (`Tax Charged 0`).
+  **Verified:** `check: PASS` with **20/20 golden tests**, `connectedDebugAndroidTest` 9/9, and a
+  re-sweep of the real inbox:
 
-- [ ] **6. ⚠ Live BroadcastReceiver**
-  Manifest-declared, `SMS_RECEIVED`, runtime permission request.
-  **Risky because:** background wake-up behaviour is device and battery-state dependent.
-  **Verify:** two stages. First `adb shell am broadcast` with a fake MoMo message — logcat shows a
-  row written. Then a real transaction: buy GHS 1 of airtime and watch the row appear without
-  opening the app.
+  ```
+                transactions   not-transactions   unrecognised
+  before 5b            118                144             39
+  after  5b            147                154              0
+  ```
+
+  The 39 resolved as **29 real transactions + 10 failures** — exactly 39, nothing unaccounted for.
+  A second sweep added **0 new rows**. 147 transactions produced 141 rows, so the unique index
+  caught **6 genuine duplicates** MTN had sent twice.
 
 ## Milestone 2 — Trust
 

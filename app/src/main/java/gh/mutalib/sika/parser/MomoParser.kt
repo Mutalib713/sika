@@ -1,5 +1,9 @@
 package gh.mutalib.sika.parser
 
+// Declared here rather than beside the other patterns: Kotlin initialises top-level
+// properties in source order, so anything referencing IGNORE must come after it.
+private val IGNORE = RegexOption.IGNORE_CASE
+
 /**
  * Reads an MTN MoMo SMS into a [ParsedTransaction].
  *
@@ -18,6 +22,17 @@ package gh.mutalib.sika.parser
 object MomoParser {
 
     fun parse(body: String): ParseResult {
+        // ⚠ **Failures are checked first, before anything else looks at this message.**
+        //
+        // Nine messages in Mutalib's inbox read `Your payment of GHS 20.00 to TELECEL PUSH
+        // has failed` — shape 1's wording exactly, apart from those two words. They carry a
+        // real amount and a real transaction id, so every other test in this file would
+        // wave them through. No money moved, and counting them would overstate spending
+        // with nothing to reveal the error afterwards.
+        if (FAILED.containsMatchIn(body)) {
+            return ParseResult.NotATransaction("Transaction failed — no money moved.")
+        }
+
         val matcher = matchers.firstOrNull { it.pattern.containsMatchIn(body) }
             ?: return if (looksLikeMoney(body)) {
                 ParseResult.Unrecognised("Carries an amount and a transaction ID, but no known shape matched.")
@@ -52,7 +67,7 @@ object MomoParser {
                 counterparty = m.groups["who"]?.value?.trim().orEmpty(),
                 reference = REFERENCE.find(body)?.groupValues?.get(1)?.trim()
                     ?.takeIf { it.isNotEmpty() && it != "-" },
-                balanceAfter = BALANCE.find(body)?.groupValues?.get(1)?.let(::parseMoney),
+                balanceAfter = findBalance(body),
             ),
         )
     }
@@ -88,10 +103,58 @@ object MomoParser {
             Shape.PAYMENT_MADE, Direction.OUT,
             Regex("""Payment made for $AMOUNT to (?<who>.+?)\s+Current Balance""", IGNORE),
         ),
+
+        // ---- the six found by the first real sweep, 2026-08-30 (PLAN task 5b) ----
+
+        ShapeMatcher(
+            // The commonest outgoing shape of all — ×20. `\.+` rather than `\.` because the
+            // payee's own name can end in one: `Bills.INV ..Current Balance`.
+            Shape.PAYMENT_FOR, Direction.OUT,
+            Regex("""Payment for $AMOUNT to (?<who>.+?)\s*\.+\s*Current Balance""", IGNORE),
+        ),
+        ShapeMatcher(
+            Shape.CASH_IN, Direction.IN,
+            Regex("""Cash In received for $AMOUNT from (?<who>.+?)\.\s*Current Balance""", IGNORE),
+        ),
+        ShapeMatcher(
+            Shape.TRANSFER, Direction.OUT,
+            Regex(
+                """You have transferred $AMOUNT\s+to (?<who>.+?)\s+from your mobile money account""",
+                IGNORE,
+            ),
+        ),
+        ShapeMatcher(
+            Shape.MERCHANT_PAY, Direction.OUT,
+            Regex(
+                """You have Paid $AMOUNT to (?<who>.+?) on your mobile money account""",
+                IGNORE,
+            ),
+        ),
     )
 }
 
-private val IGNORE = RegexOption.IGNORE_CASE
+/**
+ * Anything saying the transaction did not happen.
+ *
+ * `has failed` covers the nine failed payments; `failed to send` covers the
+ * exceeded-daily-limit message, where MTN reports money that never arrived. Both carry
+ * amounts and transaction ids, so nothing else in the parser would have stopped them.
+ */
+private val FAILED = Regex("""has failed|failed to send""", IGNORE)
+
+/**
+ * The balance MoMo reports afterwards — the anchor the whole reconciliation walk depends on.
+ *
+ * Two patterns, because MTN writes it both ways round. Almost every shape says
+ * `Current Balance: GHS 44.79`, but the transfer message says **`Your new balance: 4652.89
+ * GHS`** — number first, currency after. One message in the real inbox, and without the
+ * second pattern it would silently store no balance at all, which reconciliation would
+ * then read as a gap.
+ */
+private fun findBalance(body: String): Long? =
+    BALANCE.find(body)?.groupValues?.get(1)?.let(::parseMoney)
+        ?: BALANCE_REVERSED.find(body)?.groupValues?.get(1)?.let(::parseMoney)
+
 
 /**
  * The number pattern every money field shares. Three things about it are deliberate:
@@ -121,17 +184,37 @@ private val FEE = Regex(
     IGNORE,
 )
 
-/** Two labels: `Your new balance:` and `Current Balance:`. */
+/**
+ * Two labels — `Your new balance:` and `Current Balance:` — and the colon is **optional**.
+ *
+ * The Cash In shape writes `Current Balance GHS 102.07` with no colon at all, which is why
+ * all seven deposits stored no balance until this was measured.
+ */
 private val BALANCE = Regex(
-    """(?:Your new balance|Current Balance)\s*:\s*GHS\s*(\d[\d,]*(?:\.\d{1,2})?)""",
+    """(?:Your new balance|Current Balance)\s*:?\s*GHS\s*(\d[\d,]*(?:\.\d{1,2})?)""",
+    IGNORE,
+)
+
+/** The transfer shape only: `Your new balance: 4652.89 GHS`. See [findBalance]. */
+private val BALANCE_REVERSED = Regex(
+    """(?:Your new balance|Current Balance)\s*:?\s*(\d[\d,]*(?:\.\d{1,2})?)\s*GHS""",
     IGNORE,
 )
 
 /** Two labels, differing in capitalisation too: `Financial Transaction Id` and `Transaction ID`. */
 private val TX_ID = Regex("""(?:Financial Transaction Id|Transaction ID)\s*:\s*(\d+)""", IGNORE)
 
-/** Captures `-` as well as a number, so [parseMoney] can reject it and yield null. */
-private val TAX = Regex("""(?:Tax was\s+GHS\s*|Tax charged\s*:\s*GHS\s*|Tax charged\s*:\s*)(-|\d[\d,]*(?:\.\d{1,2})?)""", IGNORE)
+/**
+ * Captures `-` as well as a number, so [parseMoney] can reject it and yield null — a tax
+ * nobody stated is a different fact from a tax of zero.
+ *
+ * Four spellings in real messages: `Tax was GHS -`, `Tax charged: 0`, `Tax charged: GHS 0`,
+ * and `Tax Charged 0` **with no colon whatsoever**.
+ */
+private val TAX = Regex(
+    """(?:Tax was\s+GHS\s*|Tax charged\s*:?\s*GHS\s*|Tax charged\s*:?\s*)(-|\d[\d,]*(?:\.\d{1,2})?)""",
+    IGNORE,
+)
 
 /**
  * Does this message carry money at all?
