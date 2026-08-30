@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Everything is excluded, deliberately, in both sections.
+
+  Sacred Rule 1: the phone is the only place the ledger lives. Android's automatic cloud
+  backup would copy the database to the user's Google Drive, and device-transfer would
+  copy it to a new phone over the network — both are exactly the thing the missing
+  INTERNET permission is there to prevent, done on the app's behalf by the OS.
+
+  Backup is the user's own CSV export at PLAN task 15, where he chooses where it goes.
+
+  `allowBackup="false"` in the manifest says the same thing for good measure; this file
+  exists because that attribute is deprecated from Android 12 and lint is right to ask
+  for the explicit version.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="file" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+        <exclude domain="file" />
+    </device-transfer>
+</data-extraction-rules>

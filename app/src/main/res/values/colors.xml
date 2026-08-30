@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the window background needs to exist as an Android resource. Everything
+         else is a Compose token in ui/theme/Color.kt. Keep this in step with `Bg` there. -->
+    <color name="bg">#FF101422</color>
+</resources>

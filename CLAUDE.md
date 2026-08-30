@@ -37,9 +37,34 @@ adb logcat -s Sika           # watch the receiver fire in real time
 There is no deploy. There is no server, no host, no Play Store.
 "Shipping" means `./gradlew installDebug` onto the Pixel 6 Pro over USB.
 
+## Toolchain — read before touching any build file
+
+**AGP 8.13.2 · Kotlin 2.3.21 · KSP 2.3.11 · Gradle 9.4.1 · JVM target 17.** Every one of those is
+pinned for a reason and they only work together. Measured at PLAN task 1 on 2026-08-30.
+
+- ⚠ **This project is on AGP 8. Wird and Thrum are on AGP 9. That is deliberate.** Room needs KSP,
+  and KSP does not work with AGP 9 by either route — built-in Kotlin makes KSP refuse, and turning
+  it off makes AGP 9's new DSL reject the classic Kotlin plugin. Escaping needs
+  `android.builtInKotlin=false` *and* `android.newDsl=false`, both already deprecated and removed
+  in AGP 10. **Do not add those flags.** PROFILE.md § 7 has the full errors.
+- ⚠ **Do not upgrade Gradle past 9.4.1** while on AGP 8. AGP 8 uses a Gradle internal API removed in
+  9.6.0 and the build dies at plugin-apply time. (`gradle-9.5` is not a real version either — the
+  releases are `9.5.0` and `9.5.1`.)
+- ⚠ **`kotlin { compilerOptions { jvmTarget } }` must match `compileOptions`.** AGP 9's built-in
+  Kotlin kept them in step; the classic plugin does not and defaults to the build JDK — the JBR is
+  21, so without this the build fails with "Inconsistent JVM-target compatibility".
+- Lint's `AndroidGradlePluginVersion` is disabled *only* because the upgrade it asks for is
+  impossible. Delete that disable the day KSP supports AGP 9.
+
 ## Machine gotchas
 
 - Android Studio, SDK and adb all work on this laptop. Use the bundled JBR as `JAVA_HOME`.
+- ⚠ **`local.properties` is gitignored and must be recreated on a new machine.** Two traps, both hit
+  on 2026-08-30: PowerShell's `Set-Content -Encoding utf8` writes a **BOM**, which corrupts the
+  first key so Gradle reports "SDK location not found"; and a lone backslash is an **escape
+  character** in a `.properties` file, so `C:\Users` silently becomes an invalid path. Write it with
+  forward slashes and an escaped colon:
+  `sdk.dir=C\:/Users/USER/AppData/Local/Android/Sdk`
 - ~34 s incremental builds. No Avast on this machine, so **no** JKS truststore workaround and
   **no** `--max-workers=1`.
 - The signing key came from the previous laptop: the first reinstall after any signing change

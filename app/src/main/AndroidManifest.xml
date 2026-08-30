@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      ⚠ THERE IS NO android.permission.INTERNET HERE, AND THAT IS THE POINT.
+
+      Sacred Rule 1: the phone is the only place the ledger lives. Leaving INTERNET out
+      means Android *enforces* that, rather than the app promising it. No library, no
+      future session, and no mistake can send a transaction anywhere, because the OS
+      will refuse the socket.
+
+      Do not add it. The one thing that would ever justify it is the optional Gemini
+      insight call at v1.1 task 14 — and that is a deliberate, separate decision,
+      governed by Sacred Rule 12.
+
+      SMS permissions arrive at PLAN task 6, not before.
+    -->
+
+    <!--
+      Backup is off twice over, and both halves are deliberate. Android's automatic cloud
+      backup would copy the ledger to Google Drive, and device transfer would send it to a
+      new phone — the OS doing on the app's behalf exactly what the missing INTERNET
+      permission exists to prevent. `allowBackup="false"` is the old switch;
+      `dataExtractionRules` is the Android 12+ one, and it excludes every domain.
+      See res/xml/data_extraction_rules.xml.
+    -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Sika">
+
+        <!-- No android:label here: it would repeat the application's, which lint flags
+             as RedundantLabel. The launcher uses the application label. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

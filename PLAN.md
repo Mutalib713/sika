@@ -12,10 +12,14 @@ wrong you should only ever have one suspect.
 
 ## Milestone 0 — Skeleton
 
-- [ ] **1. Gradle project + `./gradlew check`**
-  Kotlin, Compose, Material 3, Room, `minSdk 31`, `targetSdk 36`. Package `gh.mutalib.sika`.
-  Empty `ParserTest.kt` with one trivial assertion so the QA suite file exists from day one.
-  **Verify:** `./gradlew check` exits 0. Paste the output.
+- [x] **1. Gradle project + `check`** — done 2026-08-30
+  Kotlin, Compose, Material 3, Room + KSP, `minSdk 31`, `targetSdk 36`, package `gh.mutalib.sika`.
+  `ParserTest.kt` exists with one placeholder so the QA suite is wired from day one.
+  ⚠ **Found the hard way: KSP does not work with AGP 9 at all**, so this project runs AGP 8.13.2 /
+  Kotlin 2.3.21 / KSP 2.3.11 / Gradle 9.4.1 while Wird and Thrum stay on AGP 9. PROFILE.md § 7 and
+  CLAUDE.md carry the reasoning — do not "fix" it by adding the two deprecated AGP flags.
+  **Verified:** `.\check.ps1` → `check: PASS`, exit 0. Lint "No issues found", ParserTest 1/1
+  passed, `app/build/generated/ksp` present so KSP genuinely ran.
 
 - [ ] **2. The app runs on the Pixel**
   One screen, an empty state saying there is nothing yet. No permissions requested. No parser.

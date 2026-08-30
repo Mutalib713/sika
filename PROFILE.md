@@ -159,11 +159,37 @@ unmaintained SMS plugin, a second language, a bridge back to Kotlin anyway) all 
 | Monthly report | **`AlarmManager`** (exact, allow-while-idle), rescheduled each month | Needs a real calendar date; periodic background work is too vague for "the 1st" |
 | Notifications | `NotificationManager`, two channels: cash-out prompt, monthly report | |
 | Charts | **Hand-drawn on Compose `Canvas`** | One breakdown bar and one comparison. A charting library is more dependency than it is worth |
-| Build | Gradle / Android Studio, `minSdk 31`, `targetSdk 36` | Pixel 6 Pro shipped on API 31; no reason to support older |
+| Build | **AGP 8.13.2 · Kotlin 2.3.21 · KSP 2.3.11 · Gradle 9.4.1** · `minSdk 31` · `targetSdk 36` · `compileSdk 36` · JVM target 17 | Pixel 6 Pro shipped on API 31. **AGP 8, not 9 — see below.** Measured at PLAN task 1, not guessed |
 | Distribution | **Sideloaded APK over adb** | No Play Store, therefore no review, no permissions declaration form, no privacy policy |
 | Backend | **None until the sync task** | Local Room database is the source of truth; Supabase is a mirror, added last |
 
-**Cost: GHS 0 per month for the phone app. Supabase free tier when sync lands.**
+**Cost: GHS 0 per month. There is no infrastructure to pay for.**
+
+#### ⚠ Why AGP 8 when Wird and Thrum are on AGP 9
+
+Found at PLAN task 1 on 2026-08-30. Sika needs Room, Room needs KSP, and KSP cannot be made to work
+with AGP 9 — both escape routes are closed, each by the other:
+
+- **AGP 9's built-in Kotlin** → KSP refuses to configure: *"KSP is not compatible with Android
+  Gradle Plugin's built-in Kotlin. Please disable by adding `android.builtInKotlin=false` … and
+  apply `kotlin("android")` plugin"*
+- **So disable it and apply Kotlin the classic way** → AGP 9's new DSL refuses: *"The
+  `org.jetbrains.kotlin.android` plugin is not compatible with AGP's 9.0 new DSL"*
+
+Getting through needs `android.builtInKotlin=false` **and** `android.newDsl=false` together — two
+flags AGP already marks deprecated and removes in version 10. A foundation resting on two escape
+hatches breaks on someone else's release schedule, and § 3 asks this app to still be correct in
+three months.
+
+Two consequences that follow, both recorded so nobody "fixes" them:
+
+- **Gradle is pinned at 9.4.1.** AGP 8 cannot run on Gradle 9.6+ — it uses an internal API removed
+  in 9.6.0 and Gradle names it. 9.4.1 is under the ceiling and already cached on this machine.
+- **Lint's `AndroidGradlePluginVersion` is disabled**, uniquely among the disables, because the
+  upgrade it demands is *impossible* rather than merely inconvenient. Leaving it on would fail
+  `check` forever on a fix nobody can apply.
+
+**Revisit the day KSP supports AGP 9 — and never by adding the two flags.**
 
 ### Implementation decisions
 

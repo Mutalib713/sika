@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Dark only, deliberately. docs/ui-guidelines.md: #101422 is the ground, and
+      inverting to a light theme needs a second set of decisions Mutalib has not made.
+      Half-supporting light mode is worse than not supporting it.
+
+      This is only the window background before Compose draws — the real palette lives
+      in ui/theme/Color.kt. Matching them stops the white flash on cold start.
+    -->
+    <style name="Theme.Sika" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+</resources>
