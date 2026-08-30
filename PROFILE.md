@@ -264,12 +264,12 @@ Everything lives in one Room database in the app's private folder. No other app 
 | `occurredAt` | Long | epoch millis, from Android's SMS timestamp (Sacred Rule 5) |
 | `direction` | enum | `IN` / `OUT` |
 | `shape` | enum | `PAYMENT_MADE` / `PAYMENT_RECEIVED` / `CASH_OUT` / `BILL_AIRTIME` / `UNKNOWN` |
-| `amount` | Double | GHS |
-| `fee` | Double | |
-| `tax` | Double? | often literally `-` in the SMS |
+| `amount` | **Long** | **pesewas**, always positive — GHS 10.00 is `1000`. Corrected from `Double` at task 3 |
+| `fee` | **Long** | pesewas. Never null: a missing fee breaks reconciliation |
+| `tax` | **Long?** | pesewas. Null when the SMS writes `-`, which is **not** the same as zero |
 | `counterparty` | String | "MTN AIRTIME", an agent number, a person's name |
 | `reference` | String? | usually `-` or `1` in practice — a hint, not the category |
-| `balanceAfter` | Double? | the reconciliation anchor |
+| `balanceAfter` | **Long?** | pesewas. The reconciliation anchor |
 | `label` | String? | null = unlabelled |
 | `labelSource` | enum | `AUTO_RULE` / `MANUAL` / `PROMPT` / `NONE` |
 | `rawBody` | String | the original SMS, kept so a parser fix can reprocess (Sacred Rule 6) |
@@ -306,6 +306,19 @@ From Mutalib's real inbox, 2026-08-30. A throwaway regex probe parsed **4 of 4**
 2. `Cash Out made for GHS{amt} to {agent}. Current Balance: GHS{bal} Financial Transaction Id: {id}. ... Fee charged: GHS{fee}.`
 3. `Payment received for GHS {amt} from {sender}  Current Balance: GHS {bal} . Available Balance: GHS {bal}. Reference: {ref}. Transaction ID: {id}. TRANSACTION FEE: {fee}`
 4. `Payment made for GHS {amt} to {payee} Current Balance: GHS {bal} . Available Balance: GHS {bal}. Reference: {ref}. Transaction ID: {id}. Fee charged: GHS{fee} Tax charged: {tax}.`
+
+### ⚠ Money is a Long of pesewas, never a Double
+
+Corrected at PLAN task 3 on 2026-08-30. This section originally said `Double`, and that was wrong
+in a way that would have quietly undermined Sacred Rule 3.
+
+Reconciliation asks whether `previous − amount − fee == new`. In binary floating point that
+comparison is not reliably true even when every figure is right — `0.1 + 0.2` is
+`0.30000000000000004`. Doubles would force a tolerance into the check, and a tolerance is exactly
+what lets a real discrepancy hide inside it.
+
+As integer pesewas the comparison is exact: a flagged gap is always real, and a clean row is
+always genuinely clean. GHS 10.00 is `1000`.
 
 ### Parser landmines already measured — do not re-learn these
 

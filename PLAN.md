@@ -35,12 +35,18 @@ wrong you should only ever have one suspect.
 
 The risky heart. No UI in this milestone at all.
 
-- [ ] **3. ⚠ Parser + golden tests**
-  The four confirmed shapes from PROFILE.md §8. Write the tests *first*, then make them pass.
-  Handle the measured landmines: optional space after `GHS`, three fee labels, two balance labels,
-  two ID labels, the trailing full stop, `Tax was GHS -.`
-  **Risky because:** these are four samples of a format only MTN controls.
-  **Verify:** 4/4 golden tests green. Show the test output.
+- [x] **3. ⚠ Parser + golden tests** — done 2026-08-30
+  `MomoParser` as a list of shape matchers, pure Kotlin with no Android import so the suite runs on
+  the JVM in 0.1s. All four confirmed shapes, every measured landmine covered.
+  **Money became `Long` pesewas, not `Double`** — PROFILE.md § 8 corrected. Reconciliation compares
+  `prev − amount − fee == new`, and with Doubles that needs a tolerance, which is exactly what hides
+  a real discrepancy.
+  **Verified:** `check: PASS`, **12/12 tests green**, lint clean.
+  **And verified the suite has teeth**, by mutation: replacing the fee pattern with `([\d.,]+)`
+  makes `shape 2 - cash out` fail with `expected:<50> but was:<0>`. Two earlier mutation attempts
+  changed nothing, which corrected a wrong comment — `\d+` cannot swallow a full stop, only a
+  character class *containing* the dot can. The failure mode is the important part: the fee goes
+  silently to **zero** rather than crashing.
 
 - [ ] **4. Room entities, DAO, dedupe**
   `transactions` and `rules` exactly as PROFILE.md §8 specifies, including `rawBody` and

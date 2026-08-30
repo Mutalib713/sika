@@ -1,30 +1,191 @@
 package gh.mutalib.sika
 
+import gh.mutalib.sika.parser.Direction
+import gh.mutalib.sika.parser.MomoParser
+import gh.mutalib.sika.parser.ParseResult
+import gh.mutalib.sika.parser.ParsedTransaction
+import gh.mutalib.sika.parser.Shape
+import gh.mutalib.sika.parser.asCedis
+import gh.mutalib.sika.parser.parseMoney
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * **The QA suite. It only ever grows.**
+ * **The golden suite. It only ever grows.**
  *
- * PROFILE.md § 12: every known MoMo message shape goes in here as a golden test — the
- * exact SMS in, the exact row out. The four confirmed shapes arrive at PLAN task 3.
+ * Every message below is a real MTN MoMo SMS from Mutalib's own inbox, supplied
+ * 2026-08-30, with names and numbers replaced by him before they were shared. The wording,
+ * spacing and punctuation are untouched — that is the whole value of them.
  *
- * The rule that matters more than any single test: when PLAN task 5 sweeps the real
- * inbox and finds a shape nobody has seen, **the new test is written here first**, and
- * only then is the parser changed to pass it. A parser fixed without a test is a parser
- * that will break the same way again.
- *
- * Task 1 has no parser yet, so this holds one placeholder to prove the suite runs and
- * `check` is wired to it. Delete this test when the first real shape lands.
+ * **The rule, from PROFILE.md § 12:** when PLAN task 5 sweeps the real inbox and finds a
+ * shape nobody has seen, **the test is written here first** and only then is the parser
+ * changed to pass it. A parser fixed without a test breaks the same way again.
  */
 class ParserTest {
 
+    // ---------------------------------------------------------------- the four shapes
+
+    private val airtime =
+        "Your payment of GHS 10.00 to MTN AIRTIME has been completed at 2026-06-10 21:00:02. " +
+            "Your new balance: GHS 90.57. Fee was GHS 0.00 Tax was GHS -. Reference: -. " +
+            "Financial Transaction Id: 83077174642. External Transaction Id: 83077174642." +
+            "Download the MoMo App for a Faster & Easier Experience Click here: " +
+            "https://mtnmymomo.onelink.me/XJOt/MoMo"
+
+    private val cashOut =
+        "Cash Out made for GHS20.00 to 000. Current Balance: GHS9.79 " +
+            "Financial Transaction Id: 87482945712. Cash-out fee is charged automatically from " +
+            "your MTN MoMo wallet. Please do not pay any fees to the Agent. Thank you for using " +
+            "MTN MobileMoney. Fee charged: GHS0.50."
+
+    private val received =
+        "Payment received for GHS 100.00 from Aaa  Current Balance: GHS 179.29 . " +
+            "Available Balance: GHS 179.29. Reference: 1. Transaction ID: 88139850923. " +
+            "TRANSACTION FEE: 0.00"
+
+    private val sent =
+        "Payment made for GHS 5.00 to bbb Current Balance: GHS 102.41 . " +
+            "Available Balance: GHS 102.41. Reference: 1. Transaction ID: 88336392260. " +
+            "Fee charged: GHS0.50 Tax charged: 0. Download the MoMo App for a Faster & Easier " +
+            "Experience. Click here: https://mtnmymomo.onelink.me/XJOt/MoMo"
+
     @Test
-    fun `qa suite is wired up`() {
-        // Guarding a real fact rather than asserting true == true: this is the amount
-        // arithmetic every later test depends on, in the currency the app actually uses.
-        val amount = 10.00
-        val fee = 0.50
-        assertEquals(10.50, amount + fee, 0.001)
+    fun `shape 1 - airtime purchase`() {
+        val t = parsed(airtime)
+        assertEquals(Shape.BILL_AIRTIME, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        assertEquals(1000L, t.amount)          // GHS 10.00
+        assertEquals(0L, t.fee)
+        assertEquals(9057L, t.balanceAfter)    // GHS 90.57
+        assertEquals("MTN AIRTIME", t.counterparty)
+        assertEquals("83077174642", t.txId)
+        // `Tax was GHS -.` — a dash is not zero, and must not become zero.
+        assertNull(t.tax)
+        // `Reference: -.` — same reasoning.
+        assertNull(t.reference)
+    }
+
+    @Test
+    fun `shape 2 - cash out`() {
+        val t = parsed(cashOut)
+        assertEquals(Shape.CASH_OUT, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        // ⚠ No space after GHS in this shape, unlike shape 1.
+        assertEquals(2000L, t.amount)
+        // ⚠ The fee sits at the very end, after a paragraph of boilerplate, and its
+        // trailing full stop is what crashed the first parser written against real data.
+        assertEquals(50L, t.fee)
+        assertEquals(979L, t.balanceAfter)
+        assertEquals("000", t.counterparty)
+        assertEquals("87482945712", t.txId)
+        assertNull(t.reference)                // this shape has no Reference field at all
+    }
+
+    @Test
+    fun `shape 3 - payment received`() {
+        val t = parsed(received)
+        assertEquals(Shape.PAYMENT_RECEIVED, t.shape)
+        assertEquals(Direction.IN, t.direction)
+        assertEquals(10_000L, t.amount)        // GHS 100.00
+        // ⚠ `TRANSACTION FEE: 0.00` — capitals, and no GHS prefix.
+        assertEquals(0L, t.fee)
+        assertEquals(17_929L, t.balanceAfter)
+        // ⚠ Two spaces between the name and "Current Balance" in the real message.
+        assertEquals("Aaa", t.counterparty)
+        // ⚠ Labelled `Transaction ID`, not `Financial Transaction Id`.
+        assertEquals("88139850923", t.txId)
+        assertEquals("1", t.reference)
+    }
+
+    @Test
+    fun `shape 4 - payment made`() {
+        val t = parsed(sent)
+        assertEquals(Shape.PAYMENT_MADE, t.shape)
+        assertEquals(Direction.OUT, t.direction)
+        assertEquals(500L, t.amount)           // GHS 5.00
+        // ⚠ `GHS 5.00` and `GHS0.50` in the SAME message. The space is not reliable.
+        assertEquals(50L, t.fee)
+        assertEquals(10_241L, t.balanceAfter)
+        assertEquals("bbb", t.counterparty)
+        assertEquals("88336392260", t.txId)
+        assertEquals("1", t.reference)
+        // `Tax charged: 0.` — here it IS zero, unlike shape 1's dash.
+        assertEquals(0L, t.tax)
+    }
+
+    // ------------------------------------------------------- the landmines, on their own
+
+    @Test
+    fun `trailing full stop is not swallowed into the number`() {
+        // The original failure, isolated: "GHS0.50." must be 50 pesewas, not a crash.
+        assertEquals(50L, parsed(cashOut).fee)
+    }
+
+    @Test
+    fun `a dash where a number belongs is null, never zero`() {
+        // Sacred Rule 7 in miniature: unreadable is not the same as absent, and neither is
+        // the same as zero. A tax of zero and a tax nobody stated are different facts.
+        assertNull(parseMoney("-"))
+        assertNull(parseMoney(null))
+        assertNull(parseMoney(""))
+    }
+
+    @Test
+    fun `money is pesewas, exactly`() {
+        assertEquals(1000L, parseMoney("10.00"))
+        assertEquals(2000L, parseMoney("20"))        // no decimal part at all
+        assertEquals(1050L, parseMoney("10.5"))      // one digit means tenths, so 50p
+        assertEquals(50L, parseMoney("0.50"))
+        assertEquals(100_000L, parseMoney("1,000.00")) // thousands separator
+        assertNull(parseMoney("0.50."))              // the landmine itself
+        assertNull(parseMoney("abc"))
+    }
+
+    @Test
+    fun `pesewas arithmetic is exact where doubles are not`() {
+        // Why money is a Long. As Doubles, 0.1 + 0.2 != 0.3 and reconciliation would need
+        // a tolerance — which is precisely what lets a real discrepancy hide.
+        assertEquals(30L, parseMoney("0.10")!! + parseMoney("0.20")!!)
+        assertTrue(0.1 + 0.2 != 0.3)
+
+        // The reconciliation sum itself, on shape 4's real figures:
+        // balance before (107.91) − amount (5.00) − fee (0.50) == balance after (102.41)
+        assertEquals(10_241L, 10_791L - 500L - 50L)
+    }
+
+    @Test
+    fun `renders the way MoMo writes it`() {
+        assertEquals("GHS 10.00", 1000L.asCedis())
+        assertEquals("GHS 0.50", 50L.asCedis())
+        assertEquals("GHS 1000.00", 100_000L.asCedis())
+    }
+
+    // ------------------------------------------------------------- refusing to guess
+
+    @Test
+    fun `an unknown shape is refused, not guessed`() {
+        val r = MomoParser.parse("Your MTN data bundle of 5GB is now active. Enjoy!")
+        assertTrue("expected Unrecognised, got $r", r is ParseResult.Unrecognised)
+    }
+
+    @Test
+    fun `a matching shape with no transaction id is refused`() {
+        // Dedupe is keyed on the id (Sacred Rule 4). Without one the inbox sweep would
+        // re-insert this row on every launch, so the review queue is the only safe home.
+        val r = MomoParser.parse("Payment made for GHS 5.00 to bbb Current Balance: GHS 102.41 .")
+        assertTrue("expected Unrecognised, got $r", r is ParseResult.Unrecognised)
+    }
+
+    @Test
+    fun `an empty message is refused`() {
+        assertTrue(MomoParser.parse("") is ParseResult.Unrecognised)
+    }
+
+    private fun parsed(body: String): ParsedTransaction {
+        val r = MomoParser.parse(body)
+        assertTrue("parser refused a known-good message: $r", r is ParseResult.Parsed)
+        return (r as ParseResult.Parsed).transaction
     }
 }
