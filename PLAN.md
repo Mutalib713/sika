@@ -60,14 +60,28 @@ The risky heart. No UI in this milestone at all.
   answer and reconciliation result is silently destroyed on each sweep. The test that caught it was
   `reInsertingASeenTransactionDoesNotDestroyItsLabel`: `expected:<Airtime> but was:<null>`.
 
-- [ ] **5. ⚠ Inbox sweep + first-run backfill**
-  `ContentResolver` query against the SMS provider, filtered to the MoMo sender. Dates from
-  Android's timestamp, never the body.
-  **Risky because:** this is the first contact with your real inbox. **This task answers open
-  question 1** — whether shapes beyond the four exist.
-  **Verify:** run on the Pixel and print four numbers: total MoMo messages found, parsed OK,
-  `UNKNOWN`, and how far back the oldest message goes. Any `UNKNOWN` becomes a new golden test in
-  task 3 *before* the parser is touched.
+- [x] **5. ⚠ Inbox sweep + first-run backfill** — done 2026-08-30
+  `ContentResolver` query against the SMS provider, sender `MobileMoney`, dates from Android's
+  timestamp. Runs on every launch, not just the first.
+  **Verified on the Pixel:** `301 matched · 118 transactions · 144 not transactions · 39
+  unrecognised · 152 in ledger`. A second run added **0 new rows** — Sacred Rule 4 holding on real
+  data across restarts.
+  **Open question 1 is answered, and the answer is yes.** The four known shapes cover only ~75% of
+  real transactions. Six more are recorded in PROFILE.md § 8, which re-opens task 3 → **task 5b**.
+  Also changed here: the sender filter narrowed from three loose patterns to the one real address
+  (465 → 301 messages read, nothing lost), and `ParseResult` gained `NotATransaction` so MTN's OTPs
+  and adverts stop flooding the review queue.
+
+- [ ] **5b. ⚠ The six shapes the sweep found** *(task 3 re-opened, exactly as its rule requires)*
+  Golden tests **first**, from the real message bodies in PROFILE.md § 8, then extend the parser.
+  In rough order of how much money they represent: `Payment for …` (×20, out) · `Cash In received …`
+  (×7, in) · failed payments (×9, **no money moved**) · exceeded-limit (×1, none) ·
+  `You have transferred …` (×1, out) · `Y'ello … You have Paid …` (×1, out).
+  **Risky because:** shapes 7 and 8 are failures that must never be counted as spending, and shape 9
+  writes its balance as `4652.89 GHS` — number first, currency after — which every existing pattern
+  would misread.
+  **Verify:** every shape green as a golden test, then re-sweep the real inbox and show `unrecognised`
+  falling from 39 toward 0.
 
 - [ ] **6. ⚠ Live BroadcastReceiver**
   Manifest-declared, `SMS_RECEIVED`, runtime permission request.
