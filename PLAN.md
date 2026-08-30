@@ -116,10 +116,22 @@ The risky heart. No UI in this milestone at all.
   by the dedupe. Test row cleared afterwards; ledger rebuilt to 141 rows from real messages only.
   `check: PASS`, 20/20 golden tests, 9/9 instrumented.
 
-  - [ ] **Stage 2 — the live test.** Buy GHS 1 of airtime (or any small transaction) with the app
-        closed and `adb logcat -s Sika` running. A `live:` line must appear without the app being
-        opened. This is the only step that exercises PDU decoding and Android's real wake-up
-        behaviour, and neither can be faked.
+  - [x] **Stage 2 — the live test.** Passed 2026-08-30 23:47 on a real airtime purchase, with
+        Sika backgrounded and never opened:
+        ```
+        23:47:03.589 I/Sika: live: recorded BILL_AIRTIME OUT 10p to 'MTN AIRTIME' txId=88451332200
+        ```
+        Then, on the next launch, the sweep re-read that same message and added **0 new** rows —
+        the two routes overlapping harmlessly, which is the whole point of having both.
+
+        ⚠ **Two attempts were wasted by my own test setup**, both now in CLAUDE.md:
+        `connectedDebugAndroidTest` had silently uninstalled the app, and `am force-stop` put it in
+        Android's *stopped state* where it receives no broadcasts at all. Use `am kill` instead —
+        it frees the process without setting the stopped flag.
+
+        ⚠ **And stage 1 was weaker than first reported.** `adb`'s `am broadcast` sets
+        `FLAG_INCLUDE_STOPPED_PACKAGES`, so the debug injector reaches a stopped app that a real
+        SMS never would. It proves the ledger path, never delivery.
 
 ## Milestone 2 — Trust
 
