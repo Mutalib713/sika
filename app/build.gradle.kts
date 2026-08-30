@@ -22,7 +22,20 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1"
+
+        // Room's DAOs talk to real SQLite, so they are tested on the real device rather
+        // than against a mock. `./gradlew connectedDebugAndroidTest` runs these.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    // Room writes the schema out as JSON on every build. Set up on day one, before there
+    // is anything to migrate, because PROFILE.md § 7 requires a migration from version 1:
+    // without the version-1 schema on disk there is nothing for a future migration test to
+    // migrate *from*, and by then the history is the whole point of the app.
+    ksp {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
     buildTypes {
         release {
@@ -113,4 +126,11 @@ dependencies {
     // structuring it that way: junit alone tests every message shape, on the JVM, in
     // milliseconds, with no emulator and no device. PROFILE.md § 12.
     testImplementation("junit:junit:4.13.2")
+
+    // Instrumented tests — these run on the Pixel against real SQLite. A dedupe guarantee
+    // verified against anything less than the real engine is not a guarantee.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:2.8.4")
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }

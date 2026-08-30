@@ -48,10 +48,17 @@ The risky heart. No UI in this milestone at all.
   character class *containing* the dot can. The failure mode is the important part: the fee goes
   silently to **zero** rather than crashing.
 
-- [ ] **4. Room entities, DAO, dedupe**
-  `transactions` and `rules` exactly as PROFILE.md §8 specifies, including `rawBody` and
-  `balanceAfter`. Unique index on `txId`.
-  **Verify:** a test that inserts the same `txId` three times and asserts exactly one row survives.
+- [x] **4. Room entities, DAO, dedupe** — done 2026-08-30
+  `transactions`, `rules` **and `categories`** (added to PROFILE.md § 8 after this plan was written,
+  so building it now avoids a migration one task later). Unique index on `txId`, `rawBody` and
+  `balanceAfter` present, enums stored by name, `exportSchema = true` from version 1.
+  **Verified on the Pixel** — real SQLite, not a fake: `connectedDebugAndroidTest` **9/9 green**,
+  plus `check: PASS` for lint and the 12 parser tests.
+  ⚠ **The verification this task originally specified was not sufficient**, and mutation testing
+  showed it. Swapping `IGNORE` for `REPLACE` — the obvious wrong choice — leaves the row count at
+  exactly one, so *"insert three times, assert one row"* still passes while every label, cash-out
+  answer and reconciliation result is silently destroyed on each sweep. The test that caught it was
+  `reInsertingASeenTransactionDoesNotDestroyItsLabel`: `expected:<Airtime> but was:<null>`.
 
 - [ ] **5. ⚠ Inbox sweep + first-run backfill**
   `ContentResolver` query against the SMS provider, filtered to the MoMo sender. Dates from

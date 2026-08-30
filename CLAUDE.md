@@ -32,6 +32,14 @@ He is a beginner who ships real projects. Never infer his level from his output.
 adb logcat -s Sika           # watch the receiver fire in real time
 ```
 
+Room's DAOs are tested against **real SQLite on the phone**, which `check` cannot run because it
+must work with no device attached:
+
+```bash
+./gradlew connectedDebugAndroidTest   # needs the Pixel plugged in
+```
+
+
 ## Deploy
 
 There is no deploy. There is no server, no host, no Play Store.
@@ -86,6 +94,14 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
 - **`Reference:` is not the category.** In real data it is `-` or `1`. It is a hint that pre-fills
   a label, nothing more.
 - MTN sometimes does not send an SMS at all. That is what reconciliation is for.
+- ⚠ **`OnConflictStrategy.IGNORE` on the transaction insert is load-bearing. Never `REPLACE`.**
+  Room implements REPLACE as delete-then-insert, so every inbox sweep would wipe the label
+  Mutalib set, his cash-out answers and the reconciliation result — silently, on every launch.
+  Proved by mutation 2026-08-30: REPLACE makes the label come back `null`.
+  ⚠ And note *what did not catch it*: the row-count test still passed, because REPLACE also
+  leaves exactly one row. Only `reInsertingASeenTransactionDoesNotDestroyItsLabel` failed.
+- ⚠ **No `fallbackToDestructiveMigration()` on the database builder.** It means "wipe everything
+  if the schema changed", on the one dataset that cannot be rebuilt from the SMS inbox.
 
 ## Sacred Rules (copied from PROFILE.md — do not reopen without Mutalib's say-so)
 
