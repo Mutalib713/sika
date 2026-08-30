@@ -137,12 +137,24 @@ The risky heart. No UI in this milestone at all.
 
 Sacred Rule 3: this ships before the pretty screens, not after.
 
-- [ ] **7. Reconciliation**
-  Walk the ledger in time order, check `previous balance − amount − fee == new balance`, mark each
-  row `OK` / `GAP` / `UNCHECKED`.
-  **Verify:** run over the real backfill from task 5. Report how many rows reconcile and where the
-  gaps are. **Gaps are expected** — MTN does not always send an SMS. Finding them is a pass, not a
-  failure.
+- [x] **7. Reconciliation** — done 2026-08-30
+  `Reconciler` is pure Kotlin over a plain list, so the arithmetic is tested on the JVM;
+  `ReconcilePass` is the thin database half and runs after every sweep rather than on request.
+  **Verified over the real 144-row ledger:**
+  ```
+  reconcile: 142 ok, 1 gaps, 1 unchecked, of 144
+
+  gap  22 Jul 12:56  PAYMENT_MADE '<counterparty>'  amount GHS 6.00
+       expected GHS 4595.39   actual GHS 4590.39   diff -GHS 5.00
+  ```
+  **GHS 5.00 left the wallet on 22 July that MoMo never texted about.** The one unchecked row is
+  the oldest, which has nothing before it to check against. 8/8 reconciler tests green, plus
+  20/20 parser and 9/9 instrumented.
+  ⚠ **A test caught a real flaw in the first algorithm.** It anchored only on the last *stated*
+  balance and ignored the amounts of rows that state none, so any such row made the next one look
+  wrong by exactly its amount. A false gap is worse than a missed one — it teaches you to ignore
+  the warning. Now a running balance carries through every transaction and re-anchors whenever
+  MoMo states a figure.
 
 - [ ] **8. Review queue**
   Anything `parsedOk = false` is held, visible and countable. Never guessed, never dropped.

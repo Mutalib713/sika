@@ -145,6 +145,14 @@ private fun Report(r: SweepReport) {
     Stat("Oldest message", r.oldest.asDate())
     Stat("Newest message", r.newest.asDate())
 
+    Stat("Reconciled OK", r.reconcile.ok.toString())
+    Stat(
+        "Balance gaps",
+        r.reconcile.gaps.size.toString(),
+        if (r.reconcile.gaps.isNotEmpty()) Warn else null,
+    )
+    Stat("Unchecked", r.reconcile.unchecked.toString())
+
     if (r.senders.isNotEmpty()) {
         Muted("Senders seen: " + r.senders.joinToString { "${it.first} (${it.second})" })
     }

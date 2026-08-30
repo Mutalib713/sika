@@ -5,6 +5,8 @@ import android.util.Log
 import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ledger.ReconcilePass
+import gh.mutalib.sika.ledger.ReconcileReport
 import gh.mutalib.sika.data.toEntity
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
@@ -65,6 +67,10 @@ object Sweeper {
         val insertedIds = dao.insertAll(rows)
         val newlyAdded = insertedIds.count { it != -1L }
 
+        // Sacred Rule 3: the check runs on every sweep rather than on request. It is cheap,
+        // and a verification you have to remember to trigger is one that stops happening.
+        val reconcile = ReconcilePass.run(context)
+
         // Which sender each *transaction* actually came from. The point of measuring this
         // is to narrow the address filter: the first sweep matched 465 messages on a
         // deliberately loose pattern, and only 118 of them were money.
@@ -88,6 +94,7 @@ object Sweeper {
                 .maxOfOrNull { it.receivedAt },
             totalInLedger = dao.count(),
             unrecognisedSamples = unrecognised.take(5).map { it.body },
+            reconcile = reconcile,
         ).also {
             Log.i(TAG, "sweep: ${it.found} matched, ${it.parsed} transactions, " +
                 "${it.notTransactions} not transactions, ${it.unrecognised} unrecognised, " +
@@ -129,4 +136,5 @@ data class SweepReport(
     val newest: Long?,
     val totalInLedger: Int,
     val unrecognisedSamples: List<String>,
+    val reconcile: ReconcileReport,
 )
