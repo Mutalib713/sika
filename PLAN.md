@@ -196,11 +196,16 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   **Verify:** `gate.py` output pasted, humanizer string gate on every visible string, screenshot on
   the real device. *(impeccable's detector does not read `.kt` — say so, don't fake it.)*
 
-- [ ] **11. Labels + learn-once rules**
-  Tap any transaction to set a label. Setting one writes a rule keyed on the counterparty, so the
-  next message from `MTN AIRTIME` or `bbb` labels itself.
-  **Verify:** label a counterparty once, inject a second message from the same counterparty, confirm
-  it arrives already labelled.
+- [x] **11. Labels + learn-once rules** — built 2026-08-31, device check pending
+  `TransactionSheet` (screen 2 of docs/screens.md): tap any row for the amount, the category chips
+  with a `+` at the end, the learn-once toggle, the receipt, and the original SMS behind a
+  disclosure. Wired to both Home and the all-transactions list.
+  Ticking **"Always label X this way"** — on by default — writes a rule keyed on the counterparty
+  and applies it to every other row from that party. The hand-set row is always `MANUAL`, so a rule
+  can never later overwrite a decision made by hand.
+  `check: PASS`, gate.py 0 block, humanizer 100.0/85.
+  - [ ] **Device check.** Tap a row, pick a category, confirm every other row from the same
+        counterparty relabels itself; then add a category with `+` and confirm it persists.
 
 - [ ] **12. Cash-out prompt**
   When a `CASH_OUT` row lands, a notification asks *"GHS X — what for?"* with one-tap answers.

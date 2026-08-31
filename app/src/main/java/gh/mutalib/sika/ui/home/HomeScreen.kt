@@ -211,10 +211,19 @@ private fun BalanceCapsule(state: HomeState, animated: Boolean, entrance: Entran
             .specularSweep(enabled = animated)
             .padding(horizontal = 20.dp, vertical = 20.dp),
     ) {
+        // ⚠ The period is named on the label, not implied by the screen.
+        //
+        // "OUT" alone does not say out of *what* — this month, this semester, all time?
+        // Mutalib caught it 2026-08-31, and it matters because the app exists to answer
+        // "what did I spend this month / this semester". A figure whose period you have to
+        // infer is a figure you cannot act on.
+        //
+        // [HomeState.periodLabel] carries the answer, so when semester ranges arrive in
+        // v1.1 these labels follow without touching this composable.
         Rising(entrance, 0) {
             Row(Modifier.fillMaxWidth()) {
-                Cell("OUT", "−" + state.moneyOut.plain(), TextPrimary, Modifier.weight(1f))
-                Cell("IN", "+" + state.moneyIn.plain(), Accent, Modifier.weight(1f))
+                Cell("SPENT IN ${state.periodLabel}", "−" + state.moneyOut.plain(), TextPrimary, Modifier.weight(1f))
+                Cell("RECEIVED IN ${state.periodLabel}", "+" + state.moneyIn.plain(), Accent, Modifier.weight(1f))
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -225,13 +234,13 @@ private fun BalanceCapsule(state: HomeState, animated: Boolean, entrance: Entran
         Rising(entrance, 2) {
             Row(Modifier.fillMaxWidth()) {
                 Cell(
-                    "TODAY",
+                    "SPENT TODAY",
                     if (state.spentToday == 0L) "—" else "−" + state.spentToday.plain(),
                     TextPrimary,
                     Modifier.weight(1f),
                 )
                 Cell(
-                    "BALANCE",
+                    "BALANCE NOW",
                     if (state.balance == null) "—" else balance.plain(),
                     TextPrimary,
                     Modifier.weight(1f),

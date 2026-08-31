@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,10 +53,12 @@ import gh.mutalib.sika.ui.scrimBehindDock
 import gh.mutalib.sika.ui.home.AllTransactionsScreen
 import gh.mutalib.sika.ui.home.HomeScreen
 import gh.mutalib.sika.ui.home.HomeViewModel
+import gh.mutalib.sika.ui.home.TransactionSheet
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
 import gh.mutalib.sika.ui.theme.SikaTheme
+import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
 
@@ -77,6 +81,7 @@ private sealed interface Gate {
     data object Ready : Gate
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SikaApp() {
     val context = LocalContext.current
@@ -152,18 +157,26 @@ private fun SikaApp() {
             // reached from the other. Reach for Navigation Compose when there are more.
             var showingAll by remember { mutableStateOf(false) }
 
+            val categories by vm.categories.collectAsStateWithLifecycle()
+            var sheetFor by remember { mutableStateOf<Long?>(null) }
+            // Re-read from state each recomposition so the sheet updates the moment a
+            // category is picked, rather than showing the row as it was when tapped.
+            val sheetRow = sheetFor?.let { id -> state.days.flatMap { it.rows }.firstOrNull { it.id == id } }
+
             Box(Modifier.fillMaxSize()) {
                 if (showingAll) {
                     AllTransactionsScreen(
                         state = state,
                         animated = animated,
                         onBack = { showingAll = false },
+                        onTransactionClick = { sheetFor = it.id },
                     )
                 } else {
                     HomeScreen(
                         state = state,
                         animated = animated,
                         onSeeAll = { showingAll = true },
+                        onTransactionClick = { sheetFor = it.id },
                     )
                 }
                 // Fades the list out before it reaches the dock, so rows never collide with
@@ -183,6 +196,24 @@ private fun SikaApp() {
                         .navigationBarsPadding()
                         .padding(horizontal = 22.dp, vertical = 22.dp),
                 )
+            }
+
+            if (sheetRow != null) {
+                ModalBottomSheet(
+                    onDismissRequest = { sheetFor = null },
+                    containerColor = SurfaceRaised,
+                    dragHandle = null,
+                ) {
+                    TransactionSheet(
+                        row = sheetRow,
+                        categories = categories,
+                        onPick = { category, alsoRemember ->
+                            vm.setCategory(sheetRow, category, alsoRemember)
+                        },
+                        onAddCategory = vm::addCategory,
+                        onDismiss = { sheetFor = null },
+                    )
+                }
             }
         }
     }
