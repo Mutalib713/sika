@@ -29,6 +29,16 @@ val TextPrimary = Color(0xFFFFFFFF)
 /** Dates, counterparty, captions. Derived. 7.11:1 on Bg, so it passes body text. */
 val TextMuted = Color(0xFF9AA1B5)
 
+/**
+ * Labels sitting **on glass**, where [TextMuted] is not bright enough.
+ *
+ * ⚠ Measured, not guessed. The BALANCE label failed at **4.17:1** in the approved sketch
+ * purely because it sat over a bright patch of the drifting aura — on glass, contrast
+ * depends on where the text happens to land. This value plus a more opaque glass fill
+ * brought it to 4.71:1. **Re-measure if the aura or the glass fill changes.**
+ */
+val TextOnGlass = Color(0xFFD3D9E6)
+
 /** Primary action, money coming in, selected state. His. */
 val Accent = Color(0xFFA8DCE7)
 

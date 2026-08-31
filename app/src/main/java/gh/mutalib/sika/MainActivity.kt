@@ -5,21 +5,22 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,143 +34,142 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import gh.mutalib.sika.sms.SweepReport
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import gh.mutalib.sika.sms.Sweeper
+import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.Dock
+import gh.mutalib.sika.ui.Tab
+import gh.mutalib.sika.ui.animationsEnabled
+import gh.mutalib.sika.ui.home.HomeScreen
+import gh.mutalib.sika.ui.home.HomeViewModel
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.SikaTheme
 import gh.mutalib.sika.ui.theme.TextMuted
-import gh.mutalib.sika.ui.theme.Warn
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import gh.mutalib.sika.ui.theme.TextPrimary
 
 /** One tag for the whole app, so `adb logcat -s Sika` shows everything and nothing else. */
 const val TAG = "Sika"
 
-/**
- * PLAN task 5: ask for SMS access, sweep the inbox, and report what was found.
- *
- * This screen is a **diagnostic**, not the product. Its job is to answer the open question
- * in PROFILE.md § 11 — are there MoMo message shapes beyond the four confirmed ones? — by
- * showing real counts from a real inbox. The Home screen replaces it at task 10.
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "MainActivity started")
         enableEdgeToEdge()
-        setContent {
-            SikaTheme {
-                Scaffold { insets ->
-                    SweepScreen(Modifier.padding(insets))
-                }
-            }
-        }
+        setContent { SikaTheme { SikaApp() } }
     }
 }
 
-private sealed interface State {
-    data object NeedsPermission : State
-    data object Denied : State
-    data object Sweeping : State
-    data class Done(val report: SweepReport) : State
+private sealed interface Gate {
+    data object NeedsPermission : Gate
+    data object Denied : Gate
+    data object Sweeping : Gate
+    data object Ready : Gate
 }
 
 @Composable
-private fun SweepScreen(modifier: Modifier = Modifier) {
+private fun SikaApp() {
     val context = LocalContext.current
-    val granted = remember {
-        SMS_PERMISSIONS.all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    val animated = remember { animationsEnabled(context) }
+
+    var gate by remember {
+        mutableStateOf<Gate>(
+            if (SMS_PERMISSIONS.all {
+                    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                }
+            ) {
+                Gate.Sweeping
+            } else {
+                Gate.NeedsPermission
+            },
+        )
+    }
+
+    val ask = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+        // Both or neither. READ_SMS alone gives a ledger that only updates when the app is
+        // opened; RECEIVE_SMS alone gives no history at all.
+        gate = if (results.values.all { it }) Gate.Sweeping else Gate.Denied
+    }
+
+    LaunchedEffect(gate) {
+        if (gate is Gate.Sweeping) {
+            Sweeper.sweep(context)
+            gate = Gate.Ready
         }
     }
-    var state by remember {
-        mutableStateOf<State>(if (granted) State.Sweeping else State.NeedsPermission)
-    }
 
-    val ask = rememberLauncher { results ->
-        // Both or neither. READ_SMS without RECEIVE_SMS gives a ledger that only updates
-        // when the app is opened; RECEIVE_SMS without READ_SMS gives no history at all.
-        state = if (results.values.all { it }) State.Sweeping else State.Denied
-    }
-
-    LaunchedEffect(state) {
-        if (state is State.Sweeping) {
-            state = State.Done(Sweeper.sweep(context))
+    when (gate) {
+        Gate.NeedsPermission -> Curtain(animated) {
+            Title("Sika reads your MoMo messages")
+            Muted("Only messages from MoMo. Nothing else is ever read.")
+            Muted("Nothing leaves your phone. Sika has no internet access.")
+            Muted("Your whole history appears straight away.")
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { ask.launch(SMS_PERMISSIONS) }) { Text("Allow SMS access") }
         }
-    }
 
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        when (val s = state) {
-            State.NeedsPermission -> Ask(onAsk = { ask(SMS_PERMISSIONS) })
-            State.Denied -> Blocked()
-            State.Sweeping -> {
-                CircularProgressIndicator(color = Accent)
-                Muted("Reading your MoMo messages…")
+        Gate.Denied -> Curtain(animated) {
+            Title("Sika can't see your messages")
+            Muted("Without SMS access there is nothing to track. Grant it in Settings → Apps → Sika.")
+        }
+
+        Gate.Sweeping -> Curtain(animated) {
+            CircularProgressIndicator(color = Accent)
+            Muted("Reading your MoMo messages…")
+        }
+
+        Gate.Ready -> {
+            val vm: HomeViewModel = viewModel()
+            val state by vm.state.collectAsStateWithLifecycle()
+            var tab by remember { mutableStateOf(Tab.Home) }
+
+            Box(Modifier.fillMaxSize()) {
+                HomeScreen(state = state, animated = animated)
+                Dock(
+                    selected = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 22.dp, vertical = 22.dp),
+                )
             }
-            is State.Done -> Report(s.report)
         }
     }
 }
 
+/** The pre-ledger screens: aura behind, one column of words in front. */
 @Composable
-private fun Ask(onAsk: () -> Unit) {
-    Title("Sika reads your MoMo messages")
-    Muted("Only messages from MoMo. Nothing else is ever read.")
-    Muted("Nothing leaves your phone. Sika has no internet access.")
-    Muted("Your whole history appears straight away.")
-    Button(onClick = onAsk) { Text("Allow SMS access") }
-}
-
-@Composable
-private fun Blocked() {
-    Title("Sika can't see your messages")
-    Muted("Without SMS access there is nothing to track. Grant it in Settings → Apps → Sika.")
-}
-
-@Composable
-private fun Report(r: SweepReport) {
-    Title("Sweep complete")
-
-    // PLAN task 5's stated verification, on screen as well as in logcat.
-    Stat("Messages matched", r.found.toString())
-    Stat("Transactions parsed", r.parsed.toString())
-    Stat("Not transactions (OTPs, adverts)", r.notTransactions.toString())
-    Stat("Unrecognised — need review", r.unrecognised.toString(), if (r.unrecognised > 0) Warn else null)
-    Stat("New this sweep", r.newlyAdded.toString())
-    Stat("Rows in ledger", r.totalInLedger.toString())
-    Stat("Oldest message", r.oldest.asDate())
-    Stat("Newest message", r.newest.asDate())
-
-    Stat("Reconciled OK", r.reconcile.ok.toString())
-    Stat(
-        "Balance gaps",
-        r.reconcile.gaps.size.toString(),
-        if (r.reconcile.gaps.isNotEmpty()) Warn else null,
-    )
-    Stat("Unchecked", r.reconcile.unchecked.toString())
-
-    Stat(
-        "Held for review",
-        r.queued.toString(),
-        if (r.queued > 0) Warn else null,
-    )
-
-    if (r.senders.isNotEmpty()) {
-        Muted("Senders seen: " + r.senders.joinToString { "${it.first} (${it.second})" })
-    }
-    // Sacred Rule 7 made visible: what could not be read, and why, in that order.
-    r.queuedSamples.forEach { (reason, body) ->
-        Muted("⚠ $reason")
-        Muted(body.take(160))
+private fun Curtain(animated: Boolean, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize()) {
+        Aura(animated = animated)
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = { content() },
+        )
     }
 }
 
-// ------------------------------------------------------------------ small shared pieces
+@Composable
+private fun Title(text: String) = Text(
+    text,
+    style = MaterialTheme.typography.headlineSmall,
+    color = TextPrimary,
+    textAlign = TextAlign.Center,
+)
+
+@Composable
+private fun Muted(text: String) = Text(
+    text,
+    style = MaterialTheme.typography.bodyMedium,
+    color = TextMuted,
+    textAlign = TextAlign.Center,
+    modifier = Modifier.widthIn(max = 320.dp),
+)
 
 /**
  * READ_SMS reads the history and powers the sweep; RECEIVE_SMS wakes the app when a message
@@ -179,50 +179,3 @@ private val SMS_PERMISSIONS = arrayOf(
     Manifest.permission.READ_SMS,
     Manifest.permission.RECEIVE_SMS,
 )
-
-@Composable
-private fun rememberLauncher(onResult: (Map<String, Boolean>) -> Unit): (Array<String>) -> Unit {
-    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-        onResult,
-    )
-    return { permissions -> launcher.launch(permissions) }
-}
-
-@Composable
-private fun Title(text: String) = Text(
-    text = text,
-    style = MaterialTheme.typography.headlineSmall,
-    textAlign = TextAlign.Center,
-)
-
-@Composable
-private fun Muted(text: String) = Text(
-    text = text,
-    style = MaterialTheme.typography.bodySmall,
-    color = TextMuted,
-    textAlign = TextAlign.Center,
-    modifier = Modifier.widthIn(max = 320.dp),
-)
-
-@Composable
-private fun Stat(label: String, value: String, emphasis: androidx.compose.ui.graphics.Color? = null) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = TextMuted)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            color = emphasis ?: MaterialTheme.colorScheme.onBackground,
-        )
-    }
-}
-
-private val DATE = DateTimeFormatter.ofPattern("d MMM yyyy")
-
-/** Africa/Accra is UTC+0 with no DST, which is why this needs no seasonal thought. */
-private fun Long?.asDate(): String = this?.let {
-    Instant.ofEpochMilli(it).atZone(ZoneId.of("Africa/Accra")).format(DATE)
-} ?: "—"

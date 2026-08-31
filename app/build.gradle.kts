@@ -125,6 +125,25 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.9.0")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.ui:ui-tooling-preview:1.9.0")
+    // State that survives rotation and reads the ledger as a Flow, so a transaction landing
+    // while Home is open appears without a refresh.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+
+    // ⚠ **Pinned deliberately, and the build fails without it.**
+    //
+    // AGP forces the androidTest compile classpath to match the app's runtime classpath
+    // ("consistent resolution"). Compose 1.9.0 pulls coroutines 1.8.1 into the app, while
+    // `kotlinx-coroutines-test:1.10.2` demands 1.10.2 for the tests — an unsatisfiable
+    // conflict. Naming the version here makes both sides 1.10.2.
+    //
+    // Worth knowing how this presents, because it cost an hour on 2026-08-31: Gradle
+    // throws a bare `NullPointerException: Cannot invoke "java.util.List.get(int)" because
+    // "path" is null` from `generateDebugAndroidTestLintModel`. That is Gradle crashing
+    // while *formatting* the resolution error, not a lint bug and not a resource problem.
+    // `./gradlew :app:dependencyInsight --configuration debugAndroidTestCompileClasspath
+    // --dependency kotlinx-coroutines-core` prints the real message.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // The ledger. Entities and DAOs arrive at PLAN task 4 — the plugin is wired now so a
     // version mismatch surfaces today rather than in the middle of writing the schema.
