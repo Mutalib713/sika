@@ -60,6 +60,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE parsedOk = 0 ORDER BY occurredAt DESC")
     fun observeReviewQueue(): Flow<List<TransactionEntity>>
 
+    /** The same queue as a one-shot read, for the sweep report. */
+    @Query("SELECT * FROM transactions WHERE parsedOk = 0 ORDER BY occurredAt DESC")
+    suspend fun reviewQueue(): List<TransactionEntity>
+
     /** The most recent message's arrival time, so a sweep can pick up where it left off. */
     @Query("SELECT MAX(occurredAt) FROM transactions")
     suspend fun newestTimestamp(): Long?

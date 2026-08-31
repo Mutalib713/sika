@@ -7,6 +7,7 @@ import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
 import gh.mutalib.sika.parser.Shape
+import gh.mutalib.sika.sms.SmsIngest
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -147,6 +148,50 @@ class LedgerDaoTest {
         assertEquals("Something else", transactions.byTxId("999000111")!!.label)
         assertEquals(LabelSource.MANUAL, transactions.byTxId("999000111")!!.labelSource)
         assertTrue(autoId > 0 && manualId > 0)
+    }
+
+    // ---------------------------------------------------------------------- review queue
+
+    @Test
+    fun anUnreadableMessageIsHeldForReviewAndNeverBecomesAWrongRow() = runTest {
+        // Sacred Rule 7, end to end. This message carries a real amount and a real
+        // transaction id, so it is plainly money — but no known shape matches it. The only
+        // safe outcome is to hold it for a human, never to guess a figure from it.
+        val mangled =
+            "Reversal of GHS 30.00 has been processed. Transaction Id: 99900011122. " +
+                "Current Balance: GHS 60.00."
+        assertTrue(MomoParser.parse(mangled) is ParseResult.Unrecognised)
+
+        transactions.insert(airtimeRow())
+        transactions.insert(
+            SmsIngest.unparsedRow(mangled, receivedAt = 1_756_200_000_000L, reason = "test"),
+        )
+
+        val queue = transactions.reviewQueue()
+        assertEquals(1, queue.size)
+        // Sacred Rule 6: the original message is kept, which is what makes the reason
+        // derivable now rather than frozen at the moment it failed.
+        assertEquals(mangled, queue[0].rawBody)
+        assertEquals(0L, queue[0].amount)
+        // The counterparty is empty, NOT the failure reason — a rule must never be keyed
+        // on a sentence of English.
+        assertEquals("", queue[0].counterparty)
+    }
+
+    @Test
+    fun aQueuedMessageCannotCorruptTheReconciliationChain() = runTest {
+        // The property that makes holding unreadable messages safe. A queued row carries
+        // zeroes for every money field; if reconciliation counted it, those zeroes would
+        // manufacture a gap out of nothing and the warning would stop meaning anything.
+        transactions.insert(airtimeRow())
+        transactions.insert(
+            SmsIngest.unparsedRow("gibberish that is not money", 1_749_589_300_000L, "test"),
+        )
+        transactions.insert(cashOutRow())
+
+        val rows = transactions.allChronological()
+        assertEquals("allChronological must exclude queued rows", 2, rows.size)
+        assertTrue(rows.none { !it.parsedOk })
     }
 
     // ------------------------------------------------------------------------ categories

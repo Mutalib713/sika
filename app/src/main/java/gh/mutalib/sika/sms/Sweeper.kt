@@ -71,6 +71,10 @@ object Sweeper {
         // and a verification you have to remember to trigger is one that stops happening.
         val reconcile = ReconcilePass.run(context)
 
+        // The stored queue, not just what this sweep happened to miss. A message queued by
+        // the live receiver last week has to show up here too, or the count lies.
+        val queued = dao.reviewQueue()
+
         // Which sender each *transaction* actually came from. The point of measuring this
         // is to narrow the address filter: the first sweep matched 465 messages on a
         // deliberately loose pattern, and only 118 of them were money.
@@ -93,13 +97,17 @@ object Sweeper {
             newest = messages.filter { MomoParser.parse(it.body) is ParseResult.Parsed }
                 .maxOfOrNull { it.receivedAt },
             totalInLedger = dao.count(),
-            unrecognisedSamples = unrecognised.take(5).map { it.body },
+            queued = queued.size,
+            queuedSamples = queued.take(5).map { SmsIngest.reasonFor(it) to it.rawBody },
             reconcile = reconcile,
         ).also {
             Log.i(TAG, "sweep: ${it.found} matched, ${it.parsed} transactions, " +
                 "${it.notTransactions} not transactions, ${it.unrecognised} unrecognised, " +
-                "${it.newlyAdded} new, ${it.totalInLedger} in ledger")
+                "${it.newlyAdded} new, ${it.totalInLedger} in ledger, ${it.queued} queued for review")
             Log.i(TAG, "transaction senders: " + it.senders.joinToString { s -> "${s.first}=${s.second}" })
+            it.queuedSamples.forEach { (reason, body) ->
+                Log.w(TAG, "queued: $reason  <<< ${body.take(150)}")
+            }
             // Grouped by opening phrase, not listed one by one: 39 unrecognised messages
             // are only a handful of distinct *shapes*, and the shapes are what matter.
             unrecognised
@@ -119,8 +127,8 @@ object Sweeper {
 
 /**
  * What one sweep found. PLAN task 5's verification is the four numbers in the middle, and
- * [unrecognisedSamples] is the one that decides whether the parser is finished: **every
- * unrecognised message becomes a golden test before the parser is touched.**
+ * [queuedSamples] is the one that decides whether the parser is finished: **every message
+ * held for review becomes a golden test before the parser is touched.**
  */
 data class SweepReport(
     /** Senders that produced actual transactions, so the address filter can be narrowed. */
@@ -135,6 +143,9 @@ data class SweepReport(
     val oldest: Long?,
     val newest: Long?,
     val totalInLedger: Int,
-    val unrecognisedSamples: List<String>,
+    /** Everything held for review, however it got there. */
+    val queued: Int,
+    /** reason (worked out now) to raw message body. */
+    val queuedSamples: List<Pair<String, String>>,
     val reconcile: ReconcileReport,
 )

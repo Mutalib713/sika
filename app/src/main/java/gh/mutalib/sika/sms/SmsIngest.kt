@@ -64,10 +64,30 @@ object SmsIngest {
         amount = 0,
         fee = 0,
         tax = null,
-        counterparty = reason,
+        // ⚠ **Empty, not the failure reason.** An earlier version stored the reason here,
+        // which was wrong twice over: `counterparty` is what a learn-once rule is keyed on,
+        // so a review row could have acquired a rule for a sentence of English; and the
+        // reason would have been frozen at the moment of failure.
+        //
+        // The reason is derived on read instead, by re-parsing [rawBody] — which Sacred
+        // Rule 6 guarantees is kept. That makes it always current: fix the parser and a
+        // queued message stops reporting a failure, because it no longer is one.
+        counterparty = "",
         reference = null,
         balanceAfter = null,
         rawBody = body,
         parsedOk = false,
     )
+
+    /**
+     * Why this queued message could not be read, worked out now rather than recalled from
+     * when it failed. [reason] is unused by callers but kept in the signature so the log
+     * line at the moment of failure still says something useful.
+     */
+    fun reasonFor(row: TransactionEntity): String = when (val r = MomoParser.parse(row.rawBody)) {
+        is ParseResult.Unrecognised -> r.reason
+        is ParseResult.NotATransaction -> r.reason
+        // The parser has since been taught this shape. The row is stale, not broken.
+        is ParseResult.Parsed -> "Now readable — re-sweep to record it as ${r.transaction.shape}."
+    }
 }

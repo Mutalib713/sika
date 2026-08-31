@@ -153,11 +153,19 @@ private fun Report(r: SweepReport) {
     )
     Stat("Unchecked", r.reconcile.unchecked.toString())
 
+    Stat(
+        "Held for review",
+        r.queued.toString(),
+        if (r.queued > 0) Warn else null,
+    )
+
     if (r.senders.isNotEmpty()) {
         Muted("Senders seen: " + r.senders.joinToString { "${it.first} (${it.second})" })
     }
-    r.unrecognisedSamples.forEachIndexed { i, body ->
-        Muted("unrecognised ${i + 1}: ${body.take(160)}")
+    // Sacred Rule 7 made visible: what could not be read, and why, in that order.
+    r.queuedSamples.forEach { (reason, body) ->
+        Muted("⚠ $reason")
+        Muted(body.take(160))
     }
 }
 
