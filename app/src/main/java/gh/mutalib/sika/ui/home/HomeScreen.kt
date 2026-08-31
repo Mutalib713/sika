@@ -88,6 +88,8 @@ fun HomeScreen(
             item { Spacer(Modifier.height(18.dp)) }
             item { BalanceCapsule(state, animated, entrance) }
 
+            if (!state.isEmpty) item { TodayLine(state) }
+
             // The status strips. Both sit flush with the capsule's left edge and share one
             // vertical rhythm, so they read as a set rather than two stray lines.
             if (state.gaps > 0) item { StatusStrip(R.drawable.ic_warning, gapText(state), Warn) }
@@ -200,6 +202,36 @@ private fun StatusStrip(icon: Int?, text: String, tint: androidx.compose.ui.grap
             Spacer(Modifier.width(10.dp))
         }
         Text(text, style = MaterialTheme.typography.bodyMedium, color = tint)
+    }
+}
+
+/**
+ * What has left the wallet today.
+ *
+ * The single idea taken from the CediSmart dashboard, 2026-08-31. Everything else on that
+ * dashboard — monthly income, savings progress, remaining — needs a figure Mutalib would
+ * have to type. This one Sika reads.
+ *
+ * **Fees are included.** A GHS 5 transfer with a 50p fee cost GHS 5.50, and "spent today"
+ * that quietly omits fees is the kind of small lie this app exists not to tell.
+ */
+@Composable
+private fun TodayLine(state: HomeState) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text("TODAY", style = LabelStyle, color = TextMuted)
+        if (state.spentToday == 0L) {
+            Text(
+                if (state.countToday == 0) "Nothing yet" else "Nothing spent",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        } else {
+            Text("−" + state.spentToday.asCedis().removePrefix("GHS "), style = StatMoneyStyle, color = TextPrimary)
+        }
     }
 }
 

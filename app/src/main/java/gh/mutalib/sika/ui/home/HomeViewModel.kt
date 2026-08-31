@@ -36,6 +36,13 @@ data class HomeState(
     val days: List<DayGroup> = emptyList(),
     /** Every transaction in this month, for the "See all" hand-off. */
     val total: Int = 0,
+    /**
+     * What has left the wallet today. The one idea worth taking from the dashboard
+     * comparison on 2026-08-31 — and unlike the rest of that dashboard, Sika can answer it
+     * from real messages without asking Mutalib to type anything.
+     */
+    val spentToday: Long = 0,
+    val countToday: Int = 0,
 ) {
     val isEmpty: Boolean get() = !loading && days.isEmpty()
 }
@@ -60,6 +67,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA)) == month
         }
 
+        val today = LocalDate.now(ACCRA)
+        val todays = inMonth.filter {
+            Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA).toLocalDate() == today
+        }
+
         val days = inMonth
             .groupBy { Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA).toLocalDate() }
             .toSortedMap(reverseOrder())
@@ -80,6 +92,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             unlabelled = inMonth.count { it.label == null },
             days = days,
             total = inMonth.size,
+            spentToday = todays.filter { it.direction == Direction.OUT }.sumOf { it.amount + it.fee },
+            countToday = todays.size,
         )
     }
 
