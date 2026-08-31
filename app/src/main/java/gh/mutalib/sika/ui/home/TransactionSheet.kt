@@ -73,7 +73,9 @@ fun TransactionSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var remember by remember(row.id) { mutableStateOf(true) }
+    // Named `alsoRemember`, not `remember` - a local called `remember` shadows the
+    // composable of the same name, which is a trap for whoever edits this next.
+    var alsoRemember by remember(row.id) { mutableStateOf(true) }
     var adding by remember(row.id) { mutableStateOf(false) }
     var newName by remember(row.id) { mutableStateOf("") }
     var showRaw by remember(row.id) { mutableStateOf(false) }
@@ -125,7 +127,7 @@ fun TransactionSheet(
                 Chip(
                     label = category.name,
                     selected = row.label == category.name,
-                    onClick = { onPick(category.name, remember) },
+                    onClick = { onPick(category.name, alsoRemember) },
                 )
             }
             // The `+` lives at the end of the row, so a category can be created from the
@@ -150,7 +152,7 @@ fun TransactionSheet(
                 onDone = {
                     if (newName.isNotBlank()) {
                         onAddCategory(newName)
-                        onPick(newName.trim(), remember)
+                        onPick(newName.trim(), alsoRemember)
                     }
                     newName = ""
                     adding = false
@@ -163,12 +165,12 @@ fun TransactionSheet(
         // ---- the learn-once toggle, stated in plain words ----
         if (row.counterparty.isNotBlank()) {
             Row(
-                Modifier.fillMaxWidth().clickable { remember = !remember }.padding(vertical = 6.dp),
+                Modifier.fillMaxWidth().clickable { alsoRemember = !alsoRemember }.padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Checkbox(
-                    checked = remember,
-                    onCheckedChange = { remember = it },
+                    checked = alsoRemember,
+                    onCheckedChange = { alsoRemember = it },
                     colors = CheckboxDefaults.colors(
                         checkedColor = Accent,
                         checkmarkColor = AccentContrast,

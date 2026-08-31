@@ -204,8 +204,15 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   and applies it to every other row from that party. The hand-set row is always `MANUAL`, so a rule
   can never later overwrite a decision made by hand.
   `check: PASS`, gate.py 0 block, humanizer 100.0/85.
-  - [ ] **Device check.** Tap a row, pick a category, confirm every other row from the same
-        counterparty relabels itself; then add a category with `+` and confirm it persists.
+  - [x] **Device check passed 2026-08-31.** Tapped a `AKOSUA MENSAH` row, tapped **Food**,
+        and **all three** of her rows — 31 Aug, 29 Aug and 28 Aug — relabelled at once. One tap,
+        three rows. The learn-once mechanism working on real data, which is the answer to risk #2
+        (label rot).
+        Two fixes from watching it: the sheet now closes on pick **deliberately** rather than by
+        accident, because picking is the job and the result is worth seeing on the list behind it;
+        and a local named `remember` that shadowed the composable of the same name was renamed.
+        Also learned: **the `Reference` field is not always `-` or `1`** — one real transaction
+        carries `Bread`. PROFILE.md § 8's note that it is useless in practice is too strong.
 
 - [ ] **12. Cash-out prompt**
   When a `CASH_OUT` row lands, a notification asks *"GHS X — what for?"* with one-tap answers.

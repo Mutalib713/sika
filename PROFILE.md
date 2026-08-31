@@ -268,7 +268,7 @@ Everything lives in one Room database in the app's private folder. No other app 
 | `fee` | **Long** | pesewas. Never null: a missing fee breaks reconciliation |
 | `tax` | **Long?** | pesewas. Null when the SMS writes `-`, which is **not** the same as zero |
 | `counterparty` | String | "MTN AIRTIME", an agent number, a person's name |
-| `reference` | String? | usually `-` or `1` in practice — a hint, not the category |
+| `reference` | String? | often `-` or `1`, but **not always** — a real August transaction carries `Bread` (seen 2026-08-31). A hint that can pre-fill a category, never the category itself |
 | `balanceAfter` | **Long?** | pesewas. The reconciliation anchor |
 | `label` | String? | null = unlabelled |
 | `labelSource` | enum | `AUTO_RULE` / `MANUAL` / `PROMPT` / `NONE` |
