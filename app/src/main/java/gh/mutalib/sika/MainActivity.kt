@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -41,9 +42,12 @@ import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.Dock
 import gh.mutalib.sika.ui.Tab
 import gh.mutalib.sika.ui.animationsEnabled
+import gh.mutalib.sika.ui.scrimBehindDock
+import gh.mutalib.sika.ui.home.AllTransactionsScreen
 import gh.mutalib.sika.ui.home.HomeScreen
 import gh.mutalib.sika.ui.home.HomeViewModel
 import gh.mutalib.sika.ui.theme.Accent
+import gh.mutalib.sika.ui.theme.Bg
 import gh.mutalib.sika.ui.theme.SikaTheme
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
@@ -125,8 +129,33 @@ private fun SikaApp() {
             val state by vm.state.collectAsStateWithLifecycle()
             var tab by remember { mutableStateOf(Tab.Home) }
 
+            // A single flag rather than a nav library: two destinations, one of which is
+            // reached from the other. Reach for Navigation Compose when there are more.
+            var showingAll by remember { mutableStateOf(false) }
+
             Box(Modifier.fillMaxSize()) {
-                HomeScreen(state = state, animated = animated)
+                if (showingAll) {
+                    AllTransactionsScreen(
+                        state = state,
+                        animated = animated,
+                        onBack = { showingAll = false },
+                    )
+                } else {
+                    HomeScreen(
+                        state = state,
+                        animated = animated,
+                        onSeeAll = { showingAll = true },
+                    )
+                }
+                // Fades the list out before it reaches the dock, so rows never collide with
+                // the dock's own labels. Measured problem, 2026-08-31 — see Glass.DockFill.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .scrimBehindDock(Bg),
+                )
                 Dock(
                     selected = tab,
                     onSelect = { tab = it },

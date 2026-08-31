@@ -57,9 +57,15 @@ fun Modifier.glass(
         // The top edge is brighter than the bottom: light falls from above, so the rim
         // nearest the light source catches it. Without this the surface reads as flat
         // plastic rather than glass.
+        //
+        // ⚠ **A thin rim, not a wash.** This originally faded over 35% of the height, which
+        // lightened the whole upper third — and the BALANCE label sits there. Measured on
+        // the device 2026-08-31 at **3.27:1**, below the 4.5 floor, purely because of this
+        // gradient. A real specular edge is a few pixels; brighter over a shorter run reads
+        // as more glassy, not less, and leaves the text alone.
         Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.10f),
-            0.35f to Color.Transparent,
+            0f to Color.White.copy(alpha = 0.18f),
+            0.055f to Color.Transparent,
         ),
     )
     .border(1.dp, rim, RoundedCornerShape(corner))
@@ -68,12 +74,37 @@ fun Modifier.glass(
 val GlassFill = Color.White.copy(alpha = 0.11f)
 
 /**
- * The dock sits over scrolling text, so it needs to obscure rather than merely tint.
- * More opaque than the capsule for that reason alone.
+ * The dock sits over scrolling text, so it must **obscure**, not merely tint.
+ *
+ * ⚠ Measured on the device 2026-08-31: at alpha `0.86` a transaction row behind the dock
+ * was still plainly readable — "TELECEL PUSH" and "−20.00" collided with the dock's own
+ * labels. The arithmetic says why: 14% of white text still lands at roughly `#424852`
+ * against a `#1B2133` dock, which the eye separates easily.
+ *
+ * `0.94` leaves about 6%, which reads as a faint warmth rather than words. Paired with
+ * [scrimBehindDock], content is nearly gone before it arrives.
  */
-val DockFill = Color(0xFF1B2133).copy(alpha = 0.86f)
+val DockFill = Color(0xFF161B29).copy(alpha = 0.94f)
 
 val GlassRim = Color.White.copy(alpha = 0.14f)
+
+/**
+ * A gradient that fades content out before it reaches the dock — the same trick iOS uses
+ * behind a tab bar. Sits between the list and the dock.
+ *
+ * Doing the work here rather than making the dock fully opaque is what lets it stay glass:
+ * the aura still shows through, but scrolling text does not.
+ */
+@Composable
+fun Modifier.scrimBehindDock(background: Color): Modifier = this.drawWithContent {
+    drawContent()
+    drawRect(
+        brush = Brush.verticalGradient(
+            0f to Color.Transparent,
+            1f to background,
+        ),
+    )
+}
 
 /**
  * The specular sweep: one narrow band of light crossing the surface every 7.5 seconds,

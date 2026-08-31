@@ -34,6 +34,8 @@ data class HomeState(
     val firstGap: TransactionEntity? = null,
     val unlabelled: Int = 0,
     val days: List<DayGroup> = emptyList(),
+    /** Every transaction in this month, for the "See all" hand-off. */
+    val total: Int = 0,
 ) {
     val isEmpty: Boolean get() = !loading && days.isEmpty()
 }
@@ -77,6 +79,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
             unlabelled = inMonth.count { it.label == null },
             days = days,
+            total = inMonth.size,
         )
     }
 

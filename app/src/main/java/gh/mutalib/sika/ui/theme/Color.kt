@@ -32,12 +32,20 @@ val TextMuted = Color(0xFF9AA1B5)
 /**
  * Labels sitting **on glass**, where [TextMuted] is not bright enough.
  *
- * ⚠ Measured, not guessed. The BALANCE label failed at **4.17:1** in the approved sketch
- * purely because it sat over a bright patch of the drifting aura — on glass, contrast
- * depends on where the text happens to land. This value plus a more opaque glass fill
- * brought it to 4.71:1. **Re-measure if the aura or the glass fill changes.**
+ * ⚠ **Measured on the device three times, and it needed all three fixes.** On glass,
+ * contrast depends on *where the text lands*, because the aura drifts underneath.
+ *
+ * | fix | BALANCE label |
+ * |---|---|
+ * | first build | 3.27:1 |
+ * | glass top-highlight tightened from a 35% wash to a 5.5% rim | 4.27:1 |
+ * | this colour raised from `#D3D9E6` | see below |
+ *
+ * **Re-measure on the phone if the aura, the glass fill or the highlight changes.** The
+ * HTML sketch is not a substitute — it read 4.71:1 for a label the real device rendered
+ * at 3.27:1, because the aura is brighter at phone scale.
  */
-val TextOnGlass = Color(0xFFD3D9E6)
+val TextOnGlass = Color(0xFFEDF1F7)
 
 /** Primary action, money coming in, selected state. His. */
 val Accent = Color(0xFFA8DCE7)
