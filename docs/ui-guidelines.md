@@ -9,15 +9,72 @@ whenever the direction actually changes.
 
 ## Direction
 
-The four lines design-studio prints. Copy them verbatim.
+Set 2026-08-31 at PLAN task 10, after browsing dark.design, Apple's Human Interface
+Guidelines and Mutalib's own hackathon site. Approved by him from four labelled skeletons.
 
-- **Tone:** `<...>`
-- **Type pairing:** `<display face> / <body face>`
-- **Colour world:** `<the world string or seed passed to palette.py>`
-- **Signature move:** `<the one thing this project does that others do not>`
+- **Tone:** a calm ledger that shows its working. Factual, quiet, slightly serious. It
+  tells you the truth and does not nag.
+- **Type pairing:** **Space Grotesk** (money, headings — chosen for real tabular figures)
+  / **Inter** (body).
+- **Colour world:** his pinned aqua `#A8DCE7` on deep navy-ink `#101422`. Dark only.
+- **Signature move:** **the light behind the glass moves.** Three soft glows drift on
+  26–34 s loops behind everything; because the balance capsule is translucent, its tint is
+  never quite the same twice. The glass is not decoration — it is a window onto something
+  moving. No previous project of his does this (anti-sameness guard, `house-taste.md`).
 
-Anything built later that contradicts these four lines is off-direction, even if
-it looks fine on its own.
+Anything built later that contradicts these four lines is off-direction, even if it looks
+fine on its own.
+
+## Glass — where it goes, and where it must not
+
+⚠ **Apple's own rule, and it is stricter than "glassmorphism" usually implies.** Liquid
+Glass belongs **only to the navigation layer that floats above content**. Apple explicitly
+excludes content layers — lists, tables, media — plus full-screen backgrounds, scrollable
+content, and stacked glass. NN/G's criticism of iOS 26 was precisely that overuse hurt
+legibility.
+
+In Sika, therefore:
+
+| Glass | Never glass |
+|---|---|
+| the balance capsule | the transaction list |
+| the bottom dock | the page background |
+| sheets, dialogs, the cash-out prompt | anything that scrolls |
+
+⚠ **On glass, contrast depends on where the text lands**, because the backdrop varies as the
+aura drifts. Measured at task 10: the `BALANCE` label failed at **4.17:1** purely because it
+sat over a bright patch. The fix was a more opaque glass (`rgba(255,255,255,.11)`, not
+`.075`), which evens the backdrop out — the same reason Apple's *regular* glass is more
+opaque than its *clear* variant. **Re-measure after any change to the aura or the glass.**
+
+## Icons — Lucide, and only Lucide
+
+Chosen 2026-08-31. One 2px stroke, rounded caps, 24 px grid. **Every icon in Sika comes from
+this set**; mixing sets is what makes an app look assembled rather than designed.
+
+Roughly 18 are needed: warning · settings · list · chart · chevrons · plus · export · import
+· check, plus one per category (food, transport, data, airtime, rent, provisions, printing,
+sent home, other).
+
+*Why not the alternatives:* **SF Symbols** is licensed to Apple platforms only and cannot
+ship on Android. **Material Symbols** is native and safe, and its advantage — matching system
+chrome — barely applies here, because Sika has no back arrows or share sheets to match; the
+risk of looking like every other Android app remains. **Phosphor** was the first
+recommendation; Mutalib narrowed it to Material Symbols or Lucide.
+
+⚠ Never add `material-icons-extended` — several megabytes for a handful of glyphs (learned
+on Wird). Convert the individual Lucide SVGs to vector drawables.
+
+## Navigation
+
+**Three tabs in a wide floating glass dock: Home · Report · Settings.**
+
+Mutalib's decision, made after I argued for two tabs plus a gear top-right on the grounds
+that Material 3 and Apple both want tab bars to hold destinations of *equal importance*, and
+Settings is opened rarely. He reaffirmed three; that is settled, not to be re-litigated.
+
+A three-way segmented pill was tried and rejected as cramped. The wide dock with icon above
+label is the approved form.
 
 ## Colour
 
@@ -88,17 +145,21 @@ than half-supporting it.
 
 ## Type
 
-| Role | Face | Size | Weight | Line height | Tracking |
-|---|---|---|---|---|---|
-| Display | `<...>` | `<...>` | `<...>` | `<...>` | `<...>` |
-| H1 | | | | | |
-| H2 | | | | | |
-| Body | | | | | |
-| Small / caption | | | | | |
+**Space Grotesk** for money and headings, **Inter** for body. Both bundled in the APK — Sika
+has no `INTERNET` permission, so a webfont is not an option even if it were wanted.
 
-- Scale ratio: `<e.g. 1.25>`
-- Measure: `<max characters per line for body text>`
-- Loading: `<self-hosted / variable font / subset>`. Font weight matters on 3G.
+| Role | Face | Size | Weight | Note |
+|---|---|---|---|---|
+| Balance | Space Grotesk | 44sp | 600 | tabular figures, `-0.02em` tracking |
+| Amount (row) | Space Grotesk | 15sp | 500 | tabular figures |
+| Amount (in/out) | Space Grotesk | 19sp | 600 | tabular figures |
+| Counterparty | Inter | 15sp | 500 | |
+| Body / caption | Inter | 12–13sp | 400 | |
+| Label (caps) | Inter | 11sp | 600 | `0.14em` tracking, uppercase |
+
+⚠ **Every money figure uses tabular figures.** Non-negotiable: with proportional digits a
+column of amounts wobbles left and right as the values change, and a money app whose numbers
+wobble reads as untrustworthy — the opposite of what reconciliation is for.
 
 ## Space, shape, depth
 
@@ -121,11 +182,21 @@ Rules that apply everywhere, so components stay siblings rather than strangers.
 
 ## Motion
 
-- Durations: `<fast / base / slow in ms>`
-- Easing: `<...>`
-- What moves: `<...>`
-- What never moves: `<...>`
-- Reduced motion: honoured via `prefers-reduced-motion`. Not optional.
+Four layers, all subtle. The research phrase worth keeping: *motion can feel luxurious
+without shouting.* A sweep that runs constantly is a shimmer, and shimmer reads cheap.
+
+| What | How | Why |
+|---|---|---|
+| **Aura drift** | three glows, 26 / 30 / 34 s loops, ease-in-out | the signature move — the glass has something to refract |
+| **Specular sweep** | one narrow band across the capsule every 7.5 s, travelling for under 3 of them | Apple's glass highlight; still most of the time |
+| **Balance count-up** | 0 → value, 900 ms, ease-out cubic, once on arrival | the money is the point, so it arrives |
+| **Rim highlight** | static `inset 0 1px 0 rgba(255,255,255,.26)` | the specular edge that makes glass read as glass |
+
+**What never moves:** the transaction list, the amounts once settled, anything on a gap
+warning. Motion is for the navigation layer, exactly like glass.
+
+**Reduced motion is honoured and kills all four.** On Android that means checking
+`Settings.Global.ANIMATOR_DURATION_SCALE == 0`, not just a Compose flag.
 
 ## Accessibility floor
 

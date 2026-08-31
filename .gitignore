@@ -38,3 +38,6 @@ desktop.ini
 *.swp
 *~
 .vscode/
+
+# Design exploration sketches — not part of the app
+/design-scratch/
