@@ -26,8 +26,19 @@ val SurfaceRaised = Color(0xFF323749)
 /** Amounts, headings, body. His. Contrast on Bg is 18.34:1. */
 val TextPrimary = Color(0xFFFFFFFF)
 
-/** Dates, counterparty, captions. Derived. 7.11:1 on Bg, so it passes body text. */
-val TextMuted = Color(0xFF9AA1B5)
+/**
+ * Dates, counterparty, captions, and every right-aligned secondary value.
+ *
+ * ⚠ **Raised from `#9AA1B5` on 2026-08-31, and the reason is structural.** Contrast against
+ * the flat field was a comfortable 7.11:1 — but the aura's blue glow sits on the **right
+ * side** of the screen, and right-aligned muted text lands on it. `Nothing yet` measured
+ * **3.94:1** there while `TODAY`, the same colour at the same height on the left, measured
+ * 7.11:1.
+ *
+ * Special-casing that one string would have left every future right-aligned caption exposed
+ * to the same trap. This value clears 4.5:1 across the whole field, glow included.
+ */
+val TextMuted = Color(0xFFB4BCCB)
 
 /**
  * Labels sitting **on glass**, where [TextMuted] is not bright enough.
