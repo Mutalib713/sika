@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +47,7 @@ import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.RowMoneyStyle
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextOnGlass
+import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextPrimary
 import gh.mutalib.sika.ui.theme.Warn
 import java.time.Instant
@@ -63,11 +68,14 @@ private const val RECENT_COUNT = 5
  * in/out pair, then a short list on the field — no cards, because proximity and hairlines
  * do the work boxes usually get asked for.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     state: HomeState,
     animated: Boolean,
     modifier: Modifier = Modifier,
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     onSeeAll: () -> Unit = {},
     onTransactionClick: (TransactionEntity) -> Unit = {},
 ) {
@@ -76,6 +84,35 @@ fun HomeScreen(
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
+
+        val pullState = rememberPullToRefreshState()
+
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+            state = pullState,
+            indicator = {
+                // The spinner every social app shows, in Sika's colours rather than
+                // Material's purple default. Mutalib asked for it explicitly after seeing
+                // the skeleton alone — and he is right that the spinner is what tells you
+                // *your pull registered*, which the skeleton cannot: the skeleton only
+                // appears once the refresh is already running.
+                PullToRefreshDefaults.Indicator(
+                    state = pullState,
+                    isRefreshing = refreshing,
+                    containerColor = SurfaceRaised,
+                    color = Accent,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            },
+        ) {
+        // Behind the spinner, the skeleton replaces the list, so the shape of what is
+        // coming is visible while it loads.
+        if (refreshing) {
+            LoadingState(animated = animated, showHeader = false)
+            return@PullToRefreshBox
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -104,6 +141,7 @@ fun HomeScreen(
                 item { SeeAllButton(state.total, onSeeAll) }
             }
         }
+        }
     }
 }
 
@@ -111,7 +149,7 @@ fun HomeScreen(
  * Whose phone this is. Hardcoded on purpose — Sika is a single-user app sideloaded to one
  * device (PROFILE.md § 2), so asking for a name would be a setup step that buys nothing.
  */
-private const val OWNER = "Osman"
+internal const val OWNER = "Osman"
 
 /**
  * The greeting, and the month.
@@ -166,7 +204,7 @@ private fun MonthHeader(state: HomeState) {
 }
 
 /** Africa/Accra, so the greeting matches the clock on the wall rather than a server's. */
-private fun greeting(): String = when (java.time.LocalTime.now(ACCRA).hour) {
+internal fun greeting(): String = when (java.time.LocalTime.now(ACCRA).hour) {
     in 0..11 -> "Good morning"
     in 12..16 -> "Good afternoon"
     else -> "Good evening"

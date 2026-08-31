@@ -1,6 +1,7 @@
 package gh.mutalib.sika.ui.home
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import gh.mutalib.sika.TAG
 import androidx.lifecycle.AndroidViewModel
@@ -10,8 +11,11 @@ import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
+import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.parser.Direction
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -94,6 +98,36 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private val _refreshing = MutableStateFlow(false)
+
+    /** True while a pull-to-refresh sweep is running. */
+    val refreshing: StateFlow<Boolean> = _refreshing
+
+    /**
+     * Re-reads the inbox and re-runs reconciliation, on demand.
+     *
+     * The live receiver already records messages as they arrive, so this is not how the
+     * ledger normally stays current — it is the manual catch-up for the case Android drops
+     * a broadcast, and the gesture people reach for by reflex when a screen might be stale.
+     *
+     * ⚠ **A minimum visible duration is deliberate.** The sweep finishes in well under a
+     * second on 300 messages, and an indicator that vanishes before it is seen reads as
+     * "nothing happened" rather than "checked, nothing new". 600 ms is long enough to
+     * register and short enough not to feel slow.
+     */
+    fun refresh(context: Context) {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.value = true
+            val started = System.currentTimeMillis()
+            runCatching { Sweeper.sweep(context) }
+                .onFailure { Log.e(TAG, "refresh failed", it) }
+            val elapsed = System.currentTimeMillis() - started
+            if (elapsed < MIN_VISIBLE_MS) delay(MIN_VISIBLE_MS - elapsed)
+            _refreshing.value = false
+        }
+    }
+
     /** Adds a category from the sheet. IGNORE on conflict, so a duplicate name is harmless. */
     fun addCategory(name: String) {
         val clean = name.trim()
@@ -161,6 +195,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val MIN_VISIBLE_MS = 600L
         val DAY_FORMAT: java.time.format.DateTimeFormatter =
             java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")
         val PERIOD: java.time.format.DateTimeFormatter =

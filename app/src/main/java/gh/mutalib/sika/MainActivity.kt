@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -53,6 +52,7 @@ import gh.mutalib.sika.ui.scrimBehindDock
 import gh.mutalib.sika.ui.home.AllTransactionsScreen
 import gh.mutalib.sika.ui.home.HomeScreen
 import gh.mutalib.sika.ui.home.HomeViewModel
+import gh.mutalib.sika.ui.home.LoadingState
 import gh.mutalib.sika.ui.home.TransactionSheet
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
@@ -143,10 +143,8 @@ private fun SikaApp() {
             Muted("If the prompt no longer appears, turn it on in Settings → Apps → Sika.")
         }
 
-        Gate.Sweeping -> Curtain(animated) {
-            CircularProgressIndicator(color = Accent)
-            Muted("Reading your MoMo messages…")
-        }
+        // A skeleton of the screen that is coming, not a spinner. See LoadingState.
+        Gate.Sweeping -> LoadingState(animated = animated)
 
         Gate.Ready -> {
             val vm: HomeViewModel = viewModel()
@@ -158,6 +156,7 @@ private fun SikaApp() {
             var showingAll by remember { mutableStateOf(false) }
 
             val categories by vm.categories.collectAsStateWithLifecycle()
+            val refreshing by vm.refreshing.collectAsStateWithLifecycle()
             var sheetFor by remember { mutableStateOf<Long?>(null) }
             // Re-read from state each recomposition so the sheet updates the moment a
             // category is picked, rather than showing the row as it was when tapped.
@@ -175,6 +174,8 @@ private fun SikaApp() {
                     HomeScreen(
                         state = state,
                         animated = animated,
+                        refreshing = refreshing,
+                        onRefresh = { vm.refresh(context) },
                         onSeeAll = { showingAll = true },
                         onTransactionClick = { sheetFor = it.id },
                     )
