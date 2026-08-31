@@ -55,7 +55,23 @@ val Inter = FontFamily(inter(400), inter(500), inter(600))
  */
 val MoneyFeature = "tnum"
 
-/** GHS 179.29 on the balance capsule. */
+/**
+ * The four figures on the capsule — out, in, today, balance.
+ *
+ * ⚠ **One size for all four, deliberately.** The balance was previously 44sp against an
+ * 11sp label and a 19sp in/out pair, which made it read as *the* number and everything
+ * beside it as a footnote. Mutalib could not tell which figure was which, and said the
+ * balance was not the most relevant one anyway. Equal weight is what makes them comparable.
+ */
+val CellMoneyStyle = TextStyle(
+    fontFamily = SpaceGrotesk,
+    fontWeight = FontWeight.W600,
+    fontSize = 26.sp,
+    letterSpacing = (-0.02).em,
+    fontFeatureSettings = MoneyFeature,
+)
+
+/** Kept for any screen that genuinely wants one dominant figure. */
 val BalanceStyle = TextStyle(
     fontFamily = SpaceGrotesk,
     fontWeight = FontWeight.W600,

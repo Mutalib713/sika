@@ -15,15 +15,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import gh.mutalib.sika.R
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
@@ -34,6 +38,7 @@ import gh.mutalib.sika.ui.theme.Border
 import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.RowMoneyStyle
 import gh.mutalib.sika.ui.theme.TextMuted
+import gh.mutalib.sika.ui.theme.TextOnGlass
 import gh.mutalib.sika.ui.theme.TextPrimary
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -65,14 +70,23 @@ fun AllTransactionsScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // A real button: 44dp circular target with the Lucide arrow, rather
+                    // than a word. Back is reached by reflex, and reflexes want a shape in a
+                    // known corner, not a label to read.
                     Box(
                         Modifier
-                            .clip(RoundedCornerShape(16.dp))
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable(onClick = onBack)
-                            .glass(corner = 16.dp)
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .glass(corner = 22.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text("Back", style = MaterialTheme.typography.titleMedium, color = Accent)
+                        Icon(
+                            painterResource(R.drawable.ic_back),
+                            contentDescription = "Back",
+                            tint = TextOnGlass,
+                            modifier = Modifier.size(20.dp),
+                        )
                     }
                     Spacer(Modifier.width(14.dp))
                     Text(

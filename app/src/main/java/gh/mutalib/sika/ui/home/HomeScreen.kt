@@ -37,11 +37,10 @@ import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.glass
 import gh.mutalib.sika.ui.specularSweep
 import gh.mutalib.sika.ui.theme.Accent
-import gh.mutalib.sika.ui.theme.BalanceStyle
+import gh.mutalib.sika.ui.theme.CellMoneyStyle
 import gh.mutalib.sika.ui.theme.Border
 import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.RowMoneyStyle
-import gh.mutalib.sika.ui.theme.StatMoneyStyle
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextOnGlass
 import gh.mutalib.sika.ui.theme.TextPrimary
@@ -88,14 +87,11 @@ fun HomeScreen(
             item { Spacer(Modifier.height(18.dp)) }
             item { BalanceCapsule(state, animated, entrance) }
 
-            if (!state.isEmpty) item { TodayLine(state) }
-
             // The status strips. Both sit flush with the capsule's left edge and share one
             // vertical rhythm, so they read as a set rather than two stray lines.
+            // Only the gap gets a strip. The category count lives in the header subtitle,
+            // and saying it twice on one screen made both instances easier to ignore.
             if (state.gaps > 0) item { StatusStrip(R.drawable.ic_warning, gapText(state), Warn) }
-            if (state.unlabelled > 0) {
-                item { StatusStrip(null, unlabelledText(state.unlabelled), TextMuted) }
-            }
 
             if (state.isEmpty) {
                 item { EmptyMonth() }
@@ -111,6 +107,24 @@ fun HomeScreen(
     }
 }
 
+/**
+ * Whose phone this is. Hardcoded on purpose — Sika is a single-user app sideloaded to one
+ * device (PROFILE.md § 2), so asking for a name would be a setup step that buys nothing.
+ */
+private const val OWNER = "Osman"
+
+/**
+ * The greeting, and the month.
+ *
+ * ⚠ **The month chip is here instead of a notification bell, hamburger or brightness
+ * toggle.** Mutalib asked for one of those and was unsure which; none of the three has a
+ * job in Sika. Its notifications are system notifications, so a bell would open nothing.
+ * Settings is already a tab, so a hamburger is a second route to one place. The app is
+ * dark-only by design, so a brightness toggle would toggle nothing.
+ *
+ * Changing month is the one thing genuinely worth reaching for from here, so that is what
+ * the corner does.
+ */
 @Composable
 private fun MonthHeader(state: HomeState) {
     Row(
@@ -118,59 +132,127 @@ private fun MonthHeader(state: HomeState) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(MONTH.format(state.month), style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+        Column {
+            Text(
+                "${greeting()}, $OWNER",
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary,
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                subtitle(state),
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+        }
+        Row(
+            Modifier.clip(RoundedCornerShape(15.dp)).glass(corner = 15.dp)
+                .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                MONTH_SHORT.format(state.month),
+                style = MaterialTheme.typography.titleMedium,
+                color = TextOnGlass,
+            )
+            Icon(
+                painterResource(R.drawable.ic_chevron_down),
+                contentDescription = "Change month",
+                tint = TextOnGlass,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }
 
+/** Africa/Accra, so the greeting matches the clock on the wall rather than a server's. */
+private fun greeting(): String = when (java.time.LocalTime.now(ACCRA).hour) {
+    in 0..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
+}
+
+/** One honest line about the state of the ledger, not a slogan. */
+private fun subtitle(state: HomeState): String = when {
+    state.isEmpty -> "Nothing recorded this month yet"
+    state.gaps > 0 -> "${state.total} transactions · ${state.gaps} to check"
+    state.unlabelled == state.total -> "${state.total} transactions · none categorised yet"
+    state.unlabelled > 0 -> "${state.total} transactions · ${state.unlabelled} need a category"
+    else -> "${state.total} transactions, all accounted for"
+}
+
+/**
+ * Four labelled figures on one glass surface.
+ *
+ * ⚠ **Restructured 2026-08-31.** It was one enormous balance with a smaller in/out pair,
+ * and Mutalib said two things about it: he could not tell which figure was which, and the
+ * balance was not the most relevant number anyway. Both fair — a 44sp number with an 11sp
+ * label reads as *the* number, and everything beside it reads as a footnote.
+ *
+ * So every figure now gets the same label treatment and a comparable size, separated by
+ * hairlines rather than by shouting. This is **not** the four-card dashboard grid he
+ * rejected: it is one glass surface with four cells, so the navigation-layer rule holds and
+ * nothing is boxed.
+ *
+ * Order is deliberate — **Out first.** What left is the question the app exists to answer.
+ */
 @Composable
 private fun BalanceCapsule(state: HomeState, animated: Boolean, entrance: EntranceClock) {
-    val shown = ((state.balance ?: 0L) * entrance.count).toLong()
+    val balance = ((state.balance ?: 0L) * entrance.count).toLong()
 
     Column(
         Modifier
             .fillMaxWidth()
-            // Stage 1: the capsule drops in from above and fades up.
             .graphicsLayer {
                 translationY = (1f - entrance.capsuleDrop) * -320f
                 alpha = entrance.capsuleFade
             }
             .glass(corner = 30.dp)
             .specularSweep(enabled = animated)
-            .padding(horizontal = 20.dp, vertical = 22.dp),
+            .padding(horizontal = 20.dp, vertical = 20.dp),
     ) {
-        // Stage 2: contents rise from behind the capsule's own bottom edge, staggered. They
-        // are clipped by the capsule, so it reads as the card filling rather than text
-        // flying across the screen.
-        Rising(entrance, 0) { Text("BALANCE", style = LabelStyle, color = TextOnGlass) }
-        Spacer(Modifier.height(6.dp))
-        Rising(entrance, 1) {
-            Text(
-                if (state.balance == null) "—" else shown.asCedis(),
-                style = BalanceStyle,
-                color = TextPrimary,
-            )
+        Rising(entrance, 0) {
+            Row(Modifier.fillMaxWidth()) {
+                Cell("OUT", "−" + state.moneyOut.plain(), TextPrimary, Modifier.weight(1f))
+                Cell("IN", "+" + state.moneyIn.plain(), Accent, Modifier.weight(1f))
+            }
         }
-        Spacer(Modifier.height(15.dp))
-        Rising(entrance, 2) {
+        Spacer(Modifier.height(16.dp))
+        Rising(entrance, 1) {
             HorizontalDivider(color = TextOnGlass.copy(alpha = 0.16f), thickness = 1.dp)
         }
-        Spacer(Modifier.height(14.dp))
-        Rising(entrance, 3) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Text("IN", style = LabelStyle, color = TextOnGlass)
-                    Spacer(Modifier.height(4.dp))
-                    Text("+" + state.moneyIn.asCedis().removePrefix("GHS "), style = StatMoneyStyle, color = Accent)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("OUT", style = LabelStyle, color = TextOnGlass)
-                    Spacer(Modifier.height(4.dp))
-                    Text("−" + state.moneyOut.asCedis().removePrefix("GHS "), style = StatMoneyStyle, color = TextPrimary)
-                }
+        Spacer(Modifier.height(16.dp))
+        Rising(entrance, 2) {
+            Row(Modifier.fillMaxWidth()) {
+                Cell(
+                    "TODAY",
+                    if (state.spentToday == 0L) "—" else "−" + state.spentToday.plain(),
+                    TextPrimary,
+                    Modifier.weight(1f),
+                )
+                Cell(
+                    "BALANCE",
+                    if (state.balance == null) "—" else balance.plain(),
+                    TextPrimary,
+                    Modifier.weight(1f),
+                )
             }
         }
     }
 }
+
+/** One labelled figure. Same treatment every time, which is what makes them comparable. */
+@Composable
+private fun Cell(label: String, value: String, colour: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = LabelStyle, color = TextOnGlass)
+        Spacer(Modifier.height(5.dp))
+        Text(value, style = CellMoneyStyle, color = colour)
+    }
+}
+
+/** `1663.20` — the currency lives in the capsule's context, not on every figure. */
+private fun Long.plain(): String = asCedis().removePrefix("GHS ")
 
 /** One line of capsule content, rising into place on its own beat. */
 @Composable
@@ -202,36 +284,6 @@ private fun StatusStrip(icon: Int?, text: String, tint: androidx.compose.ui.grap
             Spacer(Modifier.width(10.dp))
         }
         Text(text, style = MaterialTheme.typography.bodyMedium, color = tint)
-    }
-}
-
-/**
- * What has left the wallet today.
- *
- * The single idea taken from the CediSmart dashboard, 2026-08-31. Everything else on that
- * dashboard — monthly income, savings progress, remaining — needs a figure Mutalib would
- * have to type. This one Sika reads.
- *
- * **Fees are included.** A GHS 5 transfer with a 50p fee cost GHS 5.50, and "spent today"
- * that quietly omits fees is the kind of small lie this app exists not to tell.
- */
-@Composable
-private fun TodayLine(state: HomeState) {
-    Row(
-        Modifier.fillMaxWidth().padding(top = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Text("TODAY", style = LabelStyle, color = TextMuted)
-        if (state.spentToday == 0L) {
-            Text(
-                if (state.countToday == 0) "Nothing yet" else "Nothing spent",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted,
-            )
-        } else {
-            Text("−" + state.spentToday.asCedis().removePrefix("GHS "), style = StatMoneyStyle, color = TextPrimary)
-        }
     }
 }
 
@@ -340,9 +392,8 @@ private fun gapText(state: HomeState): String {
     }
 }
 
-private fun unlabelledText(count: Int) =
-    if (count == 1) "1 transaction needs a category" else "$count transactions need a category"
 
 private val MONTH = DateTimeFormatter.ofPattern("MMMM")
+private val MONTH_SHORT = DateTimeFormatter.ofPattern("MMM")
 private val DAY = DateTimeFormatter.ofPattern("d MMMM")
 private val TIME = DateTimeFormatter.ofPattern("h:mma")
