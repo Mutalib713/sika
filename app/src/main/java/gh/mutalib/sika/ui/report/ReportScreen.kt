@@ -106,24 +106,34 @@ fun ReportScreen(
 
             item {
                 Headline(summary)
-                Spacer(Modifier.height(22.dp))
-                // The part-to-whole cue, in 10dp of height. The list below is its legend,
-                // which is why there is no legend.
-                StackedBand(summary.slices)
                 Spacer(Modifier.height(24.dp))
-                Text("WHERE IT WENT", style = LabelStyle, color = TextMuted)
-                Spacer(Modifier.height(4.dp))
             }
 
-            items(summary.slices, key = { it.label }) { slice ->
-                SliceRow(slice, rank = summary.slices.indexOf(slice))
+            // The four numbers above are always true. The breakdown below is only worth
+            // drawing once enough is labelled to answer "where did it go".
+            if (summary.tooLittleLabelledToBreakDown) {
+                item { NothingLabelledYet(summary) }
+            } else {
+                item {
+                    // The part-to-whole cue, in 10dp of height. The list below is its
+                    // legend, which is why there is no legend.
+                    StackedBand(summary.slices)
+                    Spacer(Modifier.height(24.dp))
+                    Text("WHERE IT WENT", style = LabelStyle, color = TextMuted)
+                    Spacer(Modifier.height(4.dp))
+                }
+                items(summary.slices, key = { it.label }) { slice ->
+                    SliceRow(slice, rank = summary.slices.indexOf(slice))
+                }
+                item {
+                    summary.biggestChange?.let {
+                        Spacer(Modifier.height(20.dp))
+                        BiggestChange(it)
+                    }
+                }
             }
 
             item {
-                summary.biggestChange?.let {
-                    Spacer(Modifier.height(20.dp))
-                    BiggestChange(it)
-                }
                 Spacer(Modifier.height(26.dp))
                 HonestyNote(summary)
             }
@@ -181,26 +191,30 @@ private fun Headline(s: MonthSummary) {
     Text("SPENT", style = LabelStyle, color = TextMuted)
     Spacer(Modifier.height(4.dp))
     Text(s.moneyOut.asCedis(), style = BalanceStyle, color = TextPrimary)
-    Spacer(Modifier.height(18.dp))
-    Row(Modifier.fillMaxWidth()) {
-        Stat("RECEIVED", s.moneyIn.asCedis(), Accent, Modifier.weight(1f))
-        Stat(
-            "NET",
-            // The sign is what carries direction — never colour. docs/ui-guidelines.md.
-            (if (s.net >= 0) "+" else "−") + abs(s.net).asCedis(),
-            TextPrimary,
-            Modifier.weight(1f),
-        )
-        Stat("CLOSING", s.closingBalance?.asCedis() ?: "—", TextPrimary, Modifier.weight(1f))
-    }
+    Spacer(Modifier.height(20.dp))
+    // ⚠ **Stacked, not three across.** Side by side they had a third of the width each, and
+    // "−GHS 1257.80" wrapped onto two lines on the real device — a four-figure month is
+    // ordinary, so this was going to happen constantly. Stacking gives every number the
+    // full width and lines the decimal points up into one vertical rule, which is the
+    // cheapest thing that makes a hand-drawn list look engineered.
+    Stat("RECEIVED", s.moneyIn.asCedis(), Accent)
+    Stat(
+        "NET",
+        // The sign is what carries direction — never colour. docs/ui-guidelines.md.
+        (if (s.net >= 0) "+" else "−") + abs(s.net).asCedis(),
+        TextPrimary,
+    )
+    Stat("CLOSING BALANCE", s.closingBalance?.asCedis() ?: "—", TextPrimary)
 }
 
 @Composable
-private fun Stat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(label, style = LabelStyle, color = TextMuted)
-        Spacer(Modifier.height(4.dp))
-        Text(value, style = StatMoneyStyle, color = color)
+private fun Stat(label: String, value: String, color: Color) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = LabelStyle, color = TextMuted, modifier = Modifier.weight(1f))
+        Text(value, style = StatMoneyStyle, color = color, maxLines = 1)
     }
 }
 
@@ -370,6 +384,43 @@ private fun HonestyNote(s: MonthSummary) {
         Text(
             "This is the first month on record, so there is nothing to compare it against.",
             style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+        )
+    }
+}
+
+/**
+ * Shown when almost nothing is labelled, in place of the breakdown.
+ *
+ * ⚠ Found on the device on 2026-08-31: with nothing labelled, the screen drew one
+ * full-width bar reading "Uncategorised 100%" and a confident callout announcing that
+ * Uncategorised was the biggest change. Every number on it was correct and the screen was
+ * useless. **A report that looks informative while saying nothing is worse than one that
+ * admits it has nothing to say.**
+ *
+ * This states the limit and points at the one action that lifts it. The four numbers above
+ * stay, because those are true regardless of labelling.
+ */
+@Composable
+private fun NothingLabelledYet(s: MonthSummary) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Accent.copy(alpha = 0.10f))
+            .padding(horizontal = 18.dp, vertical = 18.dp),
+    ) {
+        Text(
+            "This report can't tell you where it went yet.",
+            style = MaterialTheme.typography.titleMedium,
+            color = TextPrimary,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "${Math.round(s.uncategorisedShare * 100)}% of this month has no category. " +
+                "Tap any transaction on Home to label it — label one shop once and every " +
+                "payment to it is labelled from then on.",
+            style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
         )
     }

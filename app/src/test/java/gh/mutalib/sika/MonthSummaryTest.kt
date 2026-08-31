@@ -209,6 +209,44 @@ class MonthSummaryTest {
         assertEquals("Food", summarise(rows, august, accra).biggestChange?.label)
     }
 
+    /**
+     * ⚠ Caught on the real device on 2026-08-31, where nothing was labelled: the screen
+     * announced "Uncategorised went down GHS 2402.00 this month. That's your biggest
+     * change." Every figure in it was correct and it said nothing — it only means less
+     * money moved. Uncategorised is an absence of information, not a category.
+     */
+    @Test
+    fun `uncategorised is never reported as the biggest change`() {
+        val rows = listOf(
+            out(id = 1, day = 1, amount = 410_730, fee = 0, label = null, month = 7),
+            out(id = 2, day = 1, amount = 170_530, fee = 0, label = null), // moved -240200
+            out(id = 3, day = 2, amount = 10_000, fee = 0, label = "Food", month = 7),
+            out(id = 4, day = 2, amount = 13_000, fee = 0, label = "Food"), // moved +3000
+        )
+        // Food wins despite being ~80x smaller, because Uncategorised cannot be the story.
+        assertEquals("Food", summarise(rows, august, accra).biggestChange?.label)
+    }
+
+    @Test
+    fun `with nothing labelled there is no story at all`() {
+        val rows = listOf(
+            out(id = 1, day = 1, amount = 410_730, fee = 0, label = null, month = 7),
+            out(id = 2, day = 1, amount = 170_530, fee = 0, label = null),
+        )
+        val s = summarise(rows, august, accra)
+        assertNull(s.biggestChange)
+        assertTrue("the breakdown must not be drawn", s.tooLittleLabelledToBreakDown)
+    }
+
+    @Test
+    fun `a well-labelled month does draw its breakdown`() {
+        val rows = listOf(
+            out(id = 1, day = 1, amount = 9_000, fee = 0, label = "Food"),
+            out(id = 2, day = 2, amount = 1_000, fee = 0, label = null), // 10% unlabelled
+        )
+        assertFalse(summarise(rows, august, accra).tooLittleLabelledToBreakDown)
+    }
+
     @Test
     fun `a first month has nothing to compare against`() {
         val rows = listOf(out(id = 1, day = 5, amount = 1_000, fee = 0, label = "Food"))

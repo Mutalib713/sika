@@ -95,6 +95,21 @@ data class MonthSummary(
 
     val isEmpty: Boolean get() = transactionCount == 0
 
+    /** What share of the month's spending nobody has categorised. 0f..1f. */
+    val uncategorisedShare: Float get() =
+        slices.firstOrNull { it.label == UNCATEGORISED }?.share ?: 0f
+
+    /**
+     * True when so little is labelled that the breakdown cannot answer "where did it go".
+     *
+     * The screen says so plainly instead of drawing a chart that is one full-width bar
+     * labelled Uncategorised — which is what the device showed on 2026-08-31 with nothing
+     * labelled. A report that looks informative while saying nothing is worse than one that
+     * admits it has nothing to say.
+     */
+    val tooLittleLabelledToBreakDown: Boolean get() =
+        !isEmpty && uncategorisedShare >= 0.6f
+
     /**
      * The one line worth putting in words: the category that moved most in absolute
      * pesewas. **Absolute, not percent** — a category that went from GHS 2 to GHS 4 is up
@@ -109,6 +124,12 @@ data class MonthSummary(
      */
     val biggestChange: CategorySlice? get() {
         val movers = slices
+            // ⚠ **Uncategorised can never be the story.** It is not a category, it is an
+            // absence of information, so "Uncategorised went down GHS 2402" says only that
+            // less money moved — dressed up as an insight. Caught on the device on
+            // 2026-08-31, where nothing was labelled and the callout confidently reported
+            // exactly that.
+            .filter { it.label != UNCATEGORISED }
             .filter { it.change != null && it.change != 0L }
             .sortedByDescending { kotlin.math.abs(it.change!!) }
         val top = movers.firstOrNull() ?: return null
