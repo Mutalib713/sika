@@ -1,11 +1,9 @@
 package gh.mutalib.sika.ui.theme
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.em
@@ -15,45 +13,56 @@ import gh.mutalib.sika.R
 /**
  * Type for Sika. docs/ui-guidelines.md is canonical.
  *
- * **Space Grotesk** carries money and headings; **Inter** carries body copy.
+ * **One family, IBM Plex Sans, for everything.** Chosen by Mutalib on 2026-08-31 from four
+ * options shown side by side, after he said the previous pairing was too stylised — he
+ * asked for "just a normal font".
  *
- * Both are **bundled in the APK**, not fetched. That is not a preference — Sika has no
- * `INTERNET` permission (Sacred Rule 1), so a downloadable font is impossible. About 1 MB
- * of the app is these two files, and for an app that never touches the network that is a
- * fair trade.
+ * It replaces **both** Space Grotesk (money and headings) and Inter (body). One family
+ * across a whole app is unusual advice, but it is right here: Sika is a ledger, the type has
+ * one job, and a second face was buying variety nobody asked for.
  *
- * Both are *variable* fonts: one file covers every weight, and [FontVariation] dials the
- * `wght` axis. Cheaper than shipping five static files, and the weights interpolate exactly
- * rather than snapping to the nearest cut.
+ * Bundled in the APK rather than fetched. Not a preference — Sika has no `INTERNET`
+ * permission (Sacred Rule 1), so a downloadable font is impossible. Licensed under the SIL
+ * Open Font License 1.1, which permits bundling. **Net saving of about 190 KB**, because the
+ * two faces it replaces came to roughly 1 MB.
+ *
+ * ⚠ **Four static files, not one variable file.** The previous two faces were variable, so
+ * one file covered every weight and the weights interpolated exactly. IBM does publish a
+ * variable Plex, but neither Google Fonts nor jsDelivr would serve it as a TTF on
+ * 2026-08-31 — Google's TTF fallback is four static cuts. The cost is four files instead of
+ * one, and weights that snap to the nearest cut rather than interpolating. Swap to the
+ * variable file if a reliable TTF source turns up.
  */
-
-@OptIn(ExperimentalTextApi::class)
-private fun grotesk(weight: Int) = Font(
-    R.font.space_grotesk,
+private fun plex(weight: Int) = Font(
+    when (weight) {
+        500 -> R.font.ibm_plex_sans_500
+        600 -> R.font.ibm_plex_sans_600
+        700 -> R.font.ibm_plex_sans_700
+        else -> R.font.ibm_plex_sans_400
+    },
     weight = FontWeight(weight),
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
 )
 
-@OptIn(ExperimentalTextApi::class)
-private fun inter(weight: Int) = Font(
-    R.font.inter,
-    weight = FontWeight(weight),
-    variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
-)
-
-val SpaceGrotesk = FontFamily(grotesk(400), grotesk(500), grotesk(600), grotesk(700))
-val Inter = FontFamily(inter(400), inter(500), inter(600))
+val Plex = FontFamily(plex(400), plex(500), plex(600), plex(700))
 
 /**
- * ⚠ **Every money figure uses this, and the tabular figures are the point.**
+ * ⚠ **Every money figure uses tabular figures, and that is the point.**
  *
  * With proportional digits a column of amounts shifts left and right as the values change,
  * because a `1` is narrower than an `8`. A money app whose numbers wobble reads as
  * untrustworthy — the exact opposite of what reconciliation is for.
  *
- * Space Grotesk carries real `tnum` figures, which is why it was chosen over prettier faces.
+ * ⚠ **IBM Plex Sans needs no feature to do this: its digits are natively tabular.** Measured
+ * on 2026-08-31 with fontTools — all ten digits share one advance width, and the font ships
+ * no `tnum` feature at all because it does not need one. That is *stronger* than the old
+ * arrangement, not weaker: Space Grotesk and Inter both have **nine** different digit widths
+ * and only became tabular because this setting switched the feature on. A font swap that
+ * dropped the setting would have silently un-aligned every column.
+ *
+ * The setting is kept anyway. On Plex it is an inert no-op; it costs nothing and it keeps
+ * the guarantee if the family is ever changed again.
  */
-val MoneyFeature = "tnum"
+const val MoneyFeature = "tnum"
 
 /**
  * The four figures on the capsule — out, in, today, balance.
@@ -64,16 +73,16 @@ val MoneyFeature = "tnum"
  * balance was not the most relevant one anyway. Equal weight is what makes them comparable.
  */
 val CellMoneyStyle = TextStyle(
-    fontFamily = SpaceGrotesk,
+    fontFamily = Plex,
     fontWeight = FontWeight.W600,
     fontSize = 26.sp,
     letterSpacing = (-0.02).em,
     fontFeatureSettings = MoneyFeature,
 )
 
-/** Kept for any screen that genuinely wants one dominant figure. */
+/** Kept for any screen that genuinely wants one dominant figure — the report's SPENT. */
 val BalanceStyle = TextStyle(
-    fontFamily = SpaceGrotesk,
+    fontFamily = Plex,
     fontWeight = FontWeight.W600,
     fontSize = 44.sp,
     letterSpacing = (-0.02).em,
@@ -82,7 +91,7 @@ val BalanceStyle = TextStyle(
 
 /** The in/out pair. */
 val StatMoneyStyle = TextStyle(
-    fontFamily = SpaceGrotesk,
+    fontFamily = Plex,
     fontWeight = FontWeight.W600,
     fontSize = 19.sp,
     fontFeatureSettings = MoneyFeature,
@@ -90,7 +99,7 @@ val StatMoneyStyle = TextStyle(
 
 /** One transaction's amount. */
 val RowMoneyStyle = TextStyle(
-    fontFamily = SpaceGrotesk,
+    fontFamily = Plex,
     fontWeight = FontWeight.W500,
     fontSize = 15.sp,
     textAlign = TextAlign.End,
@@ -99,16 +108,16 @@ val RowMoneyStyle = TextStyle(
 
 /** The uppercase micro-labels: BALANCE, IN, OUT, TODAY. */
 val LabelStyle = TextStyle(
-    fontFamily = Inter,
+    fontFamily = Plex,
     fontWeight = FontWeight.W600,
     fontSize = 11.sp,
     letterSpacing = 0.14.em,
 )
 
 val SikaTypography = Typography(
-    headlineSmall = TextStyle(fontFamily = SpaceGrotesk, fontWeight = FontWeight.W600, fontSize = 22.sp),
-    titleMedium = TextStyle(fontFamily = Inter, fontWeight = FontWeight.W600, fontSize = 15.sp),
-    bodyMedium = TextStyle(fontFamily = Inter, fontWeight = FontWeight.W400, fontSize = 13.sp),
-    bodySmall = TextStyle(fontFamily = Inter, fontWeight = FontWeight.W400, fontSize = 12.sp),
+    headlineSmall = TextStyle(fontFamily = Plex, fontWeight = FontWeight.W600, fontSize = 22.sp),
+    titleMedium = TextStyle(fontFamily = Plex, fontWeight = FontWeight.W600, fontSize = 15.sp),
+    bodyMedium = TextStyle(fontFamily = Plex, fontWeight = FontWeight.W400, fontSize = 13.sp),
+    bodySmall = TextStyle(fontFamily = Plex, fontWeight = FontWeight.W400, fontSize = 12.sp),
     labelSmall = LabelStyle,
 )
