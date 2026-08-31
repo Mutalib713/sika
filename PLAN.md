@@ -245,10 +245,33 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         makes the prompt vanish with only a logcat line, which reads exactly like a broken build:
         `adb logcat -s Sika` will say `cash-out prompt suppressed`.
 
-- [ ] **13. Month report**
-  The four numbers, breakdown by label, this month vs last. Charts hand-drawn on Compose `Canvas`.
-  **Verify:** screenshot against a hand-checked total from the same month's raw messages. The
-  numbers must match arithmetic done by hand, not just look plausible.
+- [ ] **13. Month report** — built 2026-08-31, **device check pending (phone not connected)**
+  `ledger/MonthSummary.kt` holds the arithmetic (pure Kotlin, no Android import, like
+  `Reconciler`), `ui/report/` holds the screen. Charts hand-drawn on Compose `Canvas`.
+  `check: PASS`, 47 unit tests, 0 failures. gate.py 0 block / 2 warn (both are `⚠` in code
+  *comments*, not UI chrome). Humanizer 100.0/85 on every visible string.
+
+  ⚠ **A real inconsistency found and fixed on the way.** Home summed bare `amount` for the
+  month but `amount + fee` for today — two figures on the same card computed differently.
+  `Reconciler` settles it: MoMo's stated balance only agrees with
+  `previous − amount − fee − tax`, so fee and tax are part of the spend. Both now go through
+  one `outflow()`. **His month totals will read slightly higher than before, and that is the
+  correct number.**
+
+  Three changes driven by the task-13 research browse (sources in the session notes):
+  - **No donut or pie.** At 6+ categories the angular encoding stops resolving, and a one-hue
+    palette cannot supply the distinguishable colours a multi-slice pie needs. One stacked
+    band carries part-to-whole; the ranked list does the comparing.
+  - **A percentage is withheld when last month's base was under GHS 20.** At ~45 transactions
+    a month one purchase swings a small category 300%, and a screen of meaningless arrows
+    trains you to ignore the one that matters.
+  - **The biggest-change callout only fires when the top mover beats the second by 1.4×.**
+    Two similar swings are not a story, and asserting one would be the report inventing a
+    finding.
+
+  - [ ] **Device check.** ⚠ Not run — no device attached on 2026-08-31. Screenshot the report
+        against a hand-checked total from the same month's raw messages. The numbers must
+        match arithmetic done by hand, not just look plausible.
 
 - [ ] **14. Monthly notification**
   `AlarmManager`, exact, allow-while-idle, rescheduled after each firing.

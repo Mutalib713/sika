@@ -13,6 +13,8 @@ import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ledger.inflow
+import gh.mutalib.sika.ledger.outflow
 import gh.mutalib.sika.parser.Direction
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -172,15 +174,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             // number, and this app's whole argument is that it does not do that.
             balance = inMonth.firstOrNull { it.balanceAfter != null }?.balanceAfter,
             balanceAt = inMonth.firstOrNull { it.balanceAfter != null }?.occurredAt,
-            moneyIn = inMonth.filter { it.direction == Direction.IN }.sumOf { it.amount },
-            moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.amount },
+            // ⚠ Both through `inflow`/`outflow` — see ledger/MonthSummary.kt. Until task 13
+            // this line summed bare `amount` while `spentToday` below summed `amount + fee`,
+            // so two figures on the same card were computed differently. The fee and tax are
+            // money that left the wallet: Reconciler proves it, because MoMo's own stated
+            // balance only agrees with `previous − amount − fee − tax`.
+            moneyIn = inMonth.filter { it.direction == Direction.IN }.sumOf { it.inflow() },
+            moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.outflow() },
             gaps = inMonth.count { it.reconciled == Reconciled.GAP },
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
             unlabelled = inMonth.count { it.label == null },
             days = days,
             total = inMonth.size,
             periodLabel = PERIOD.format(month).uppercase(),
-            spentToday = todays.filter { it.direction == Direction.OUT }.sumOf { it.amount + it.fee },
+            spentToday = todays.filter { it.direction == Direction.OUT }.sumOf { it.outflow() },
             countToday = todays.size,
         )
     }

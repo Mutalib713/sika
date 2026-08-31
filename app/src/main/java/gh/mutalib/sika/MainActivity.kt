@@ -53,11 +53,14 @@ import gh.mutalib.sika.ui.Dock
 import gh.mutalib.sika.ui.Tab
 import gh.mutalib.sika.ui.animationsEnabled
 import gh.mutalib.sika.ui.scrimBehindDock
+import gh.mutalib.sika.ui.home.ACCRA
 import gh.mutalib.sika.ui.home.AllTransactionsScreen
 import gh.mutalib.sika.ui.home.HomeScreen
 import gh.mutalib.sika.ui.home.HomeViewModel
 import gh.mutalib.sika.ui.home.LoadingState
 import gh.mutalib.sika.ui.home.TransactionSheet
+import gh.mutalib.sika.ui.report.ReportScreen
+import gh.mutalib.sika.ui.report.ReportViewModel
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
@@ -217,15 +220,36 @@ private fun SikaApp(openRow: MutableState<Long?>) {
             val sheetRow = sheetFor?.let { id -> state.days.flatMap { it.rows }.firstOrNull { it.id == id } }
 
             Box(Modifier.fillMaxSize()) {
-                if (showingAll) {
-                    AllTransactionsScreen(
+                when {
+                    showingAll -> AllTransactionsScreen(
                         state = state,
                         animated = animated,
                         onBack = { showingAll = false },
                         onTransactionClick = { sheetFor = it.id },
                     )
-                } else {
-                    HomeScreen(
+
+                    tab == Tab.Report -> {
+                        val rvm: ReportViewModel = viewModel()
+                        val summary by rvm.summary.collectAsStateWithLifecycle()
+                        // Read so the arrow re-enables when the month changes; the
+                        // ViewModel's own function is the authority on whether it can.
+                        val reportMonth by rvm.month.collectAsStateWithLifecycle()
+                        ReportScreen(
+                            summary = summary,
+                            canStepForward = reportMonth < java.time.YearMonth.now(ACCRA),
+                            animated = animated,
+                            onStep = rvm::step,
+                        )
+                    }
+
+                    tab == Tab.Settings -> Curtain(animated) {
+                        Title("Settings")
+                        Spacer(Modifier.height(6.dp))
+                        Muted("Categories, learned rules, and CSV export and import.")
+                        Muted("Not built yet — PLAN task 15.")
+                    }
+
+                    else -> HomeScreen(
                         state = state,
                         animated = animated,
                         refreshing = refreshing,
