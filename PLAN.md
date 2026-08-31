@@ -214,10 +214,36 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         Also learned: **the `Reference` field is not always `-` or `1`** — one real transaction
         carries `Bread`. PROFILE.md § 8's note that it is useless in practice is too strong.
 
-- [ ] **12. Cash-out prompt**
+- [ ] **12. Cash-out prompt** — built 2026-08-31, **device check pending (phone not connected)**
   When a `CASH_OUT` row lands, a notification asks *"GHS X — what for?"* with one-tap answers.
-  **Verify:** inject a cash-out broadcast, tap an answer from the notification shade, confirm the
-  label is stored with `labelSource = PROMPT`.
+  `notify/CashOutPrompt.kt` posts it, `notify/CashOutReplyReceiver.kt` stores the answer with
+  `labelSource = PROMPT`.
+  `check: PASS`, 31 unit tests, 0 failures.
+
+  Three decisions the spec did not cover, all recorded in `docs/screens.md`:
+  - **Android draws at most three action buttons.** A fourth is silently dropped, so the
+    `Choose…` escape moved onto the notification body, which opens the transaction sheet.
+  - **Only the live receiver prompts, never the sweep** — otherwise first run fires a
+    notification for every historic cash-out.
+  - **No learn-once rule from a prompt answer** — the counterparty is the agent, not the
+    purchase, so a rule there would mislabel every future cash-out from that agent.
+
+  Two bugs caught before the device: `asCedis()` already writes the `GHS` prefix, so the title
+  read `GHS GHS 20.00`; and `POST_NOTIFICATIONS` does not exist below API 33, where
+  `checkSelfPermission` answers DENIED — which would have silenced the prompt on Android 12
+  for a permission it never needed.
+
+  - [ ] **Device check.** ⚠ Not run — no device attached on 2026-08-31. Inject a cash-out
+        broadcast, tap an answer from the shade, confirm the label is stored with
+        `labelSource = PROMPT` and that the app was never opened.
+        ```bash
+        adb shell "am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS -n gh.mutalib.sika/.sms.DebugSmsReceiver --es body 'Cash Out made for GHS20.00 to AGENT TEST .Current Balance: GHS 67.21. Transaction Id: 90000000012. Fee charged: GHS0.00,Tax Charged 0.'"
+        ```
+        `DebugSmsReceiver` now passes `promptOnCashOut = true` to match the live receiver, so
+        an injected cash-out raises the same prompt a real one would.
+        ⚠ Grant the notification permission first — on Android 13+ a denied `POST_NOTIFICATIONS`
+        makes the prompt vanish with only a logcat line, which reads exactly like a broken build:
+        `adb logcat -s Sika` will say `cash-out prompt suppressed`.
 
 - [ ] **13. Month report**
   The four numbers, breakdown by label, this month vs last. Charts hand-drawn on Compose `Canvas`.

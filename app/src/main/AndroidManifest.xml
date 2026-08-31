@@ -41,6 +41,18 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
 
     <!--
+      POST_NOTIFICATIONS: the cash-out prompt (PLAN task 12) and the monthly report (task 14).
+
+      A runtime permission since Android 13. ⚠ Without it `notify()` neither throws nor
+      posts — the notification simply never appears — so the app checks it explicitly rather
+      than discovering the silence later. See CashOutPrompt.canPost.
+
+      Refusing it costs the prompt, not the ledger: a cash-out is still recorded and can
+      still be labelled by hand from the transaction sheet.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
       required="true", not the required="false" lint suggests.
 
       Lint asks for this tag so an app does not accidentally exclude tablets and ChromeOS,
@@ -73,8 +85,14 @@
 
         <!-- No android:label here: it would repeat the application's, which lint flags
              as RedundantLabel. The launcher uses the application label. -->
+        <!--
+          singleTop: tapping a cash-out prompt's body must bring the existing app forward
+          and hand it the row id, not stack a second copy of Sika on top of the first.
+          onNewIntent is what receives it in that case.
+        -->
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -104,6 +122,17 @@
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          Answers to the cash-out prompt.
+
+          exported="false" and no intent-filter: the only thing that can reach this is the
+          PendingIntent handed to the system when the notification was posted. Exporting it
+          would let any app on the phone relabel rows in the ledger without a trace.
+        -->
+        <receiver
+            android:name=".notify.CashOutReplyReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

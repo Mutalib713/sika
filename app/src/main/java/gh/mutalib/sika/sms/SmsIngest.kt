@@ -6,6 +6,7 @@ import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.data.toEntity
+import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
@@ -22,8 +23,23 @@ import gh.mutalib.sika.parser.Shape
  */
 object SmsIngest {
 
-    /** @return true if this message became a new row. */
-    suspend fun ingest(context: Context, body: String, receivedAt: Long, source: String): Boolean {
+    /**
+     * @param promptOnCashOut ask what a new cash-out was for, via a notification.
+     *
+     * ⚠ **Only the live route passes true, and that is load-bearing.** The sweep re-reads the
+     * whole inbox on every launch, so a backfill would fire one notification per historic
+     * cash-out — dozens at once on first run, for money spent months ago that nobody can
+     * remember. The prompt is only worth anything at the moment the money leaves.
+     *
+     * @return true if this message became a new row.
+     */
+    suspend fun ingest(
+        context: Context,
+        body: String,
+        receivedAt: Long,
+        source: String,
+        promptOnCashOut: Boolean = false,
+    ): Boolean {
         val dao = SikaDatabase.get(context).transactions()
 
         val row = when (val result = MomoParser.parse(body)) {
@@ -44,6 +60,18 @@ object SmsIngest {
             "$source: ${if (isNew) "recorded" else "already had"} ${row.shape} " +
                 "${row.direction} ${row.amount}p to '${row.counterparty}' txId=${row.txId}",
         )
+
+        // Only a genuinely new cash-out is worth asking about. `isNew` is what stops a
+        // re-read of the same message asking twice — the dedupe doing double duty.
+        if (isNew && promptOnCashOut && row.shape == Shape.CASH_OUT) {
+            CashOutPrompt.show(
+                context = context,
+                rowId = id,
+                amount = row.amount,
+                counterparty = row.counterparty,
+                categories = SikaDatabase.get(context).categories().all().map { it.name },
+            )
+        }
         return isNew
     }
 

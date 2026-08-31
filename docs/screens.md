@@ -189,9 +189,23 @@ Messages the parser could not read with confidence. **Never guessed, never silen
 
 > **GHS 20.00 cashed out**
 > What was it for?
-> `[ Food ] [ Transport ] [ Data ] [ Choose… ]`
+> `[ Food ] [ Transport ] [ Data ]`
 
-Four most-used categories plus an escape. Answering from the shade never opens the app.
+The first three categories in `sortOrder`. Answering from the shade never opens the app.
+
+⚠ **Corrected at task 12: Android draws at most THREE action buttons on a notification.**
+This originally asked for four — three categories plus a `Choose…` escape. A fourth
+`addAction` does not error, it is silently dropped, so the escape moved off the buttons and
+onto the notification **body**: tapping the text opens the transaction sheet for that row,
+where the full category list lives. Three quick answers plus a tap-through.
+
+⚠ **Only the live receiver prompts, never the inbox sweep.** The sweep re-reads everything on
+every launch, so prompting from it would fire one notification per historic cash-out — dozens
+at once on first run, about money spent months ago that nobody can remember.
+
+**No learn-once rule is written from a prompt answer**, unlike the transaction sheet. A rule is
+keyed on the counterparty, and a cash-out's counterparty is the *agent*, not the purchase — so
+"the agent by the junction = Food" would quietly mislabel every future cash-out from that agent.
 
 **Monthly report.** 1st of the month.
 

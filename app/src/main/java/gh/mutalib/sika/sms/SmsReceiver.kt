@@ -53,7 +53,14 @@ class SmsReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                SmsIngest.ingest(context.applicationContext, body, receivedAt, source = "live")
+                SmsIngest.ingest(
+                    context.applicationContext,
+                    body,
+                    receivedAt,
+                    source = "live",
+                    // The live route is the only one that prompts — see SmsIngest.ingest.
+                    promptOnCashOut = true,
+                )
             } catch (t: Throwable) {
                 // Never let a parse or database problem take down the receiver: a crash here
                 // would lose this message and every one after it until the app was reopened.

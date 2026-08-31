@@ -1,7 +1,9 @@
 package gh.mutalib.sika
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -29,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.Dock
@@ -66,12 +70,34 @@ import gh.mutalib.sika.ui.theme.TextPrimary
 const val TAG = "Sika"
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * The row a cash-out notification asked us to open, or null.
+     *
+     * Held on the activity rather than inside the composable because it arrives on an
+     * Intent, which is an activity-level event — and it must survive the case where Sika is
+     * already running, where [onNewIntent] delivers it instead of [onCreate].
+     */
+    private val openRow = mutableStateOf<Long?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "MainActivity started")
+        openRow.value = rowIdFrom(intent)
         enableEdgeToEdge()
-        setContent { SikaTheme { SikaApp() } }
+        setContent { SikaTheme { SikaApp(openRow) } }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Without setIntent the activity keeps reporting the Intent it was created with,
+        // so a second notification tap would silently reopen the first row.
+        setIntent(intent)
+        openRow.value = rowIdFrom(intent)
+    }
+
+    private fun rowIdFrom(intent: Intent?): Long? =
+        intent?.getLongExtra(CashOutPrompt.EXTRA_ROW_ID, -1L)?.takeIf { it > 0L }
 }
 
 private sealed interface Gate {
@@ -83,7 +109,7 @@ private sealed interface Gate {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SikaApp() {
+private fun SikaApp(openRow: MutableState<Long?>) {
     val context = LocalContext.current
     val animated = remember { animationsEnabled(context) }
 
@@ -112,6 +138,24 @@ private fun SikaApp() {
         if (gate is Gate.Sweeping) {
             Sweeper.sweep(context)
             gate = Gate.Ready
+        }
+    }
+
+    // Notifications are asked for SECOND, and only once SMS is granted.
+    //
+    // Two dialogs at once is how you get both refused: the first is the one the whole app
+    // depends on, and stacking a second on top of it turns a considered yes into a reflex
+    // dismissal. This one is also genuinely optional — refusing it costs the cash-out
+    // prompt and the monthly report, not the ledger.
+    val askNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* Either answer is fine. CashOutPrompt.canPost checks before every post. */ }
+
+    LaunchedEffect(gate) {
+        if (gate is Gate.Ready && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !CashOutPrompt.canPost(context)
+        ) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -158,6 +202,16 @@ private fun SikaApp() {
             val categories by vm.categories.collectAsStateWithLifecycle()
             val refreshing by vm.refreshing.collectAsStateWithLifecycle()
             var sheetFor by remember { mutableStateOf<Long?>(null) }
+
+            // A cash-out prompt was tapped on its body rather than a button: open that
+            // row's sheet, where every category is available. Cleared immediately so
+            // dismissing the sheet does not reopen it on the next recomposition.
+            LaunchedEffect(openRow.value) {
+                openRow.value?.let { id ->
+                    sheetFor = id
+                    openRow.value = null
+                }
+            }
             // Re-read from state each recomposition so the sheet updates the moment a
             // category is picked, rather than showing the row as it was when tapped.
             val sheetRow = sheetFor?.let { id -> state.days.flatMap { it.rows }.firstOrNull { it.id == id } }
