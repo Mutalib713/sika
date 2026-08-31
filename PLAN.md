@@ -156,10 +156,27 @@ Sacred Rule 3: this ships before the pretty screens, not after.
   the warning. Now a running balance carries through every transaction and re-anchors whenever
   MoMo states a figure.
 
-- [ ] **8. Review queue**
-  Anything `parsedOk = false` is held, visible and countable. Never guessed, never dropped.
-  **Verify:** feed the parser a deliberately mangled message; it lands in the queue instead of
-  becoming a wrong row.
+- [x] **8. Review queue** — done 2026-08-31
+  Read from the ledger rather than from the current sweep, so a message queued by the live
+  receiver last week still appears. Count and contents on the diagnostic screen and in the log.
+  **Verified on the Pixel** by injecting a money-shaped message no MTN shape matches
+  (`Reversal of GHS 30.00 … Transaction Id: 99900011122 … Current Balance: GHS 60.00`):
+
+  |  | baseline | after injecting | meaning |
+  |---|---|---|---|
+  | queued for review | 0 | **1** | held, not dropped |
+  | transactions | 150 | **150** | not counted as money |
+  | rows in ledger | 144 | 145 | it exists |
+  | reconcile | 142 ok / 1 gap / 1 unchecked **of 144** | **identical, still of 144** | never entered the chain |
+
+  Ingestion logged `0p to ''` — **no amount guessed, no counterparty invented** — and the queue
+  showed the reason worked out on read plus the original text. Test row then cleared; ledger back
+  to 144. 11/11 instrumented, 28/28 JVM tests, `check: PASS`.
+  ⚠ **Correctness fix made here:** an unparsed row's `counterparty` is now empty rather than the
+  failure reason. `counterparty` is the key a learn-once rule attaches to, so a review row could
+  have acquired a rule for a sentence of English. The reason is derived by re-parsing `rawBody`
+  instead, which also keeps it current — fix the parser and a queued message reports that it is
+  now readable.
 
 ## Milestone 3 — The screens
 
