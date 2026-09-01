@@ -318,6 +318,19 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   posting, and add the row with `R.drawable.ic_calendar` (Lucide "calendar", deleted here
   because lint correctly called it unused).
 
+  **Half of it is already built and tested, 2026-09-01**, on a laptop with no phone attached:
+  `notify/MonthlyReport.kt` holds `nextFire`, `title` and `detail` as pure functions, with 12
+  tests in `MonthlyReportTest`. The rescheduling test walks 24 firings and requires every one
+  to land on the 1st at 9am — the drift a "+30 days" rebooking would cause is invisible for one
+  cycle and firing on the 28th by December.
+
+  ⚠ **This task's own line says "exact", and that is now wrong.** `SCHEDULE_EXACT_ALARM` is a
+  restricted permission on Android 12+ that the user can revoke, and a monthly summary does not
+  need a to-the-second alarm — "some time on the morning of the 1st" is entirely good enough.
+  Use `setAndAllowWhileIdle`, exactly as `DailyNudge` already does and for the same reason.
+  Still to build: the channel, the receiver, the `AlarmManager` booking, and the reschedule on
+  firing. Only those need the device.
+
 - [x] **15. Settings + CSV export *and import***
   Shipped 2026-09-01. Grouped cards (shape **B**, picked by Mutalib from four organisations in
   `design-scratch/settings.html`), one line of state at the top, Appearance as a named list,
