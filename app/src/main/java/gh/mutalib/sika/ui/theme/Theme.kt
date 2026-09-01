@@ -1,16 +1,18 @@
 package gh.mutalib.sika.ui.theme
 
 import android.content.Context
+import android.content.res.Configuration
 import androidx.core.content.edit
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalConfiguration
 
 /**
  * Which theme to show.
@@ -19,11 +21,25 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * with the control in the top corner rather than buried in Settings.
  */
 enum class ThemeMode {
-    /** Follow the phone's own light/dark setting. The default. */
+    /** Whatever the phone itself is set to. The default. */
     SYSTEM,
     LIGHT,
     DARK,
     ;
+
+    /**
+     * What Settings calls each one.
+     *
+     * ⚠ **"Default phone theme", not "Follow my phone"** — Mutalib's wording, 2026-09-01, and
+     * the reason it lives here rather than in the screen is so there is one place to change it
+     * and no chance of two screens naming the same setting differently.
+     */
+    val label: String
+        get() = when (this) {
+            SYSTEM -> "Default phone theme"
+            LIGHT -> "Light"
+            DARK -> "Dark"
+        }
 
     /**
      * What the corner control switches to, given what is currently on screen.
@@ -80,6 +96,26 @@ val LocalThemeMode = staticCompositionLocalOf { ThemeMode.SYSTEM }
 val LocalSetThemeMode = staticCompositionLocalOf<(ThemeMode) -> Unit> { {} }
 
 /**
+ * What the phone itself is asking for, **and light when it is not asking for anything.**
+ *
+ * Mutalib's rule, 2026-09-01: *"if the user does not have the default phone mode the default
+ * should be the light theme"*. Android's config has three states, not two —
+ * `UI_MODE_NIGHT_YES`, `NO`, and `UNDEFINED` — and `UNDEFINED` is real: a stripped ROM, a
+ * device with no dark setting, or a config that has not resolved yet.
+ *
+ * ⚠ **This is written out rather than left to `isSystemInDarkTheme()` even though that
+ * function already returns false for `UNDEFINED`.** The behaviour was correct by accident;
+ * an accident is not a decision, and the next person to touch this cannot tell the difference
+ * unless it says so. Nothing about the running app changes.
+ */
+@Composable
+@ReadOnlyComposable
+fun systemPrefersDark(): Boolean {
+    val night = LocalConfiguration.current.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    return night == Configuration.UI_MODE_NIGHT_YES
+}
+
+/**
  * ⚠ **Was dark-only until 2026-08-31**, and the old comment here said inverting the ground
  * "would need a second set of decisions Mutalib has not made". He has now made them: he
  * asked for light mode, and the light palette was derived and measured rather than guessed.
@@ -92,7 +128,7 @@ fun SikaTheme(
     content: @Composable () -> Unit,
 ) {
     val dark = when (mode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.SYSTEM -> systemPrefersDark()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }

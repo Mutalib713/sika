@@ -50,6 +50,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import gh.mutalib.sika.data.Backup
+import gh.mutalib.sika.data.CategoryEntity
+import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.notify.DailyNudge
 import gh.mutalib.sika.sms.Sweeper
@@ -66,6 +69,12 @@ import gh.mutalib.sika.ui.home.LoadingState
 import gh.mutalib.sika.ui.home.TransactionSheet
 import gh.mutalib.sika.ui.report.ReportScreen
 import gh.mutalib.sika.ui.report.ReportViewModel
+import gh.mutalib.sika.ui.settings.CategoriesScreen
+import gh.mutalib.sika.ui.settings.LearnedRulesScreen
+import gh.mutalib.sika.ui.settings.SettingsRoute
+import gh.mutalib.sika.ui.settings.SettingsScreen
+import gh.mutalib.sika.ui.settings.SettingsToast
+import gh.mutalib.sika.ui.settings.SettingsViewModel
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
@@ -238,12 +247,45 @@ private fun SikaApp(openRow: MutableState<Long?>) {
             // reached from the other. Reach for Navigation Compose when there are more.
             var showingAll by remember { mutableStateOf(false) }
 
+            // Settings has two sub-screens, reached the same flag-based way.
+            var settingsRoute by remember { mutableStateOf(SettingsRoute.ROOT) }
+            val insideSettings = tab == Tab.Settings && settingsRoute != SettingsRoute.ROOT
+
             // ⚠ Without this, the system back button LEAVES THE APP from the transactions
             // list, because nothing was ever pushed onto the back stack — `showingAll` is a
             // flag, and Android has no idea it means "somewhere else". Found by Mutalib on
-            // 2026-09-01. Enabled only while that screen is up, so back keeps its normal
-            // meaning everywhere else.
-            BackHandler(enabled = showingAll) { showingAll = false }
+            // 2026-09-01. Enabled only while one of those screens is up, so back keeps its
+            // normal meaning everywhere else.
+            BackHandler(enabled = showingAll || insideSettings) {
+                if (showingAll) showingAll = false else settingsRoute = SettingsRoute.ROOT
+            }
+
+            val svm: SettingsViewModel = viewModel()
+            val settings by svm.state.collectAsStateWithLifecycle()
+            val rules by svm.rules.collectAsStateWithLifecycle()
+            val busy by svm.busy.collectAsStateWithLifecycle()
+            val toast by svm.toast.collectAsStateWithLifecycle()
+
+            // Asked directly rather than inferred from `gate`. Inside Gate.Ready the answer is
+            // effectively always yes — Android kills the process when a permission is revoked —
+            // but a screen that reports permission state should read the permission, not a flag
+            // that happens to imply it.
+            val smsGranted = remember {
+                SMS_PERMISSIONS.all {
+                    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+                }
+            }
+
+            // ⚠ **The Storage Access Framework, so Sika asks for no storage permission.** The
+            // system picker returns a Uri for the one file chosen and nothing else; asking for
+            // WRITE_EXTERNAL_STORAGE would mean requesting the whole device to save one CSV.
+            val exportTo = rememberLauncherForActivityResult(
+                ActivityResultContracts.CreateDocument(Backup.MIME),
+            ) { uri -> uri?.let(svm::export) }
+
+            val importFrom = rememberLauncherForActivityResult(
+                ActivityResultContracts.OpenDocument(),
+            ) { uri -> uri?.let(svm::import) }
 
             val categories by vm.categories.collectAsStateWithLifecycle()
             val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -286,11 +328,34 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         )
                     }
 
-                    tab == Tab.Settings -> Curtain(animated) {
-                        Title("Settings")
-                        Spacer(Modifier.height(6.dp))
-                        Muted("Categories, learned rules, and CSV export and import.")
-                        Muted("Not built yet — PLAN task 15.")
+                    tab == Tab.Settings -> when (settingsRoute) {
+                        SettingsRoute.CATEGORIES -> CategoriesScreen(
+                            state = settings,
+                            animated = animated,
+                            onBack = { settingsRoute = SettingsRoute.ROOT },
+                            onHide = svm::setHidden,
+                            onDelete = svm::delete,
+                            onAdd = svm::add,
+                        )
+
+                        SettingsRoute.RULES -> LearnedRulesScreen(
+                            rules = rules,
+                            animated = animated,
+                            onBack = { settingsRoute = SettingsRoute.ROOT },
+                            onForget = svm::forget,
+                        )
+
+                        SettingsRoute.ROOT -> SettingsScreen(
+                            state = settings,
+                            smsGranted = smsGranted,
+                            busy = busy,
+                            animated = animated,
+                            onRoute = { settingsRoute = it },
+                            // ⚠ The date is in the name because a folder of files all called
+                            // `sika.csv` tells you nothing about which one to restore.
+                            onExport = { exportTo.launch(Backup.fileName(today(ACCRA))) },
+                            onImport = { importFrom.launch(BACKUP_TYPES) },
+                        )
                     }
 
                     else -> HomeScreen(
@@ -312,6 +377,16 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         .height(150.dp)
                         .scrimBehindDock(Bg),
                 )
+                // Above the dock, never over it: a message you have to move a control to read
+                // is a message that will be dismissed unread.
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 104.dp),
+                ) {
+                    SettingsToast(toast, svm::clearToast)
+                }
                 Dock(
                     selected = tab,
                     // ⚠ Choosing a tab leaves the transactions list AND closes any open
@@ -320,7 +395,14 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                     // `showingAll`, so nothing changed. Without the second, the sheet stayed
                     // floating over whichever screen you switched to — it belongs to a row
                     // on the list you just left, so it has nothing to say about Home.
-                    onSelect = { tab = it; showingAll = false; sheetFor = null },
+                    onSelect = {
+                        tab = it
+                        showingAll = false
+                        sheetFor = null
+                        // Leaving Settings and coming back should land on Settings, not on
+                        // whichever sub-screen was open when you left it.
+                        settingsRoute = SettingsRoute.ROOT
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
@@ -336,7 +418,15 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                 ) {
                     TransactionSheet(
                         row = sheetRow,
-                        categories = categories,
+                        // ⚠ A row already filed under a put-away category must still show it
+                        // as its own. Without this the sheet opens with nothing selected, on a
+                        // transaction that plainly has a category — which reads as the label
+                        // having been lost.
+                        categories = remember(categories, sheetRow.label) {
+                            val label = sheetRow.label
+                            if (label == null || categories.any { it.name == label }) categories
+                            else categories + CategoryEntity(name = label, sortOrder = Int.MAX_VALUE)
+                        },
                         onPick = { category, alsoRemember ->
                             vm.setCategory(sheetRow, category, alsoRemember)
                         },
@@ -437,4 +527,20 @@ private fun Muted(text: String) = Text(
 private val SMS_PERMISSIONS = arrayOf(
     Manifest.permission.READ_SMS,
     Manifest.permission.RECEIVE_SMS,
+)
+
+/**
+ * What the file picker will let you choose when restoring.
+ *
+ * ⚠ **More than `text/csv`, deliberately.** The same file comes back as `text/comma-separated-
+ * values` from some providers and `application/octet-stream` from others — Drive and a few
+ * file managers among them — and a picker that greys out the user's own backup is indefensible.
+ * A full wildcard is not the answer either: the file is still validated when it is read, and
+ * offering every file on the phone invites choosing a photo and being told no.
+ */
+private val BACKUP_TYPES = arrayOf(
+    "text/csv",
+    "text/comma-separated-values",
+    "text/plain",
+    "application/octet-stream",
 )

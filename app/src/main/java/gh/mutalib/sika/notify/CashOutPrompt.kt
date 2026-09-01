@@ -116,6 +116,12 @@ object CashOutPrompt {
         counterparty: String,
         categories: List<String>,
     ) {
+        // Switched off in Settings. Checked before the permission, because a deliberate "no"
+        // is not a failure and should not be logged as one.
+        if (!NotificationPrefs.cashOutPrompt(context)) {
+            Log.i(TAG, "cash-out prompt: switched off in Settings")
+            return
+        }
         // POST_NOTIFICATIONS is a runtime permission from Android 13. Without this check
         // `notify` throws nothing and does nothing, so the failure would be invisible.
         if (!canPost(context)) {

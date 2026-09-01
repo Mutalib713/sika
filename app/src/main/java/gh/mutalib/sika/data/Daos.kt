@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -124,6 +125,26 @@ interface TransactionDao {
     @Query("UPDATE transactions SET note = :note WHERE id = :id")
     suspend fun setNote(id: Long, note: String?)
 
+    /**
+     * Restores a label from a backup, **only onto a row that has none**.
+     *
+     * ⚠ Keyed on `txId`, never on the row id — ids are local to one install and mean nothing
+     * in a file. MTN's transaction id is the same number on any phone, which is why it is the
+     * dedupe key in the first place (Sacred Rule 4).
+     *
+     * The `label IS NULL` guard is the promise that importing can only add: a two-week-old
+     * backup can never silently undo two weeks of labelling.
+     */
+    @Query(
+        "UPDATE transactions SET label = :label, labelSource = :source " +
+            "WHERE txId = :txId AND label IS NULL",
+    )
+    suspend fun restoreLabel(txId: String, label: String, source: LabelSource): Int
+
+    /** Same promise for notes: fills a blank, never replaces words already there. */
+    @Query("UPDATE transactions SET note = :note WHERE txId = :txId AND note IS NULL")
+    suspend fun restoreNote(txId: String, note: String): Int
+
     @Query("UPDATE transactions SET reconciled = :state WHERE id = :id")
     suspend fun setReconciled(id: Long, state: Reconciled)
 
@@ -157,6 +178,10 @@ interface RuleDao {
     @Query("SELECT * FROM rules ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<RuleEntity>>
 
+    /** A one-shot read, for writing the backup file. */
+    @Query("SELECT * FROM rules ORDER BY createdAt DESC")
+    suspend fun all(): List<RuleEntity>
+
     @Query("DELETE FROM rules WHERE counterparty = :counterparty")
     suspend fun delete(counterparty: String)
 
@@ -172,8 +197,22 @@ interface CategoryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(category: CategoryEntity): Long
 
+    /** Everything, hidden included. What the Categories screen shows. */
     @Query("SELECT * FROM categories ORDER BY sortOrder ASC")
     fun observeAll(): Flow<List<CategoryEntity>>
+
+    /**
+     * Only the ones still in use.
+     *
+     * ⚠ **This is what the picker and the cash-out notification read**, and the difference
+     * from [observeAll] is the whole point of putting a category away. Wire a chooser to
+     * [observeAll] by mistake and hiding does nothing at all.
+     */
+    @Query("SELECT * FROM categories WHERE isHidden = 0 ORDER BY sortOrder ASC")
+    fun observeVisible(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT * FROM categories WHERE isHidden = 0 ORDER BY sortOrder ASC")
+    suspend fun visible(): List<CategoryEntity>
 
     @Query("SELECT * FROM categories ORDER BY sortOrder ASC")
     suspend fun all(): List<CategoryEntity>
@@ -181,14 +220,59 @@ interface CategoryDao {
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 
-    /** `Other` is protected — the delete screen must never offer it. */
+    /**
+     * Puts a category away, or brings it back.
+     *
+     * ⚠ `isProtected = 0` guards it: `Other` must always be offerable, because it is where
+     * anything that fits nothing else goes. Hide it and a transaction can end up with no
+     * honest answer available at all.
+     */
+    @Query("UPDATE categories SET isHidden = :hidden WHERE id = :id AND isProtected = 0")
+    suspend fun setHidden(id: Long, hidden: Boolean): Int
+
+    /** How many transactions carry this label. Zero is what makes a delete safe. */
+    @Query("SELECT COUNT(*) FROM transactions WHERE label = :name")
+    suspend fun usageOf(name: String): Int
+
+    /** Usage for every category name at once, so the screen reads the table once, not nine times. */
+    @Query("SELECT label AS name, COUNT(*) AS uses FROM transactions WHERE label IS NOT NULL GROUP BY label")
+    fun observeUsage(): Flow<List<CategoryUsage>>
+
+    /** `Other` is protected — no screen may ever offer to delete it. */
     @Query("DELETE FROM categories WHERE id = :id AND isProtected = 0")
     suspend fun delete(id: Long): Int
 
     /**
-     * Moves a deleted category's transactions to `Other` rather than orphaning them.
-     * **Losing a category must never lose money.**
+     * Deletes a category **only while nothing points at it**.
+     *
+     * ⚠ **The one rule, with no special case for the nine starters.** A category holding
+     * transactions cannot be deleted at all — it can only be put away, which keeps every row
+     * exactly as it is. A category that never labelled anything can go, because there is
+     * nothing left to lose.
+     *
+     * `@Transaction` matters: the count and the delete have to see the same database, or a
+     * label written between the two would be orphaned by a delete that read a stale zero.
+     *
+     * @return true if it was removed.
+     */
+    @Transaction
+    suspend fun deleteIfUnused(id: Long, name: String): Boolean {
+        if (usageOf(name) > 0) return false
+        return delete(id) > 0
+    }
+
+    /**
+     * Moves one category's transactions to another.
+     *
+     * ⚠ **Nothing calls this any more, and that is deliberate.** It was written for the
+     * delete-and-reassign flow that hiding replaced: losing a category would not have lost the
+     * money, but it would have erased what the money was *for*, which is the only thing the
+     * ledger cannot rebuild from the SMS inbox. Kept because a genuine merge — "these two
+     * names mean the same thing" — is a real future feature, and this is the safe half of it.
      */
     @Query("UPDATE transactions SET label = :toLabel WHERE label = :fromLabel")
     suspend fun reassign(fromLabel: String, toLabel: String): Int
 }
+
+/** One row of [CategoryDao.observeUsage]: a label and how many transactions carry it. */
+data class CategoryUsage(val name: String, val uses: Int)

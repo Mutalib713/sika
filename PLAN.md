@@ -312,24 +312,46 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   **Verify:** set the device clock to 23:58 on the last of a month, watch it fire, confirm it
   reschedules for the following month.
 
-- [ ] **15. Settings + CSV export *and import***
-  Permission state, categories, learned rules, export to CSV **and import back**. Risk #3: your
-  labels are the only irreplaceable data, and export alone lets you look at them after a wipe
-  rather than recover them.
-  **Verify:** export, wipe the app's data, import, confirm every row *and every label* returns.
+  ⚠ **Bring the switch with it.** Settings has switches for the cash-out prompt and the
+  end-of-day reminder, both backed by `NotificationPrefs`. A monthly-summary switch was left
+  out deliberately rather than drawn dead — add `NotificationPrefs.monthly`, check it before
+  posting, and add the row with `R.drawable.ic_calendar` (Lucide "calendar", deleted here
+  because lint correctly called it unused).
 
-  ⚠ **Bring back "follow my phone" here.** The corner toggle now flips light and dark
-  directly, because a three-way cycle had a dead step in it — `DARK → SYSTEM` on a phone
-  already in dark mode changed the setting and changed nothing visible, so the control
-  needed two presses to do one thing. A three-way choice belongs in a list with three
-  labels, not behind an icon. `ic_theme_auto.xml` was deleted when it fell out of use;
-  regenerate the Lucide `sun-moon` glyph when this task lands.
+- [x] **15. Settings + CSV export *and import***
+  Shipped 2026-09-01. Grouped cards (shape **B**, picked by Mutalib from four organisations in
+  `design-scratch/settings.html`), one line of state at the top, Appearance as a named list,
+  Categories, Learned rules, and a backup file that actually restores.
 
-  ⚠ **Deleting the starter categories must be possible** — Mutalib's request, 2026-09-01.
-  The data layer already allows it: `CategoryDao.delete` carries `AND isProtected = 0`, and
-  only `Other` is protected, so the other eight starters are deletable and always were. What
-  is missing is the UI. Deleting a category moves its transactions to `Other` and says so
-  before it happens (docs/screens.md, screen 6) — losing a category must never lose money.
+  **Verified:** 86 unit tests, 0 failures, `check: PASS`. `BackupTest` writes a ledger out and
+  reads it back field for field, including a body containing `Fee charged: GHS0.50,Tax Charged 0.`
+  — the comma that a naive `split(",")` would have silently turned into two columns.
+  ⚠ **Not yet verified on the phone**: the wipe-and-restore round trip, and the 2→3 migration
+  over the real 148 rows. Both need the Pixel, which was disconnected when this was built.
+
+  **Appearance** brought back the three-way choice, as this task always said it would — named
+  options in a list rather than a cycle with a dead step in it. ⚠ **"Default phone theme", never
+  "Follow my phone"** — Mutalib's wording, held on `ThemeMode.label` so there is one copy of it.
+  `systemPrefersDark()` writes out the fallback: no preference reported means light.
+
+  ⚠ **Categories are PUT AWAY, not deleted.** Mutalib overruled the delete-and-reassign plan
+  recorded here, and was right — it would have kept the money and lost what the money was for.
+  `CategoryEntity.isHidden`, migration 2→3, `ALTER TABLE ... NOT NULL DEFAULT 0`. Delete survives
+  only for a category holding nothing at all (`deleteIfUnused`, re-checked inside the
+  transaction). `Other` can be neither hidden nor deleted.
+
+  ⚠ **Import can only ADD.** `restoreLabel` and `restoreNote` carry `AND label IS NULL` /
+  `AND note IS NULL`, so restoring a two-week-old file can never silently revert two weeks of
+  labelling. Rows come in under `OnConflictStrategy.IGNORE`, so an existing transaction keeps
+  what it has. A row whose amount cannot be read is reported and skipped, never guessed at.
+
+  ⚠ **No storage permission.** Both directions go through the Storage Access Framework, which
+  hands back a `Uri` for the one file chosen. `WRITE_EXTERNAL_STORAGE` would mean asking for the
+  whole device to save one CSV.
+
+  Also shipped: `NotificationPrefs`, so the two notification switches control something real
+  rather than looking live and doing nothing. The monthly-summary switch is deliberately absent
+  until task 14 gives it something to switch.
 
 - [ ] **16. Error and empty states**
   Permission denied, no messages found, nothing this month, reconciliation gap detected.

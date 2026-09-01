@@ -77,8 +77,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val rules = db.rules()
     private val categoryDao = db.categories()
 
-    /** The category list, live — a new one added from the sheet appears immediately. */
-    val categories: StateFlow<List<CategoryEntity>> = categoryDao.observeAll()
+    /**
+     * The category list, live — a new one added from the sheet appears immediately.
+     *
+     * ⚠ **Visible only.** A category put away in Settings stops being offered here, which is
+     * the entire point of putting one away. The screen that manages them reads `observeAll`
+     * instead; wire this one to that by mistake and hiding does nothing at all.
+     */
+    val categories: StateFlow<List<CategoryEntity>> = categoryDao.observeVisible()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**

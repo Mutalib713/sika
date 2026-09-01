@@ -1,0 +1,194 @@
+package gh.mutalib.sika.ui.settings
+
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import gh.mutalib.sika.data.BackupIo
+import gh.mutalib.sika.data.CategoryEntity
+import gh.mutalib.sika.data.Reconciled
+import gh.mutalib.sika.data.RuleEntity
+import gh.mutalib.sika.data.SikaDatabase
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/**
+ * One category as the Categories screen needs to see it: the row itself, and how many
+ * transactions point at it.
+ *
+ * [uses] is what decides whether the bin appears. It is read from the transactions table
+ * rather than stored on the category, because a stored count is a second copy of a fact and
+ * second copies drift.
+ */
+data class CategoryRow(val category: CategoryEntity, val uses: Int) {
+    val canDelete: Boolean get() = uses == 0 && !category.isProtected
+    val canHide: Boolean get() = !category.isProtected
+}
+
+data class SettingsState(
+    val loading: Boolean = true,
+    val transactions: Int = 0,
+    val gaps: Int = 0,
+    val unlabelled: Int = 0,
+    val needsReview: Int = 0,
+    val categories: List<CategoryRow> = emptyList(),
+    val rulesCount: Int = 0,
+) {
+    val inUse: List<CategoryRow> get() = categories.filter { !it.category.isHidden }
+    val putAway: List<CategoryRow> get() = categories.filter { it.category.isHidden }
+    /** True when every transaction on record balances. The one claim worth leading with. */
+    val allBalancing: Boolean get() = gaps == 0
+}
+
+/** What just happened, shown once and then dismissed. Null means nothing to say. */
+data class Toast(val text: String, val bad: Boolean = false)
+
+class SettingsViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val db = SikaDatabase.get(app)
+    private val transactions = db.transactions()
+    private val categoryDao = db.categories()
+    private val ruleDao = db.rules()
+
+    private val _toast = MutableStateFlow<Toast?>(null)
+    val toast: StateFlow<Toast?> = _toast
+    fun clearToast() { _toast.value = null }
+
+    private val _busy = MutableStateFlow(false)
+
+    /** True while a file is being read or written, so the row can say so instead of looking dead. */
+    val busy: StateFlow<Boolean> = _busy
+
+    val state: StateFlow<SettingsState> = combine(
+        categoryDao.observeAll(),
+        categoryDao.observeUsage(),
+        transactions.observeAll(),
+        transactions.observeReviewQueue().map { it.size },
+        ruleDao.observeAll().map { it.size },
+    ) { categories, usage, all, review, ruleCount ->
+        val uses = usage.associate { it.name to it.uses }
+        SettingsState(
+            loading = false,
+            transactions = all.size,
+            gaps = all.count { it.reconciled == Reconciled.GAP },
+            unlabelled = all.count { it.label == null },
+            needsReview = review,
+            categories = categories.map { CategoryRow(it, uses[it.name] ?: 0) },
+            rulesCount = ruleCount,
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState())
+
+    val rules: StateFlow<List<RuleEntity>> = ruleDao.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ------------------------------------------------------------------ categories
+
+    fun setHidden(row: CategoryRow, hidden: Boolean) {
+        viewModelScope.launch {
+            categoryDao.setHidden(row.category.id, hidden)
+            _toast.value = Toast(
+                if (hidden) {
+                    "${row.category.name} put away. Its transactions keep the label."
+                } else {
+                    "${row.category.name} is back in the list."
+                },
+            )
+        }
+    }
+
+    /**
+     * ⚠ **Re-checks usage inside the transaction rather than trusting the screen.** The row
+     * on screen was read a moment ago; a cash-out notification answered in the shade since
+     * then could have put a transaction into this very category. The database is the only
+     * thing that knows, and it is asked at the moment of deleting.
+     */
+    fun delete(row: CategoryRow) {
+        viewModelScope.launch {
+            val gone = categoryDao.deleteIfUnused(row.category.id, row.category.name)
+            _toast.value = if (gone) {
+                Toast("${row.category.name} deleted.")
+            } else {
+                Toast(
+                    "${row.category.name} has transactions in it now, so it was put away instead.",
+                    bad = true,
+                )
+            }
+            if (!gone) categoryDao.setHidden(row.category.id, true)
+        }
+    }
+
+    fun add(name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        viewModelScope.launch {
+            val existing = categoryDao.all().firstOrNull { it.name.equals(clean, ignoreCase = true) }
+            if (existing != null) {
+                // Adding a name that is only put away should bring it back, not fail silently
+                // with "already exists" on a category the list is not even showing.
+                if (existing.isHidden) {
+                    categoryDao.setHidden(existing.id, false)
+                    _toast.value = Toast("$clean was put away. It is back in the list.")
+                } else {
+                    _toast.value = Toast("You already have a $clean.", bad = true)
+                }
+                return@launch
+            }
+            val order = (categoryDao.all().maxOfOrNull { it.sortOrder } ?: 0) + 1
+            categoryDao.insert(CategoryEntity(name = clean, sortOrder = order))
+            _toast.value = Toast("$clean added.")
+        }
+    }
+
+    // ------------------------------------------------------------------ rules
+
+    fun forget(rule: RuleEntity) {
+        viewModelScope.launch {
+            ruleDao.delete(rule.counterparty)
+            _toast.value = Toast("Sika will stop labelling ${rule.counterparty} on its own.")
+        }
+    }
+
+    // ------------------------------------------------------------------ the file
+
+    fun export(uri: Uri) {
+        viewModelScope.launch {
+            _busy.value = true
+            val result = BackupIo.export(getApplication(), uri)
+            _busy.value = false
+            _toast.value = result.error?.let { Toast(it, bad = true) }
+                ?: Toast("Saved ${result.rows} transactions, with every label.")
+        }
+    }
+
+    fun import(uri: Uri) {
+        viewModelScope.launch {
+            _busy.value = true
+            val r = BackupIo.import(getApplication(), uri)
+            _busy.value = false
+            _toast.value = when {
+                r.error != null -> Toast(r.error, bad = true)
+                r.changedNothing -> Toast("Everything in that file was already here.")
+                else -> Toast(summarise(r))
+            }
+        }
+    }
+
+    /** Says what changed, in the order that matters, and leaves out the zeroes. */
+    private fun summarise(r: BackupIo.Import): String {
+        val parts = buildList {
+            if (r.added > 0) add("${r.added} transactions")
+            if (r.labels > 0) add("${r.labels} labels")
+            if (r.notes > 0) add("${r.notes} notes")
+            if (r.categories > 0) add("${r.categories} categories")
+            if (r.rules > 0) add("${r.rules} rules")
+        }
+        val head = "Restored " + parts.joinToString(", ") + "."
+        return if (r.problems.isEmpty()) head
+        else head + " " + r.problems.size + " rows could not be read and were left out."
+    }
+}

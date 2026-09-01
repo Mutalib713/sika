@@ -94,6 +94,10 @@ object DailyNudge {
             Log.i(TAG, "daily nudge: nothing unlabelled today, staying quiet")
             return
         }
+        if (!NotificationPrefs.endOfDay(context)) {
+            Log.i(TAG, "daily nudge: switched off in Settings")
+            return
+        }
         if (!CashOutPrompt.canPost(context)) {
             Log.w(TAG, "daily nudge suppressed: notifications not permitted")
             return

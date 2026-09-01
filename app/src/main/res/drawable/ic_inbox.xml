@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "inbox" - the project's only icon set. See docs/ui-guidelines.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M22,12h-6l-2,3h-4l-2,-3H2M5.5,5.1 2,12v6a2,2 0 0 0 2,2h16a2,2 0 0 0 2,-2v-6l-3.5,-6.9A2,2 0 0 0 16.8,4H7.2a2,2 0 0 0 -1.7,1.1"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

@@ -70,6 +70,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Settings shows the version, and the manifest is the only place that knows it.
+        // Off by default since AGP 8; without this `BuildConfig` is not generated at all.
+        buildConfig = true
     }
 
     lint {

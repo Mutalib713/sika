@@ -158,13 +158,27 @@ Messages the parser could not read with confidence. **Never guessed, never silen
 
 ## 5. Settings
 
-- **SMS access** — granted or denied, with a button into system settings.
+Built at task 15. Grouped cards — Mutalib picked shape **B** from four organisations shown side
+by side (`design-scratch/settings.html`), over Android's flat list, which "would look correct
+in any app".
+
+- **One line of state at the top**, and no more than one — his instruction, "not too big".
+  Four wordings: SMS off · no messages yet · reading, all balancing · *n* do not add up.
+- **Appearance** — a row showing its current value, opening a list of three named options:
+  **Default phone theme** · Light · Dark. ⚠ His wording: never "Follow my phone". If the phone
+  reports no preference at all, Sika shows the light one.
+- **SMS access** — granted or denied, and when denied the row opens Sika's own app info, not
+  the top of Android's settings.
+- **Ask what a cash-out was for** / **Remind me at the end of the day** — real switches, stored
+  in `NotificationPrefs` and checked before either notification is posted.
 - **Categories** → screen 6.
 - **Learned rules** — every counterparty → category pair, each deletable. Deleting stops the
-  auto-labelling without touching past transactions.
-- **Export CSV** / **Import CSV** — the whole ledger including labels. Import restores after a
-  reinstall.
-- **Review queue** → screen 4, with its count.
+  auto-labelling without touching past transactions, and the screen says so.
+- **Export everything** / **Restore from a file** — the whole ledger including labels, notes,
+  categories and rules. Through the Storage Access Framework, so no storage permission is asked
+  for. ⚠ Import only ever *adds*: it never overwrites a label or a note that already exists, so
+  restoring an old file cannot silently undo recent work.
+- **Review queue** → screen 4, with its count. Shown only when there is something in it.
 - **About** — version, and one line stated as fact because it is verifiable in the manifest:
   > Sika has no internet permission. Your data cannot leave this phone.
 
@@ -175,11 +189,28 @@ Messages the parser could not read with confidence. **Never guessed, never silen
 - The nine starters: **Food · Transport · Data · Airtime · Rent · Provisions · Printing · Sent home
   · Other**.
 - **`+` to add.** Name, and that's all — no colour picker, no icon picker. Every category renders in
-  the same palette.
-- Reorder by drag. Order drives the cash-out prompt's four quick options.
-- **`Other` is protected** — no rename, no delete.
-- Deleting a category moves its transactions to `Other` and says so before it happens. Losing a
-  category must never lose money.
+  the same palette. Adding a name that is only *put away* brings it back rather than failing.
+- Two lists: **in use** and **put away**.
+- **`Other` is protected** — no rename, no delete, and it cannot be put away either. It is where
+  anything that fits nothing else goes, so hiding it would leave a transaction with no honest
+  answer available.
+
+### ⚠ Categories are put away, not deleted — changed 2026-09-01
+
+Mutalib's call, and he was right: *"if a user deletes a category when it's already being used it
+can cause problems"*. The plan he corrected was worse than it looked — deleting was going to move
+every affected transaction to `Other`, which keeps the money and throws away the only record of
+what the money was *for*. That is not recoverable from the SMS inbox.
+
+- **Put away** (a minus) — reversible in one tap. The category stops being offered in the picker
+  and in the cash-out notification. Every transaction already in it keeps its label, and the
+  report still counts the money. The dialog names all three of those before anything happens.
+- **Delete** (a bin) — offered **only for a category nothing points at**. One rule, no special
+  case for the starters: a category holding transactions cannot be deleted at all, and a category
+  that never labelled anything can go, because there is nothing left to lose. The check is
+  re-run inside the database transaction, not trusted from the screen.
+- A put-away category still shows as selected on a transaction that already carries it, so a
+  label never looks lost.
 
 ---
 

@@ -19,7 +19,7 @@ import androidx.room.TypeConverters
  */
 @Database(
     entities = [TransactionEntity::class, RuleEntity::class, CategoryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -57,9 +57,29 @@ abstract class SikaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 2 to 3: a category can be put away instead of deleted.
+         *
+         * ⚠ **`NOT NULL DEFAULT 0` is what makes this safe on existing rows.** Every category
+         * already on the phone becomes `isHidden = 0`, meaning "in use", which is exactly what
+         * was true of all of them before the column existed. A nullable column would have
+         * matched the note migration's shape but been wrong here: "unknown" is not a state a
+         * category can be in, and every read would need to decide what null meant.
+         *
+         * Same `ALTER TABLE` guarantee as 1→2 — SQLite adds the column in place, so no
+         * transaction, label, note or reconciliation result is touched.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE categories ADD COLUMN isHidden INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 // ⚠ **No `fallbackToDestructiveMigration()`.** It is the usual shortcut and
                 // it means "if the schema changed, delete everything and start over" — on a
                 // ledger whose whole value is months of history, and whose labels are the

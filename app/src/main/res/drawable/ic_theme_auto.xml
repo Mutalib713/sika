@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lucide "sun-moon" - the project's only icon set. See docs/ui-guidelines.md.
+  Deleted once, when the corner toggle stopped offering a "follow the phone" state and lint
+  correctly flagged it as unused. Back because Settings now names all three modes in a list,
+  where "Default phone theme" is a choice you can point at rather than cycle through.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,8a4,4 0 0 0 0,8 4,4 0 0 0 0,-8M12,8v8M12,2v2M12,20v2M4.9,4.9l1.4,1.4M17.7,17.7l1.4,1.4M2,12h2M20,12h2M6.3,17.7l-1.4,1.4M19.1,4.9l-1.4,1.4"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

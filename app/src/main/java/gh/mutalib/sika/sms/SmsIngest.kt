@@ -81,7 +81,9 @@ object SmsIngest {
                 rowId = id,
                 amount = row.amount,
                 counterparty = row.counterparty,
-                categories = SikaDatabase.get(context).categories().all().map { it.name },
+                // Visible only: a category put away in Settings must not come back as a
+                // button in the shade, which is the one place it cannot be corrected from.
+                categories = SikaDatabase.get(context).categories().visible().map { it.name },
             )
         }
         return isNew

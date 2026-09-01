@@ -77,7 +77,7 @@ class CashOutReplyReceiver : BroadcastReceiver() {
                         rowId = rowId,
                         amount = row.amount,
                         counterparty = row.counterparty,
-                        categories = db.categories().all().map { it.name },
+                        categories = db.categories().visible().map { it.name },
                     )
 
                     // The only branch that touches the ledger.

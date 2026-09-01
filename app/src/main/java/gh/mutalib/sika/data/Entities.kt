@@ -151,6 +151,26 @@ data class CategoryEntity(
     val isDefault: Boolean = false,
     /** True only for `Other`: it cannot be renamed or deleted, and absorbs deletions. */
     val isProtected: Boolean = false,
+
+    /**
+     * Put away: still a real category, just no longer offered when labelling.
+     *
+     * ⚠ **This exists because deleting was the wrong idea, and Mutalib said so first**
+     * (2026-09-01): *"if a user deletes a category when it's already being used it can cause
+     * problems"*. He is right, and the plan before this was worse than he realised — it would
+     * have moved every transaction to `Other`, which does not lose the money but does lose the
+     * only record of what the money was for. Destroying information to tidy a list is a bad
+     * trade, and it is not undoable.
+     *
+     * Hiding costs nothing and reverses in one tap. A hidden category:
+     *   * disappears from the picker and from the cash-out notification's quick options,
+     *   * keeps every transaction already filed under it, untouched,
+     *   * still appears in reports, because the money was still spent.
+     *
+     * Deleting outright survives only for a category that has never labelled anything — see
+     * `CategoryDao.deleteIfUnused`. Nothing can be lost by removing a name nothing points at.
+     */
+    val isHidden: Boolean = false,
 )
 
 /**
