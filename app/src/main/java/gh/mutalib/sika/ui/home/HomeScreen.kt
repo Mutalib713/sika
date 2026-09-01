@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -85,10 +86,16 @@ fun HomeScreen(
     refreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     onSeeAll: () -> Unit = {},
+    onOpenReport: () -> Unit = {},
     onTransactionClick: (TransactionEntity) -> Unit = {},
 ) {
     val pullState = rememberPullToRefreshState()
     var pickedBar by remember(state.weekSummary?.period) { mutableStateOf<Int?>(null) }
+    // ⚠ Restored 2026-09-01. Both of these were lost when Home was rebuilt as a dashboard —
+    // the rewrite replaced the screen wholesale and quietly took the entrance and the
+    // refresh skeleton with it. Neither failed loudly, which is why they were only noticed
+    // by Mutalib using the app.
+    val entrance = rememberEntrance(animated)
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
@@ -107,6 +114,12 @@ fun HomeScreen(
                 )
             },
         ) {
+            // While a refresh is running the screen becomes its own skeleton, so the pull
+            // has something to show for itself beyond a spinner.
+            if (refreshing) {
+                LoadingState(animated = animated, showHeader = false)
+                return@PullToRefreshBox
+            }
             LazyColumn(
                 Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 50.dp, bottom = 150.dp),
@@ -119,12 +132,41 @@ fun HomeScreen(
                 }
 
                 item {
-                    state.monthSummary?.let { HeroCard(it) }
-                    Spacer(Modifier.height(11.dp))
-                    state.monthSummary?.let { StatPair(it) }
+                    state.monthSummary?.let { month ->
+                        // The card drops in from above; its contents rise into it; the money
+                        // counts up last, because the money is the point of the screen.
+                        Box(
+                            Modifier.graphicsLayer {
+                                translationY = (1f - entrance.capsuleDrop) * -320f
+                                alpha = entrance.capsuleFade
+                            },
+                        ) {
+                            HeroCard(month, entrance)
+                        }
+                        Spacer(Modifier.height(11.dp))
+                        Rising(entrance, 2) { StatPair(month) }
+                    }
                 }
 
-                item { Spacer(Modifier.height(20.dp)); SectionHeading("This week") }
+                item {
+                    Spacer(Modifier.height(20.dp))
+                    Rising(entrance, 3) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                            SectionHeading("This week", Modifier.weight(1f))
+                            // A way through to the report from the section it summarises —
+                            // his request, 2026-09-01.
+                            Text(
+                                "Full report",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Accent,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(onClick = onOpenReport)
+                                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                }
 
                 item {
                     state.weekSummary?.let { week ->
@@ -164,6 +206,27 @@ fun HomeScreen(
     }
 }
 
+/**
+ * One block of the entrance: rises from below into place, [index] slots behind the card.
+ *
+ * ⚠ Wrapped in a Box with a `graphicsLayer` rather than an offset modifier, because a
+ * layer moves pixels that are already drawn while an offset re-measures the layout — and
+ * re-measuring a LazyColumn item sixty times a second is how a smooth animation becomes a
+ * stutter on a list.
+ */
+@Composable
+private fun Rising(entrance: EntranceClock, index: Int, content: @Composable () -> Unit) {
+    val progress = entrance.content(index)
+    Box(
+        Modifier.graphicsLayer {
+            translationY = (1f - progress) * 46f
+            alpha = progress
+        },
+    ) {
+        content()
+    }
+}
+
 @Composable
 private fun Greeting(state: HomeState) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -194,7 +257,7 @@ private fun Greeting(state: HomeState) {
  * bottom of the third.
  */
 @Composable
-private fun HeroCard(month: PeriodSummary) {
+private fun HeroCard(month: PeriodSummary, entrance: EntranceClock) {
     val labelled = 1f - month.uncategorisedShare
     Column(
         Modifier
@@ -210,7 +273,14 @@ private fun HeroCard(month: PeriodSummary) {
             color = AccentContrast.copy(alpha = 0.68f),
         )
         Spacer(Modifier.height(3.dp))
-        Text(month.moneyOut.asCedis(), style = BalanceStyle, color = AccentContrast)
+        // ⚠ Counts up from zero, and lands on the real figure. The count is driven by the
+        // entrance clock rather than its own animation so it cannot finish before the card
+        // it sits on has arrived.
+        Text(
+            (month.moneyOut * entrance.count.toDouble()).toLong().asCedis(),
+            style = BalanceStyle,
+            color = AccentContrast,
+        )
 
         month.biggestChange?.change?.let { change ->
             Spacer(Modifier.height(7.dp))

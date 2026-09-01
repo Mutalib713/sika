@@ -13,6 +13,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
 import gh.mutalib.sika.ui.theme.LocalSetThemeMode
+import gh.mutalib.sika.ui.theme.LocalSikaColors
 import gh.mutalib.sika.ui.theme.LocalThemeMode
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.ThemeMode
@@ -34,21 +35,18 @@ import gh.mutalib.sika.ui.theme.ThemeMode
 fun ThemeToggle(modifier: Modifier = Modifier) {
     val mode = LocalThemeMode.current
     val onChange = LocalSetThemeMode.current
-    val icon = when (mode) {
-        ThemeMode.SYSTEM -> R.drawable.ic_theme_auto
-        ThemeMode.LIGHT -> R.drawable.ic_theme_light
-        ThemeMode.DARK -> R.drawable.ic_theme_dark
-    }
-    val description = when (mode) {
-        ThemeMode.SYSTEM -> "Theme: following your phone. Tap for light."
-        ThemeMode.LIGHT -> "Theme: light. Tap for dark."
-        ThemeMode.DARK -> "Theme: dark. Tap to follow your phone."
-    }
+    val showingDark = LocalSikaColors.current.isDark
+    // ⚠ The icon shows what a TAP WILL DO, not what the setting currently is. On a dark
+    // screen it is a sun, because tapping brings the light one. An icon naming the present
+    // state leaves you working out the consequence yourself, on a control whose whole job is
+    // to be obvious.
+    val icon = if (showingDark) R.drawable.ic_theme_light else R.drawable.ic_theme_dark
+    val description = if (showingDark) "Switch to the light theme" else "Switch to the dark theme"
     Box(
         modifier
             .size(44.dp) // ≥44dp touch target, docs/screens.md
             .clip(RoundedCornerShape(22.dp))
-            .clickable { onChange(mode.next()) },
+            .clickable { onChange(mode.next(showingDark)) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

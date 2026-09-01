@@ -25,12 +25,25 @@ enum class ThemeMode {
     DARK,
     ;
 
-    /** The next mode when the corner control is tapped: system → light → dark → system. */
-    fun next(): ThemeMode = when (this) {
-        SYSTEM -> LIGHT
-        LIGHT -> DARK
-        DARK -> SYSTEM
-    }
+    /**
+     * What the corner control switches to, given what is currently on screen.
+     *
+     * ⚠ **Takes the current appearance, not just the current mode, and that is the fix for a
+     * real bug.** The old cycle was `SYSTEM → LIGHT → DARK → SYSTEM`, which looks tidy and
+     * has a dead step in it: going `DARK → SYSTEM` on a phone that is itself in dark mode
+     * changes the setting and changes nothing you can see. Mutalib hit exactly that on
+     * 2026-09-01 — "when it's on dark mode I have to press it twice before it goes to light".
+     * He was pressing once to reach SYSTEM, seeing no change, and pressing again.
+     *
+     * **A control that can no-op is broken**, however correct its state machine. This one is
+     * defined by what it does to the screen: it always flips light and dark.
+     *
+     * The cost, stated: the toggle can no longer return to "follow my phone". That is a real
+     * loss and it goes in Settings at PLAN task 15, where a three-way choice can be shown as
+     * three labelled options rather than guessed at from an icon. SYSTEM remains the default
+     * until the control is touched for the first time.
+     */
+    fun next(showingDark: Boolean): ThemeMode = if (showingDark) LIGHT else DARK
 }
 
 /**

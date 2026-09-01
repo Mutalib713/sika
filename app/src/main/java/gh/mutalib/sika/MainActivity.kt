@@ -291,6 +291,7 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         refreshing = refreshing,
                         onRefresh = { vm.refresh(context) },
                         onSeeAll = { showingAll = true },
+                        onOpenReport = { tab = Tab.Report },
                         onTransactionClick = { sheetFor = it.id },
                     )
                 }

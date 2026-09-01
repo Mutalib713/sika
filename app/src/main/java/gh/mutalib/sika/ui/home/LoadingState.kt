@@ -30,8 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.ui.Aura
-import gh.mutalib.sika.ui.glass
-import gh.mutalib.sika.ui.theme.LabelStyle
+import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
 
@@ -78,62 +77,62 @@ fun LoadingState(
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(PaddingValues(start = 22.dp, end = 22.dp, top = 54.dp)),
+                .padding(PaddingValues(start = 20.dp, end = 20.dp, top = 50.dp)),
         ) {
-            // The header, real rather than skeletal: the greeting is known before any
-            // message is read, so faking it as a grey bar would be pretending not to know
-            // something we know.
+            // The greeting is real rather than skeletal: it is known before any message is
+            // read, so faking it as a grey bar would be pretending not to know something.
             if (showHeader) {
                 Text(
                     "${greeting()}, $OWNER",
                     style = MaterialTheme.typography.headlineSmall,
                     color = TextPrimary,
                 )
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(2.dp))
             }
             Text(
                 "Reading your MoMo messages…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextMuted,
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // The capsule, in outline. Same corner radius and height as the real one, so it
-            // does not jump when the figures arrive.
-            Column(
-                Modifier.fillMaxWidth().glass(corner = 30.dp).padding(20.dp),
-            ) {
-                Row(Modifier.fillMaxWidth()) {
-                    SkeletonCell(pulse, Modifier.weight(1f))
-                    SkeletonCell(pulse, Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(30.dp))
-                Row(Modifier.fillMaxWidth()) {
-                    SkeletonCell(pulse, Modifier.weight(1f))
-                    SkeletonCell(pulse, Modifier.weight(1f))
-                }
+            // ⚠ The skeleton mirrors the CURRENT Home, not the one this file was written
+            // for. It drew the old glass capsule with four cells until 2026-09-01, long
+            // after Home became a hero card over a chart — a skeleton that promises a
+            // different screen from the one that arrives is worse than none, because the
+            // jump from loading to loaded stops being a fill and becomes a replacement.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(132.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .alpha(pulse)
+                    .background(Accent.copy(alpha = 0.35f)),
+            )
+            Spacer(Modifier.height(11.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                SkeletonBlock(pulse, Modifier.weight(1f).height(62.dp))
+                SkeletonBlock(pulse, Modifier.weight(1f).height(62.dp))
             }
-
-            Spacer(Modifier.height(26.dp))
-            Text("RECENT", style = LabelStyle, color = TextMuted.copy(alpha = 0.6f))
-            Spacer(Modifier.height(10.dp))
-
-            // Five rows, because five is what Home shows. Widths vary so it reads as a list
-            // of different things rather than a stack of identical bars.
-            listOf(0.62f, 0.48f, 0.70f, 0.55f, 0.66f).forEach { width ->
-                SkeletonRow(pulse, width)
-            }
+            Spacer(Modifier.height(22.dp))
+            Bar(pulse, width = 108.dp, height = 17.dp)
+            Spacer(Modifier.height(11.dp))
+            SkeletonBlock(pulse, Modifier.fillMaxWidth().height(168.dp))
+            Spacer(Modifier.height(16.dp))
+            listOf(0.62f, 0.48f, 0.70f).forEach { width -> SkeletonRow(pulse, width) }
         }
     }
 }
 
+/** A rounded block standing in for a card. */
 @Composable
-private fun SkeletonCell(pulse: Float, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Bar(pulse, width = 74.dp, height = 9.dp)
-        Spacer(Modifier.height(11.dp))
-        Bar(pulse, width = 118.dp, height = 20.dp)
-    }
+private fun SkeletonBlock(pulse: Float, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .alpha(pulse)
+            .background(TextMuted.copy(alpha = 0.20f)),
+    )
 }
 
 @Composable

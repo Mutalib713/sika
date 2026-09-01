@@ -306,6 +306,13 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   rather than recover them.
   **Verify:** export, wipe the app's data, import, confirm every row *and every label* returns.
 
+  ⚠ **Bring back "follow my phone" here.** The corner toggle now flips light and dark
+  directly, because a three-way cycle had a dead step in it — `DARK → SYSTEM` on a phone
+  already in dark mode changed the setting and changed nothing visible, so the control
+  needed two presses to do one thing. A three-way choice belongs in a list with three
+  labels, not behind an icon. `ic_theme_auto.xml` was deleted when it fell out of use;
+  regenerate the Lucide `sun-moon` glyph when this task lands.
+
 - [ ] **16. Error and empty states**
   Permission denied, no messages found, nothing this month, reconciliation gap detected.
   **Verify:** trigger each one deliberately and screenshot it.
