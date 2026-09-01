@@ -30,8 +30,18 @@ import gh.mutalib.sika.parser.asCedis
  */
 object CashOutPrompt {
 
-    /** One channel, so the prompts can be silenced without silencing the monthly report. */
-    const val CHANNEL_ID = "cash_out"
+    /**
+     * One channel, so the prompts can be silenced without silencing the monthly report.
+     *
+     * ⚠ **The `_v2` is load-bearing.** Android ignores every change to a channel that
+     * already exists — importance, sound, everything — because those become the user's
+     * settings the moment the channel is created. Raising the importance of `cash_out`
+     * would have compiled, run, logged success and changed nothing on the phone. A new id
+     * is the only way to ship a new default, and the old one is deleted so it does not sit
+     * in Settings as a dead entry.
+     */
+    const val CHANNEL_ID = "cash_out_v2"
+    private const val OLD_CHANNEL_ID = "cash_out"
 
     /** Extras on the reply broadcast. */
     const val EXTRA_ROW_ID = "gh.mutalib.sika.ROW_ID"
@@ -63,16 +73,28 @@ object CashOutPrompt {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Cash-out prompts",
-            // DEFAULT, not HIGH: this should appear in the shade and be answerable at
-            // leisure. A cash-out is not an emergency, and a heads-up banner that covers
-            // what you are doing the moment you walk away from an agent would be a reason
-            // to turn the whole thing off.
-            NotificationManager.IMPORTANCE_DEFAULT,
+            // ⚠ **HIGH, and the first version being DEFAULT was a real error.**
+            //
+            // The reasoning for DEFAULT was that a cash-out is not an emergency and a
+            // banner covering the screen would be a reason to switch the whole thing off.
+            // That was wrong about the mechanism: a DEFAULT notification arrives silent and
+            // COLLAPSED, and a collapsed notification does not show its action buttons. In
+            // Mutalib's shade, behind a stack of other apps, the prompt was invisible —
+            // he tapped the body instead, which opened the app, which is the one outcome
+            // this feature exists to avoid.
+            //
+            // HIGH makes it a heads-up banner with the buttons on it, at the one moment the
+            // answer is still in his head. Cash-outs are occasional, so this does not nag.
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "Asks what a cash-out was for, so it can be categorised."
         }
-        ContextCompat.getSystemService(context, NotificationManager::class.java)
-            ?.createNotificationChannel(channel)
+        ContextCompat.getSystemService(context, NotificationManager::class.java)?.apply {
+            createNotificationChannel(channel)
+            // The v1 channel is dead. Left alone it lingers in Settings as a switch that
+            // controls nothing.
+            deleteNotificationChannel(OLD_CHANNEL_ID)
+        }
     }
 
     /**
@@ -103,7 +125,9 @@ object CashOutPrompt {
             .setContentTitle("${amount.asCedis()} cashed out")
             .setContentText("What was it for?")
             .setSubText(counterparty.ifBlank { "MoMo agent" })
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // PRIORITY_* is the pre-Android-8 equivalent of channel importance and is what
+            // older phones read. Set alongside the channel, not instead of it.
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             // Dismisses itself once answered from the app instead of the shade.
             .setAutoCancel(true)
             .setContentIntent(openSheetIntent(context, rowId))
@@ -152,7 +176,7 @@ object CashOutPrompt {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("${amount.asCedis()} → $category")
             .setContentText("Save it?")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             // ⚠ NOT auto-cancel: the whole point is that it waits for a deliberate answer.
             .setAutoCancel(false)
             .setContentIntent(openSheetIntent(context, rowId))
