@@ -116,8 +116,18 @@ object Backup {
     )
 
     fun read(text: String): Parsed {
-        val rows = Csv.parse(text)
+        val scan = Csv.parseChecked(text)
+        val rows = scan.rows
         if (rows.isEmpty()) return Parsed(fatal = "That file is empty.")
+        // ⚠ Fatal, not a skipped row. Everything after an unclosed quote was swallowed into
+        // one field, so the honest report is "this file is damaged" rather than a count that
+        // understates the loss — see Csv.Parsed.
+        if (scan.unterminatedQuote) {
+            return Parsed(
+                fatal = "That file is damaged: a quoted value is never closed, so everything " +
+                    "after it could not be read. Nothing was imported.",
+            )
+        }
         val first = rows.first()
         if (first.firstOrNull() != "SIKA BACKUP") {
             return Parsed(fatal = "That is not a Sika backup file.")

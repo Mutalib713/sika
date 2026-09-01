@@ -465,8 +465,41 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
 
   One open finding, accepted: an import reads the whole CSV into memory. Low severity — the
   file is user-chosen and the failure writes nothing — with a cap to add during task 19.
-- [ ] **18. Benchmark audit + red team.** Graded against the best real app in the category, not
-      "good for a side project."
+- [x] **18. Benchmark audit + red team.** Done 2026-09-01 — `docs/benchmark-audit.md`.
+
+  ⚠ **Read the research-limits table in that file first.** Reddit was unreachable, Hacker News
+  had almost nothing, and **no Ghana-specific source was found at all** — which is the most
+  relevant evidence there is. The benchmark half is reasoning from documented behaviour, not
+  from users complaining in public. The red-team half is code, probed directly, with tests.
+
+  **The finding that reframes the comparison:** Google restricts `READ_SMS` to apps whose core
+  function needs it, and Stack Overflow carries a run of rejection threads about it. That is
+  why almost no published tracker reads your bank texts — a distribution constraint, not a
+  missing idea. Sika sidesteps it by being sideloaded, and would hit that wall the day anyone
+  suggested publishing it.
+
+  **Grade:** decisively ahead on automatic capture and on provable correctness — the two things
+  it chose to compete on — level on effort-over-time, onboarding and craft, and **behind on
+  breadth**, chiefly budgets. Right trade for one user; wrong trade for a product with
+  strangers to convince.
+
+  **Two red-team findings fixed:**
+
+  ⚠ **A damaged CSV understated its own losses by two orders of magnitude.** An unterminated
+  quote swallowed the rest of the file into one field, so a 144-row backup damaged at row 3
+  reported "1 row could not be read". A small number invites you to shrug and believe you
+  restored your ledger. It is fatal now: the whole file is refused.
+
+  ⚠ **The gap window could name the wrong day.** It opened at the previous row, but a message
+  stating no balance cannot anchor anything — so one sitting between the hole and the row that
+  caught it pushed the window past the moment the money left. It now opens at the last row
+  that stated a balance.
+
+  **The reconciliation chain held under seven separate attacks** and needed no change. Worth
+  recording as a result, not an absence of one.
+
+  ⚠ **Date tests pass on Africa/Accra, which is UTC+0 with no DST** — the one zone where a
+  timezone bug is invisible. They prove correctness here, not portability.
 - [ ] **19. Tag `v1.0.0`.** Then leave it alone and use it for a month.
 
 ---

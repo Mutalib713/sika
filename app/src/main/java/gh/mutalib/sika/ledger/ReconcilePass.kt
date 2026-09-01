@@ -29,11 +29,17 @@ object ReconcilePass {
         val checks = Reconciler.reconcile(rows)
         for (c in checks) dao.setReconciled(c.id, c.state)
 
-        // Chronological, so the row before a gap can be found by position. That row's time is
-        // what opens the window the missing money moved inside.
+        // ⚠ **The window opens at the last row that STATED a balance, not simply the previous
+        // row.** A message with no balance in its text cannot anchor anything, so if one sits
+        // between the hole and the row that catches it, the previous-row answer names a window
+        // that excludes the moment the money actually left — sending someone to look on a day
+        // when nothing happened. Found by probing for PLAN task 18.
         val ordered = rows.sortedWith(compareBy({ it.occurredAt }, { it.id }))
-        val previousOf = ordered.withIndex().associate { (i, row) ->
-            row.id to ordered.getOrNull(i - 1)?.occurredAt
+        val anchorBefore = mutableMapOf<Long, Long?>()
+        var lastStated: Long? = null
+        for (r in ordered) {
+            anchorBefore[r.id] = lastStated
+            if (r.balanceAfter != null) lastStated = r.occurredAt
         }
 
         val gaps = checks.filter { it.state == Reconciled.GAP }.map { c ->
@@ -45,7 +51,7 @@ object ReconcilePass {
                 // message after the missing one, so this row's own date is the far end of the
                 // window. Reporting it as the date of the loss sends someone looking on the
                 // wrong day - Mutalib's question, 2026-09-01.
-                sinceMillis = previousOf[row.id],
+                sinceMillis = anchorBefore[row.id],
                 counterparty = row.counterparty,
                 shape = row.shape.name,
                 amount = row.amount,

@@ -263,8 +263,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         // number that could drift out of step with the rows it came from.
         val ordered = all.filter { it.parsedOk }
             .sortedWith(compareBy({ it.occurredAt }, { it.id }))
-        val previousOf = ordered.withIndex().associate { (i, row) ->
-            row.id to ordered.getOrNull(i - 1)?.occurredAt
+        // The window opens at the last row that STATED a balance — see ReconcilePass for why
+        // the previous row is the wrong answer.
+        val anchorBefore = mutableMapOf<Long, Long?>()
+        var lastStated: Long? = null
+        for (r in ordered) {
+            anchorBefore[r.id] = lastStated
+            if (r.balanceAfter != null) lastStated = r.occurredAt
         }
         val newestGap = Reconciler.reconcile(all)
             .filter { it.state == Reconciled.GAP }
@@ -273,7 +278,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 GapDetail(
                     rowId = row.id,
                     amount = kotlin.math.abs(check.difference ?: 0L),
-                    sinceMillis = previousOf[row.id],
+                    sinceMillis = anchorBefore[row.id],
                     untilMillis = row.occurredAt,
                     note = row.gapNote,
                 )

@@ -44,7 +44,23 @@ object Csv {
      *
      * Accepts `\n` and `\r\n`. A trailing newline does not produce a final empty row.
      */
-    fun parse(text: String): List<List<String?>> {
+    /**
+     * A parse, plus whether the file ended in the middle of a quoted value.
+     *
+     * ⚠ **[unterminatedQuote] exists because the count was lying.** A stray `"` in an export
+     * swallows every following line into one field, so a 144-row file damaged at row 3 came
+     * back as a single unreadable row — and the import reported *"1 row could not be read"*
+     * while 141 were silently gone. A number that understates a loss by two orders of
+     * magnitude is worse than no number: it invites you to shrug and carry on.
+     *
+     * Found by deliberate probing for PLAN task 18, not by using the app.
+     */
+    data class Parsed(val rows: List<List<String?>>, val unterminatedQuote: Boolean)
+
+    /** The rows only, for callers that have no way to act on a damaged file. */
+    fun parse(text: String): List<List<String?>> = parseChecked(text).rows
+
+    fun parseChecked(text: String): Parsed {
         val rows = mutableListOf<List<String?>>()
         var row = mutableListOf<String?>()
         val field = StringBuilder()
@@ -85,6 +101,8 @@ object Csv {
         // Whatever is still in hand when the text runs out is the last record, unless the file
         // ended cleanly on a newline and there is nothing pending.
         if (field.isNotEmpty() || wasQuoted || row.isNotEmpty()) endRow()
-        return rows
+        // `quoted` still true means the closing quote never arrived, so everything from that
+        // point on was absorbed into one field rather than read as rows.
+        return Parsed(rows, unterminatedQuote = quoted)
     }
 }
