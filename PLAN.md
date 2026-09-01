@@ -214,7 +214,7 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         Also learned: **the `Reference` field is not always `-` or `1`** — one real transaction
         carries `Bread`. PROFILE.md § 8's note that it is useless in practice is too strong.
 
-- [ ] **12. Cash-out prompt** — built 2026-08-31, **device check pending (phone not connected)**
+- [x] **12. Cash-out prompt** — done 2026-09-01
   When a `CASH_OUT` row lands, a notification asks *"GHS X — what for?"* with one-tap answers.
   `notify/CashOutPrompt.kt` posts it, `notify/CashOutReplyReceiver.kt` stores the answer with
   `labelSource = PROMPT`.
