@@ -76,6 +76,16 @@ fun TransactionSheet(
     // Named `alsoRemember`, not `remember` - a local called `remember` shadows the
     // composable of the same name, which is a trap for whoever edits this next.
     var alsoRemember by remember(row.id) { mutableStateOf(true) }
+
+    // ⚠ **Picking a chip only selects it. Nothing is written until Save.**
+    //
+    // Mutalib asked for this on 2026-08-31 — "when I select food let me click okay or
+    // something before I can leave that popup and save it". Before this, every tap wrote
+    // straight through: on 2026-09-01 he tapped six times while looking for a confirm, and
+    // the log shows six separate rule writes, each one silently relabelling every row from
+    // that counterparty. A label is the one thing in this app that cannot be rebuilt from
+    // the SMS inbox, so it is exactly the thing that should not be one accidental tap away.
+    var selected by remember(row.id) { mutableStateOf(row.label) }
     var adding by remember(row.id) { mutableStateOf(false) }
     var newName by remember(row.id) { mutableStateOf("") }
     var showRaw by remember(row.id) { mutableStateOf(false) }
@@ -126,8 +136,8 @@ fun TransactionSheet(
             categories.forEach { category ->
                 Chip(
                     label = category.name,
-                    selected = row.label == category.name,
-                    onClick = { onPick(category.name, alsoRemember) },
+                    selected = selected == category.name,
+                    onClick = { selected = category.name },
                 )
             }
             // The `+` lives at the end of the row, so a category can be created from the
@@ -152,7 +162,7 @@ fun TransactionSheet(
                 onDone = {
                     if (newName.isNotBlank()) {
                         onAddCategory(newName)
-                        onPick(newName.trim(), alsoRemember)
+                        selected = newName.trim()
                     }
                     newName = ""
                     adding = false
@@ -184,6 +194,37 @@ fun TransactionSheet(
                     color = TextPrimary,
                 )
             }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // ---- the one action that writes anything ----
+        val changed = selected != null && selected != row.label
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(26.dp))
+                .background(if (changed) Accent else Border)
+                .clickable(enabled = changed) {
+                    selected?.let { onPick(it, alsoRemember) }
+                    onDismiss()
+                }
+                .padding(vertical = 15.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                // Three states, because "Pick a category" is a lie when one is already
+                // picked — which is what it said on a row that was labelled Food already.
+                when {
+                    changed -> "Save"
+                    selected != null -> "Saved as $selected"
+                    else -> "Pick a category"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                // Dark text on the aqua, never white — docs/ui-guidelines.md. On the
+                // disabled grey the muted ink is the readable pair.
+                color = if (changed) AccentContrast else TextMuted,
+            )
         }
 
         Spacer(Modifier.height(14.dp))
