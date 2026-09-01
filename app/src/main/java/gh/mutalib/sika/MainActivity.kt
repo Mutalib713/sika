@@ -439,6 +439,9 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                             // NOT clear the answers: someone re-watching the tour should find
                             // their own name already in the field, not a blank one.
                             onRunSetupAgain = {
+                                // ⚠ Clears the tour flag too, or "show the tour again" shows
+                                // everything except the tour.
+                                OnboardingPrefs.setTourSeen(context, false)
                                 OnboardingPrefs.setDone(context, false)
                                 settingsRoute = SettingsRoute.ROOT
                                 gate = Gate.Onboarding

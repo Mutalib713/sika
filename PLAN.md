@@ -450,8 +450,15 @@ the binary-safe form, and the header was checked before anything was installed.
 - [x] **The migrations, over the real 148 rows.** v2 → v4 in one launch. Integrity ok.
       148/148 transactions, 13/13 labels, 3/3 notes, 1/1 gap, 9/9 categories, 8/8 rules, both
       new columns present, 0 categories hidden. **Nothing lost.**
-- [x] **First run.** The tour, the name, the student question with the dates revealed under
-      Yes. Home now greets him by a name that came from the flow rather than from a constant.
+- [x] **First run.** ⚠ **And it exposed a real bug: the tour was skipped entirely.** The
+      resume logic started the flow at the name screen whenever SMS permission was already
+      granted — sensible for someone who granted it and then took a call, and wrong for every
+      existing install, where permission was granted weeks ago. Mutalib upgraded and never saw
+      the four screens; he reported it, and he was right. "Has permission" and "has seen the
+      tour" are different facts, and conflating them meant the one person the tour was built
+      for could never reach it. Now gated on its own `tour_seen` flag, and "Show the tour
+      again" clears that too — otherwise it showed everything except the tour. Re-verified on
+      the device: screen 1 of 4 renders, dots above the button, chevron on the action.
 - [x] **The gap card, in use.** His real GHS 5.00 gap renders with the window *between 21 and
       22 Jul* — the widened window, showing the right days — and he has already explained it
       ("friend"), so the explain path works on device too.

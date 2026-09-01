@@ -21,6 +21,7 @@ object OnboardingPrefs {
     private const val DONE = "onboarding_done"
     private const val NAME = "owner_name"
     private const val NAME_ASKED = "owner_name_asked"
+    private const val TOUR_SEEN = "tour_seen"
     private const val STUDENT = "is_student"
     private const val TERM_START = "semester_start"
     private const val TERM_END = "semester_end"
@@ -44,6 +45,24 @@ object OnboardingPrefs {
     }
 
     fun nameAsked(context: Context): Boolean = prefs(context).getBoolean(NAME_ASKED, false)
+
+    /**
+     * Whether the four tour screens have been shown.
+     *
+     * ⚠ **Separate from the SMS permission, and that separation is the whole point.** The
+     * first version resumed the flow at the name screen whenever permission was already
+     * granted — reasonable for someone who granted it and then took a call, and completely
+     * wrong for an existing install, where permission was granted weeks ago. Mutalib upgraded
+     * an app that already had it and the tour was skipped entirely: he reported never seeing
+     * it, and he was right.
+     *
+     * "Has permission" and "has seen the tour" are different facts. Conflating them meant the
+     * one person the tour was built for could never reach it.
+     */
+    fun tourSeen(context: Context): Boolean = prefs(context).getBoolean(TOUR_SEEN, false)
+
+    fun setTourSeen(context: Context, value: Boolean) =
+        prefs(context).edit { putBoolean(TOUR_SEEN, value) }
 
     /**
      * ⚠ **A "no" here removes the semester view entirely**, rather than leaving a segment in

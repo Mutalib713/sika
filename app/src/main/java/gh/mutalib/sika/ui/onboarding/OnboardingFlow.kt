@@ -49,8 +49,24 @@ fun OnboardingFlow(
 ) {
     val context = LocalContext.current
     var step by rememberSaveable {
-        // Coming back to a half-finished flow: never re-ask for a permission already granted.
-        mutableStateOf(if (smsGranted) OnboardingStep.NAME else OnboardingStep.TOUR_INTRO)
+        // ⚠ The tour is gated on whether the TOUR has been seen, never on the permission.
+        // Those are different facts, and conflating them skipped the tour entirely for anyone
+        // upgrading an install that already had SMS access — which was everyone who mattered.
+        mutableStateOf(
+            when {
+                !OnboardingPrefs.tourSeen(context) -> OnboardingStep.TOUR_INTRO
+                // Tour already seen and permission already held: nothing left to ask before
+                // the questions.
+                smsGranted -> OnboardingStep.NAME
+                else -> OnboardingStep.PERMISSION
+            },
+        )
+    }
+
+    /** Past the tour: skip the permission screen only if it is genuinely already granted. */
+    fun afterTour() {
+        OnboardingPrefs.setTourSeen(context, true)
+        step = if (smsGranted) OnboardingStep.NAME else OnboardingStep.PERMISSION
     }
 
     var student by rememberSaveable { mutableStateOf(OnboardingPrefs.isStudent(context)) }
@@ -74,7 +90,7 @@ fun OnboardingFlow(
         }
     }
 
-    val skipTour = { step = OnboardingStep.PERMISSION }
+    val skipTour = { afterTour() }
 
     when (step) {
         OnboardingStep.TOUR_INTRO ->
@@ -87,7 +103,7 @@ fun OnboardingFlow(
             TourChecks(onNext = { step = OnboardingStep.TOUR_SEMESTER }, onSkip = skipTour)
 
         OnboardingStep.TOUR_SEMESTER ->
-            TourSemester(onNext = { step = OnboardingStep.PERMISSION }, onSkip = skipTour)
+            TourSemester(onNext = { afterTour() }, onSkip = skipTour)
 
         OnboardingStep.PERMISSION -> AskPermission(
             onAllow = onRequestSms,
