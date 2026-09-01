@@ -442,7 +442,29 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
 
 ## Milestone 4 — Harden and ship
 
-- [ ] **17. `docs/security-checklist.md` end to end**, ticks committed.
+- [x] **17. `docs/security-checklist.md` end to end**, ticks committed. Done 2026-09-01.
+  Every tick says how it was checked. Whole sections are genuinely N/A — there is no server,
+  no browser, no paid API and no network — and each says why rather than passing by default.
+
+  **The central claim is now proven against the artifact.** `INTERNET` is absent from the
+  MERGED manifest in both debug and release, not just from the source file, so a dependency
+  cannot have added it through manifest merging. Four permissions total, all justified.
+
+  **Two real bugs found and fixed in the pass**, neither by using the app:
+
+  ⚠ **The cash-out notification's text box could never have worked.** `RemoteInput` delivers
+  typed text by writing it into the PendingIntent, which `FLAG_IMMUTABLE` forbids — so the
+  answer arrived null and was logged as ignored. It failed in the way hardest to notice: box
+  opens, text sends, notification dismisses, label silently unchanged. Mutability now granted
+  to that one action only. **Still unproven on the phone.**
+
+  ⚠ **Whole SMS bodies and counterparty names were being written to logcat**, readable by
+  anyone who can plug the phone in — the same data the app refuses to put on a network, going
+  out through a side door. Now behind `BuildConfig.DEBUG` via `Logging.kt`, so R8 strips the
+  strings from a release build entirely.
+
+  One open finding, accepted: an import reads the whole CSV into memory. Low severity — the
+  file is user-chosen and the failure writes nothing — with a cap to add during task 19.
 - [ ] **18. Benchmark audit + red team.** Graded against the best real app in the category, not
       "good for a side project."
 - [ ] **19. Tag `v1.0.0`.** Then leave it alone and use it for a month.

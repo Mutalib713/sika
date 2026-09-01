@@ -3,6 +3,7 @@ package gh.mutalib.sika.sms
 import android.content.Context
 import android.util.Log
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.warnPrivate
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ledger.ReconcilePass
@@ -106,7 +107,11 @@ object Sweeper {
                 "${it.newlyAdded} new, ${it.totalInLedger} in ledger, ${it.queued} queued for review")
             Log.i(TAG, "transaction senders: " + it.senders.joinToString { s -> "${s.first}=${s.second}" })
             it.queuedSamples.forEach { (reason, body) ->
-                Log.w(TAG, "queued: $reason  <<< ${body.take(150)}")
+                // ⚠ Debug only. This is a whole MoMo message: amount, counterparty,
+                // balance. It is what the parser gets fixed from, and it must not be in a
+                // release build's logcat.
+                warnPrivate { "queued: $reason  <<< ${body.take(150)}" }
+                Log.w(TAG, "queued a message the parser refused: $reason")
             }
             // Grouped by opening phrase, not listed one by one: 39 unrecognised messages
             // are only a handful of distinct *shapes*, and the shapes are what matter.
@@ -118,7 +123,7 @@ object Sweeper {
                     val full = unrecognised.first { it.body.startsWith(prefix) }.body
                     // Truncated: full bodies carry counterparty names and account
                     // numbers, and logcat is readable by anyone with the phone.
-                    Log.w(TAG, "shape x$n: ${full.take(200)}")
+                    warnPrivate { "shape x$n: ${full.take(200)}" }
                 }
         }
     }

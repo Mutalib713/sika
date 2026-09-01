@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.DemoMode
 import gh.mutalib.sika.data.LabelSource
@@ -159,7 +160,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             if (alsoRemember && row.counterparty.isNotBlank()) {
                 rules.put(RuleEntity(row.counterparty, category, System.currentTimeMillis()))
                 val touched = dao.applyRule(row.counterparty, category)
-                Log.i(TAG, "rule '" + row.counterparty + "' -> '" + category + "' applied to " + touched + " rows")
+                logPrivate { "rule '" + row.counterparty + "' -> '" + category + "'" }
+                Log.i(TAG, "a learned rule was applied to " + touched + " rows")
             }
         }
     }

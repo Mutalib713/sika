@@ -1,210 +1,227 @@
-# Security checklist — <PROJECT NAME>
+# Security checklist — Sika
 
-Run this twice: once before the first deploy that anyone else can reach, and
-again before launch. Tick items in a commit so the state is visible in the repo.
+**Run end to end on 2026-09-01 (PLAN task 17).** Every tick below says *how* it was checked,
+not just that it was. An item that could not be verified says so rather than being ticked.
 
-This sits underneath the hardening floor in the new-project pipeline Phase 5. The
-floor is eight items and it is the minimum. This is the detailed sweep.
+Sika is unusual for this checklist, which was written for web projects: there is **no server,
+no account, no paid API, no browser and no network at all**. Whole sections are genuinely
+inapplicable and are marked `N/A` with the reason. That is not the same as passing, and where
+an item still bites in a different form — input validation on hostile SMS, data loss on a
+migration — it is answered rather than dismissed.
 
-**A term used throughout:** an *environment variable* (env var) is a secret value
-stored by the host (Vercel, GitHub Actions) rather than written in a file that
-gets committed. Code reads it at runtime by name. The name is public, the value
-is not.
+**Threat model, stated so the answers can be judged.** One phone, one user, sideloaded. The
+data is months of real transactions with real counterparty names and balances. The realistic
+adversaries are, in order: **a bug that destroys the ledger**, **the operating system quietly
+copying it off the device**, **another app on the phone**, and **anyone who picks the phone up
+and plugs it in**. There is no remote attacker, because there is nothing listening.
+
+---
 
 ## The critical seven
 
-If time runs out, these are the ones. Each has either cost real money, leaked
-real data, or taken down a real account in projects like this one.
+- **N/A** — *No key is in the repo.* There are no keys at all: no API, no service, no
+  network. Verified `git ls-files` and `git log --all --diff-filter=A` for `.env`, `.jks`,
+  `keystore`, `.pem`, `secret` — nothing tracked and nothing ever committed.
+- **N/A** — *Every paid API has a spending ceiling.* No paid API exists. Nothing in this app
+  can cost money by running.
+- **N/A** — *Nothing secret reaches the browser.* There is no browser and no client bundle.
+- [x] **Every input is validated before it is trusted.** Reworded from "on the server",
+  which has no meaning here. The hostile-ish input is SMS text from a sender Sika does not
+  control. `MomoParser` refuses anything it does not recognise rather than guessing
+  (Sacred Rule 7), and `Backup.read` rejects a row whose amount will not parse instead of
+  defaulting it to zero (`data/Backup.kt`, `transaction()` returns null on any bad field).
+- **N/A** — *`DRY_RUN=1` is still the default.* Nothing is ever sent anywhere.
+- [x] **No personal WhatsApp number is connected to an unofficial gateway.** Nothing is
+  connected to anything. `INTERNET` is absent from the merged manifest.
+- [x] **Other people's data is handled deliberately.** Counterparty names arrive inside the
+  user's own MoMo messages and never leave the phone. As of this run they are also no longer
+  written to logcat in a release build — see Finding 2.
 
-- [ ] **No key is in the repo, and none ever was.** Rotating a leaked key is not
-      enough if the old value is still in git history, where anyone can read it.
-- [ ] **Every paid API has a spending ceiling.** A loop, a bot, or a bug can run
-      a free-tier key into a real bill overnight.
-- [ ] **Nothing secret reaches the browser.** Anything the browser downloads is
-      readable by everyone, forever.
-- [ ] **Every input is validated on the server.** Browser-side checks are a
-      convenience for honest users and stop nobody else.
-- [ ] **`DRY_RUN=1` is still the default** for anything that sends a message or
-      moves money, until the moment you deliberately flip it.
-- [ ] **No personal WhatsApp number is connected to an unofficial gateway.**
-      This is a Sacred Rule. It cost a six-hour account restriction once already,
-      with zero messages sent.
-- [ ] **Other people's phone numbers and addresses are handled deliberately,**
-      not just because they were easy to scrape.
+---
 
 ## 1. Secrets and keys
 
-- [ ] `.env` is gitignored.
-      ```powershell
-      git check-ignore -v .env
-      ```
-      No output means it is **not** ignored. Fix that before anything else.
-
-- [ ] No `.env` file is tracked.
-      ```powershell
-      git ls-files | Select-String "env"
-      ```
-      `.env.example` is fine and should exist. `.env`, `.env.local`, and
-      `.env.production` are not.
-
-- [ ] No key was ever committed, including in old commits.
-      ```powershell
-      git log --all -p -S "AIza" --oneline
-      ```
-      Repeat for `sk-`, `sk_live`, `ghp_`, `Bearer `, and any provider prefix you
-      use. A hit means the key is burned: rotate it at the provider, do not just
-      delete the line.
-
-- [ ] `.env.example` names every variable the project needs, with no real values.
-- [ ] Every secret lives in the host's env settings (Vercel project settings,
-      GitHub repository secrets) and nowhere else.
-- [ ] Every key can be rotated without a code change. If a value is hardcoded
-      anywhere, it cannot.
-- [ ] Keys used by GitHub Actions are alive. A dead secret produces a failing
-      workflow every night and an inbox you stop reading, which is how a real
-      failure gets missed.
+- **N/A** — `.env` is gitignored. No `.env` exists; this is not a Node project.
+- [x] **No secret file is tracked.** `git ls-files | grep -iE "\.env|secret|\.jks|keystore|\.pem"`
+  returns nothing.
+- [x] **No key was ever committed, including in old commits.**
+  `git log --all --diff-filter=A --name-only` shows no such file has ever been added.
+- [x] **`local.properties` is gitignored** (`.gitignore:4`), along with `*.jks`,
+  `*.keystore` and `keystore.properties` (`.gitignore:23–25`). It holds only the SDK path.
+- **N/A** — `.env.example`, host env settings, rotatable keys, GitHub Actions secrets. There
+  is no host, no CI and no key.
 
 ## 2. Money
 
-Free tiers are not free when someone loops them.
-
-- [ ] Every paid or metered API call has a hard ceiling: requests per minute per
-      user, and a total per day.
-- [ ] You know the answer to: **what does a hostile loop cost me per hour?**
-      Write the number here: `<...>`
-- [ ] Billing alerts are on at the provider, at a threshold you would actually
-      mind paying.
-- [ ] AI/LLM endpoints cap input length. A pasted book is a bill.
-- [ ] Nothing expensive runs before the user is identified, if there is a login.
-- [ ] Payment amounts are calculated server-side. A price that arrives from the
-      browser is a price the customer chose.
-- [ ] Payment webhooks verify their signature before being trusted, and are
-      safe to receive twice.
+- **N/A** — every item. No paid or metered call exists; a hostile loop costs nothing because
+  there is nothing to call. **The one future exception is recorded in PROFILE.md § 12**: the
+  optional Gemini insight at v1.1 is the first thing that would ever add `INTERNET`, and this
+  section becomes live the day it does.
 
 ## 3. Input and abuse
 
-- [ ] Every field is validated on the server: type, length, range, allowed values.
-- [ ] Request body size is capped.
-- [ ] Uploads are capped by size, checked by type, and never trusted by filename.
-- [ ] User text is escaped where it is rendered. If HTML is inserted anywhere,
-      it is sanitised first.
-      ```powershell
-      Get-ChildItem -Recurse -Include *.ts,*.tsx,*.js,*.jsx,*.html | Select-String "dangerouslySetInnerHTML|innerHTML"
-      ```
-      Every hit needs a reason.
-- [ ] Database queries use parameters, never string concatenation with user input.
-- [ ] Submitting the same form twice does not create two records.
-- [ ] Rate limiting exists on anything that writes, sends, or costs.
+- [x] **Every field is validated: type, length, range, allowed values.** For SMS,
+  `MomoParser` matches explicit shapes and rejects the rest. For the CSV, `Backup.read`
+  validates every enum and every money field and reports what it skipped.
+- [ ] **Request body size is capped.** ⚠ **Not capped — see Finding 3.** A CSV chosen at
+  import is read whole into memory (`BackupIo.import` → `readBytes()`).
+- **N/A** — uploads by type and filename. The only file read is one the user picks themselves
+  through the system picker; there is no upload endpoint.
+- [x] **User text is escaped where it is rendered.** Compose `Text` does not interpret markup,
+  so a counterparty or a note containing HTML renders as characters. There is no `WebView`
+  anywhere: `grep -rn "WebView" app/src` returns nothing.
+- [x] **Database queries use parameters, never string concatenation.** Every query is a Room
+  `@Query` with bound `:parameters`; there is no raw SQL string built from input.
+- [x] **Submitting the same thing twice does not create two records.** Sacred Rule 4: a unique
+  index on `txId` with `OnConflictStrategy.IGNORE`. This is why the sweep is safe to run on
+  every launch.
+- **N/A** — rate limiting. Nothing writes, sends or costs on a request from outside.
 
 ## 4. Other people's data
 
-Applies whenever the project holds information about people who are not the user:
-scraped listings, contact numbers, reviews, uploaded photos.
-
-- [ ] You can say what personal data this project holds and why each field is
-      needed. Fields nobody needs get deleted.
-- [ ] Published phone numbers and addresses were already public, and there is a
-      route for someone to ask to be removed. A contact link counts.
-- [ ] Removal requests are honoured in the data file, not just the UI.
-- [ ] No personal data sits in URLs, query strings, or analytics events.
-- [ ] Logs do not record full names, numbers, tokens, or message bodies.
-- [ ] There is a privacy line on the site if anything at all is collected.
-- [ ] Data is exportable or backed up, so a bad deploy cannot lose it.
+- [x] **You can say what personal data this holds and why.** Per transaction: counterparty
+  name, amount, fee, tax, balance, timestamp, MTN's transaction id, and the raw message.
+  The raw body is kept under Sacred Rule 6 so a parser fix can repair history — the single
+  most sensitive field, and the one with the clearest justification.
+- **N/A** — publishing numbers and addresses, removal requests. Nothing is published.
+- [x] **No personal data sits in URLs or analytics events.** There are no URLs and no
+  analytics SDK. `grep -rn "Firebase\|Analytics\|Crashlytics" app/src` returns nothing.
+- [x] **Logs do not record message bodies or names — as of this run.** ⚠ They did until
+  2026-09-01. See Finding 2; fixed in this pass, not merely noted.
+- **N/A** — a privacy line on the site. There is no site. The equivalent claim is on the
+  Settings screen and is *verifiable*: "No internet permission. You can check that yourself in
+  Android's app info."
+- [x] **Data is exportable, so a bad deploy cannot lose it.** PLAN task 15: CSV export **and
+  import**, through the Storage Access Framework. ⚠ The round trip has still not been run on
+  the phone — see "Not verified" below.
 
 ## 5. Auth and access
 
-Skip if there is no login, but read item one first.
-
-- [ ] Every endpoint that returns user data checks who is asking. A URL with an
-      id in it is not authorisation.
-- [ ] Changing an id in the URL returns 403, not someone else's record. Test it
-      by hand, with two accounts.
-- [ ] Row-level security is on if the database supports it. *Row-level security*
-      means the database itself refuses to return rows that do not belong to the
-      requester, even if the code forgets to filter.
-- [ ] Admin routes are not protected by being unguessable.
-- [ ] Sessions expire, and signing out actually invalidates.
-- [ ] Password reset and magic links expire and are single use.
+- **N/A** — every item. There is no login, no endpoint, no session and no server. The access
+  control is the operating system's: Sika's database lives in its private app directory, which
+  no other app can open without root.
 
 ## 6. What reaches the browser
 
-- [ ] No secret is in the client bundle.
-      ```powershell
-      Get-ChildItem -Recurse -Include *.ts,*.tsx,*.js,*.jsx | Select-String "NEXT_PUBLIC_"
-      ```
-      In Next.js, any variable prefixed `NEXT_PUBLIC_` is compiled into the
-      JavaScript the browser downloads. Anything genuinely secret must not carry
-      that prefix.
-
-- [ ] Fetch the deployed page and search the served JavaScript for your key
-      prefixes. Reading the source of the live site is what an attacker does
-      first, so do it before they do.
-- [ ] API calls that need a secret go through your own server route, so the key
-      stays on the server.
-- [ ] CORS is not `*` on anything that writes. *CORS* controls which other
-      websites are allowed to call your API from a browser.
-- [ ] Source maps are off in production, or you are content for the source to be
-      readable.
+- **N/A** — every item. There is no browser, no bundle, no CORS and no source map.
 
 ## 7. Deploy and hosting
 
-- [ ] HTTPS everywhere, with HTTP redirecting to it.
-- [ ] `noindex` is still set if this is not launched yet, and removed the moment
-      it is.
-      ```powershell
-      curl.exe -sI https://<domain> | Select-String "x-robots-tag"
-      ```
-- [ ] Preview and staging URLs are not indexed and do not hold real user data.
-- [ ] Error pages do not print stack traces, file paths, or environment values.
-- [ ] Security headers are set: `Content-Security-Policy`,
-      `X-Content-Type-Options: nosniff`, `Referrer-Policy`.
-- [ ] Dependencies have no known critical advisories.
-      ```powershell
-      npm audit --omit=dev
-      ```
-- [ ] `npm run check` passes on the commit being deployed.
+- **N/A** — HTTPS, `noindex`, staging URLs, security headers. There is no deploy. "Shipping"
+  is `./gradlew installDebug` over USB to one phone.
+- [x] **Error paths do not print stack traces to the user.** Failures are caught and reported
+  in plain words (`BackupIo` returns "Sika could not read that file. Nothing was changed.");
+  the stack trace goes to logcat.
+- [x] **Dependencies have no known critical advisories.** ⚠ Weaker than it looks — see
+  "Not verified": there is no `npm audit` equivalent wired up here, and this is a judgement
+  from the dependency list, not a scan.
+- [x] **`check` passes on the commit being shipped.** `./gradlew check` — lint plus 106 unit
+  tests, 0 failures, on the commit this run covers.
 
 ## 8. Messaging channels
 
-For anything that sends WhatsApp, SMS, or email.
+- **N/A** — every item. Sika sends nothing. It only ever *reads* SMS, and posts local
+  notifications to its own phone, which leave no device.
 
-- [ ] **No personal number is linked to an unofficial gateway.** Official APIs
-      only. This is not negotiable and is not worth re-testing.
-- [ ] `DRY_RUN=1` remains the default; flipping it is a deliberate, separate
-      commit.
-- [ ] Recipients are on a list you control, and there is an opt-out.
-- [ ] Send volume is capped per run, so a loop cannot mass-message.
-- [ ] A failed send is logged and retried with a limit, not retried forever.
-- [ ] Template content is reviewed before approval, since approved templates are
-      awkward to change later.
+## 9. Android builds
 
-## 9. Android builds (delete this section for web-only projects)
-
-- [ ] The signing keystore is not in the repo and is backed up somewhere off this
-      laptop. Losing it means never updating the app under the same identity.
-- [ ] Keystore passwords are in `local.properties` or env, and `local.properties`
-      is gitignored.
-- [ ] No API key is compiled into the APK. Anything in the APK can be extracted.
-- [ ] `android:exported` is set deliberately on every activity, service, and
-      receiver. Anything exported can be triggered by any other app.
-- [ ] Cleartext HTTP traffic is disabled unless a specific endpoint needs it.
-- [ ] The app requests only permissions it uses, and degrades gracefully when
-      one is refused.
-- [ ] Nothing sensitive is written to external storage or logged with `Log.d`.
+- [x] **The signing keystore is not in the repo.** `*.jks` and `*.keystore` are gitignored and
+  none is tracked. ⚠ **Backed up off this laptop: NOT VERIFIED** — this is Mutalib's to
+  confirm, and the key came from the previous laptop (CLAUDE.md). Losing it means never
+  updating the app under the same identity.
+- [x] **Keystore passwords are in `local.properties`, which is gitignored.**
+- [x] **No API key is compiled into the APK.** There are none to compile in.
+- [x] **`android:exported` is set deliberately on every component.** Six declarations, all
+  explicit. The two `true` ones are `MainActivity` (a launcher, necessarily) and `SmsReceiver`
+  — which is exported because Android delivers `SMS_RECEIVED` from outside the app, and is
+  **guarded by `android:permission="android.permission.BROADCAST_SMS"`**, so only the system
+  can reach it. The four notification receivers are `exported="false"`.
+- [x] **Cleartext HTTP traffic is disabled.** Vacuously and better than by configuration:
+  there is no `INTERNET` permission, so no traffic of any kind is possible.
+- [x] **The app requests only permissions it uses.** Verified against the **merged** manifest,
+  not the source file — debug and release both contain exactly four:
+  `READ_SMS`, `RECEIVE_SMS`, `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`. **No `INTERNET`,
+  no `WRITE_EXTERNAL_STORAGE`, no `SCHEDULE_EXACT_ALARM`.** This is the app's central claim
+  and it is now proven against the artifact rather than the intention.
+- [x] **It degrades gracefully when a permission is refused.** SMS refused → a screen that
+  says why and a way back. Notifications refused → the ledger still works; every posting site
+  checks `CashOutPrompt.canPost` first.
+- [x] **Nothing sensitive is written to external storage.** The only file written outside the
+  app is the CSV the user explicitly asks for and chooses the location of.
+- [x] **`android:allowBackup="false"` and `dataExtractionRules` excludes every domain.**
+  Worth its own line: without this, Android would copy the entire ledger to Google Drive on
+  every backup — the OS performing exactly the exfiltration the missing `INTERNET` permission
+  exists to prevent, and the single most likely way this app's promise could have been broken.
 
 ## 10. After launch
 
-- [ ] Uptime monitor pings the live URL and the alert reaches your phone.
-- [ ] Errors are logged where you will actually look.
-- [ ] API spend is checked weekly, in the Phase 7 operate pass.
-- [ ] There is a contact route for someone to report a problem.
+- **N/A** — uptime monitor, API spend, contact route. Nothing is hosted and nothing is
+  public.
+- [x] **Errors are logged where they will be looked at.** One tag, `adb logcat -s Sika`.
+
+---
+
+## Findings — 2026-09-01
+
+Ordered worst first. **Findings 1 and 2 were fixed during this run**; 3 and 4 are recorded.
+
+### 1. The cash-out notification's text box could never have worked — FIXED
+
+`CashOutPrompt.noteAction` attached a `RemoteInput` to a `PendingIntent` built with
+`FLAG_IMMUTABLE`. `RemoteInput` delivers what was typed by writing it **into that Intent**,
+which immutability forbids, so `RemoteInput.getResultsFromIntent` returned null and
+`CashOutReplyReceiver` logged the answer as ignored.
+
+**Why it survived:** it fails in the way hardest to notice. The button appears, the box opens,
+the text sends, the notification dismisses — and the label silently never changes. Everything
+looks right except the outcome.
+
+**Fixed** by granting mutability to that one action and leaving the three category buttons
+immutable. ⚠ Still unproven on the phone: this needs a real cash-out message.
+
+### 2. Whole SMS bodies and counterparty names were written to logcat — FIXED
+
+`Sweeper` logged 150–200 characters of unparsed messages, `SmsIngest` logged amount and
+counterparty per row, `HomeViewModel` logged the counterparty of every learned rule. `adb
+logcat` is readable by anyone who can plug the phone in — which is precisely the data this app
+refuses to put on a network. It would have been giving it away through a side door.
+
+**Fixed** with `logPrivate`/`warnPrivate` in `Logging.kt`, guarded on `BuildConfig.DEBUG` so
+R8 removes the strings from a release build entirely. Debug keeps everything, because reading
+real queued messages out of logcat is how the parser gets fixed.
+
+### 3. An import reads the whole file into memory — RECORDED, NOT FIXED
+
+`BackupIo.import` calls `readBytes()` on a user-picked `Uri`. Pointing it at a very large file
+would allocate the whole thing and could `OutOfMemory`. **Severity: low.** The file is chosen
+by the user from their own storage; there is no attacker who gets to choose it, and the crash
+loses nothing because nothing has been written by that point. Worth a size cap before v1.0.0
+if the fix is cheap — a streaming reader would be over-engineering for a few hundred rows.
+
+### 4. The signing key's off-laptop backup is unconfirmed — MUTALIB'S TO CHECK
+
+Not a code issue. The key came from the previous laptop and losing it means never updating the
+app under the same identity. This cannot be verified from inside the repo.
+
+---
+
+## Not verified, and why
+
+- **The CSV round trip on a real device.** Export → clear app data → import → confirm every
+  row *and every label* returns. Needs the phone; it was disconnected for this run.
+- **The 1→2, 2→3 and 3→4 migrations against the real 148 rows.** `MigrationTest` exists in
+  `androidTest` but was deliberately not run: `connectedDebugAndroidTest` uninstalls the app
+  when it finishes, and the uninstall would take the ledger with it.
+- **Dependency advisories.** There is no scan wired up. The dependency list is small and
+  first-party (AndroidX, Room, Compose), but "no known criticals" here is a judgement, not a
+  result.
+- **The keystore backup** — see Finding 4.
 
 ## Sign-off
 
-| Run | Date | Commit | Items failing | Deployed anyway? |
+| Run | Date | Commit | Items failing | Shipped anyway? |
 |---|---|---|---|---|
-| Pre-first-deploy | | | | |
-| Pre-launch | | | | |
+| Task 17, first full pass | 2026-09-01 | see the commit carrying this file | 1 open (Finding 3, low) | Not shipped yet — v1.0.0 is task 19 |
 
-A failing item can ship if you decide it can. Write down which one and why, so
-the next session finds a decision rather than an oversight.
+Finding 3 is accepted for now: the input is user-chosen, the failure mode is a crash that
+writes nothing, and a cap is cheap enough to add during task 19 rather than blocking on it.

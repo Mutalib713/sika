@@ -229,7 +229,7 @@ object CashOutPrompt {
         return NotificationCompat.Action.Builder(
             0,
             "Say what it was",
-            replyIntent(context, rowId, category, 2, STEP_NOTE),
+            replyIntent(context, rowId, category, 2, STEP_NOTE, mutable = true),
         )
             .addRemoteInput(input)
             // Without this the system opens the app to collect the text, which defeats the
@@ -270,12 +270,30 @@ object CashOutPrompt {
      */
     fun notificationId(rowId: Long): Int = rowId.toInt()
 
+    /**
+     * @param mutable **must be true for the note action and false for everything else.**
+     *
+     * ⚠ **This parameter exists because of a shipped bug.** `RemoteInput` delivers what was
+     * typed by writing it *into* this very Intent — which `FLAG_IMMUTABLE` forbids. The note
+     * action was built with the same immutable intent as the three category buttons, so
+     * `RemoteInput.getResultsFromIntent` came back null and the receiver logged the answer as
+     * "ignored". Typing into the shade did nothing at all.
+     *
+     * It failed silently and in the one place hardest to notice: the buttons worked, the box
+     * appeared, the text sent, and the label simply never changed. Found on 2026-09-01 while
+     * gathering evidence for PLAN task 17, not by using the app.
+     *
+     * ⚠ **Mutable is granted to exactly one action, never as a blanket.** An immutable intent
+     * is the right default here — nothing outside this app has any business rewriting which
+     * row gets which label — so the three category buttons keep it.
+     */
     private fun replyIntent(
         context: Context,
         rowId: Long,
         category: String,
         index: Int,
         step: String,
+        mutable: Boolean = false,
     ): PendingIntent {
         val intent = Intent(context, CashOutReplyReceiver::class.java).apply {
             putExtra(EXTRA_ROW_ID, rowId)
@@ -294,9 +312,8 @@ object CashOutPrompt {
             // button labelling the row "Food".
             requestCode(rowId, index),
             intent,
-            // IMMUTABLE is mandatory from Android 12 and correct anyway: nothing outside
-            // this app has any business rewriting which row gets which label.
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
         )
     }
 

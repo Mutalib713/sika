@@ -3,6 +3,7 @@ package gh.mutalib.sika.sms
 import android.content.Context
 import android.util.Log
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.data.LabelSource
@@ -60,11 +61,13 @@ object SmsIngest {
 
         val id = dao.insert(row)
         val isNew = id != -1L
-        Log.i(
-            TAG,
+        // ⚠ Debug only: the counterparty is a real person or shop and the amount is real
+        // money. A release build logs the shape of what happened and nothing identifying.
+        logPrivate {
             "$source: ${if (isNew) "recorded" else "already had"} ${row.shape} " +
-                "${row.direction} ${row.amount}p to '${row.counterparty}' txId=${row.txId}",
-        )
+                "${row.direction} ${row.amount}p to '${row.counterparty}' txId=${row.txId}"
+        }
+        Log.i(TAG, "$source: ${if (isNew) "recorded a" else "already had a"} ${row.shape}")
 
         // A guess from the words in the reference, for rows nothing else has claimed.
         // Mutalib's "bread -> Food" question, 2026-08-31. Runs on both routes, unlike the
@@ -72,7 +75,7 @@ object SmsIngest {
         if (isNew) {
             Keywords.categoryFor(row.reference, row.counterparty)?.let { guess ->
                 val filled = dao.setLabelIfUnset(id, guess, LabelSource.AUTO_KEYWORD)
-                if (filled > 0) Log.i(TAG, "$source: guessed '$guess' from the reference")
+                if (filled > 0) logPrivate { "$source: guessed '$guess' from the reference" }
             }
         }
 
