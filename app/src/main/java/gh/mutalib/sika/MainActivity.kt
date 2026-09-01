@@ -35,6 +35,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,6 +66,7 @@ import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
 import gh.mutalib.sika.ui.theme.SikaTheme
+import gh.mutalib.sika.ui.theme.ThemePreference
 import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
@@ -88,7 +90,17 @@ class MainActivity : ComponentActivity() {
         Log.i(TAG, "MainActivity started")
         openRow.value = rowIdFrom(intent)
         enableEdgeToEdge()
-        setContent { SikaTheme { SikaApp(openRow) } }
+        setContent {
+            // Loaded once, then held in composition. Saved on every change so the choice
+            // survives a relaunch.
+            var mode by rememberSaveable { mutableStateOf(ThemePreference.load(this)) }
+            SikaTheme(
+                mode = mode,
+                onModeChange = { mode = it; ThemePreference.save(this, it) },
+            ) {
+                SikaApp(openRow)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

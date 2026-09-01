@@ -41,6 +41,7 @@ import gh.mutalib.sika.ledger.MonthSummary
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.parser.asCedis
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.BalanceStyle
 import gh.mutalib.sika.ui.theme.Border
@@ -150,6 +151,8 @@ private fun MonthHeader(month: YearMonth, canStepForward: Boolean, onStep: (Long
             color = TextPrimary,
             modifier = Modifier.weight(1f),
         )
+        ThemeToggle()
+        Spacer(Modifier.width(2.dp))
         Chevron(back = true, enabled = true) { onStep(-1) }
         Spacer(Modifier.width(6.dp))
         // Disabled rather than hidden: a control that vanishes reads as a glitch, and a
@@ -235,6 +238,9 @@ private fun StackedBand(slices: List<CategorySlice>) {
     val shown = slices.take(BAND_SEGMENTS)
     val tail = slices.drop(BAND_SEGMENTS).sumOf { it.share.toDouble() }.toFloat()
 
+    // ⚠ Read here, in composable scope. A Canvas draw block is NOT a composable context,
+    // so a colour read inside it would have to be a fixed constant — frozen at one theme.
+    val accent = Accent
     Canvas(Modifier.fillMaxWidth().height(10.dp)) {
         val gap = 3.dp.toPx()
         val radius = CornerRadius(size.height / 2)
@@ -249,7 +255,7 @@ private fun StackedBand(slices: List<CategorySlice>) {
                 // Drawn hollow on purpose: money nobody has categorised is not a category,
                 // and giving it a solid fill would let it sit in the band as a peer of Food.
                 drawRoundRect(
-                    color = Accent.copy(alpha = 0.55f),
+                    color = accent.copy(alpha = 0.55f),
                     topLeft = Offset(x + 1f, 1f),
                     size = Size(width - 2f, size.height - 2f),
                     cornerRadius = radius,
@@ -257,7 +263,7 @@ private fun StackedBand(slices: List<CategorySlice>) {
                 )
             } else {
                 drawRoundRect(
-                    color = rampColor(index),
+                    color = rampColor(accent, index),
                     topLeft = Offset(x, 0f),
                     size = Size(width, size.height),
                     cornerRadius = radius,
@@ -296,7 +302,7 @@ private fun SliceRow(slice: CategorySlice, rank: Int) {
                         .fillMaxWidth(slice.share.coerceIn(0f, 1f))
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(rampColor(rank)),
+                        .background(rampColor(Accent, rank)),
                 )
             }
             Spacer(Modifier.width(12.dp))
@@ -450,8 +456,8 @@ private fun EmptyMonth() {
  * That reads as ranked by construction and needs no legend. The steps are kept far apart
  * because adjacent tints of one hue turn to mush on an OLED at low brightness.
  */
-private fun rampColor(rank: Int): Color =
-    Accent.copy(alpha = RAMP.getOrElse(rank) { RAMP.last() })
+private fun rampColor(accent: Color, rank: Int): Color =
+    accent.copy(alpha = RAMP.getOrElse(rank) { RAMP.last() })
 
 private val RAMP = listOf(1f, 0.78f, 0.60f, 0.45f, 0.33f, 0.24f)
 private const val BAND_SEGMENTS = 5

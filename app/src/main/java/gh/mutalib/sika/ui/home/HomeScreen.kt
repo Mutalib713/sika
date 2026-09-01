@@ -38,6 +38,7 @@ import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.glass
 import gh.mutalib.sika.ui.specularSweep
 import gh.mutalib.sika.ui.theme.Accent
@@ -157,8 +158,11 @@ internal const val OWNER = "Osman"
  * ⚠ **The month chip is here instead of a notification bell, hamburger or brightness
  * toggle.** Mutalib asked for one of those and was unsure which; none of the three has a
  * job in Sika. Its notifications are system notifications, so a bell would open nothing.
- * Settings is already a tab, so a hamburger is a second route to one place. The app is
- * dark-only by design, so a brightness toggle would toggle nothing.
+ * Settings is already a tab, so a hamburger is a second route to one place.
+ *
+ * ⚠ The line that used to sit here — "the app is dark-only by design, so a brightness
+ * toggle would toggle nothing" — stopped being true on 2026-08-31, when Mutalib asked for
+ * light mode and put the control in this corner.
  *
  * Changing month is the one thing genuinely worth reaching for from here, so that is what
  * the corner does.
@@ -183,6 +187,8 @@ private fun MonthHeader(state: HomeState) {
                 color = TextMuted,
             )
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+        ThemeToggle()
         Row(
             Modifier.clip(RoundedCornerShape(15.dp)).glass(corner = 15.dp)
                 .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -199,6 +205,7 @@ private fun MonthHeader(state: HomeState) {
                 tint = TextOnGlass,
                 modifier = Modifier.size(18.dp),
             )
+        }
         }
     }
 }

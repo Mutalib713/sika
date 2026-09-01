@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
+import gh.mutalib.sika.ui.theme.LocalSikaColors
 import androidx.compose.ui.unit.dp
 
 /**
@@ -46,10 +48,18 @@ import androidx.compose.ui.unit.dp
  * If the dock ever looks wrong over a dense list, that is the moment to reach for
  * `RenderEffect`, and not before.
  */
+@Composable
 fun Modifier.glass(
     corner: Dp,
     fill: Color = GlassFill,
     rim: Color = GlassRim,
+): Modifier = glassInternal(corner, fill, rim, LocalSikaColors.current.isDark)
+
+private fun Modifier.glassInternal(
+    corner: Dp,
+    fill: Color,
+    rim: Color,
+    isDark: Boolean,
 ): Modifier = this
     .clip(RoundedCornerShape(corner))
     .background(fill)
@@ -64,14 +74,27 @@ fun Modifier.glass(
         // gradient. A real specular edge is a few pixels; brighter over a shorter run reads
         // as more glassy, not less, and leaves the text alone.
         Brush.verticalGradient(
-            0f to Color.White.copy(alpha = 0.18f),
+            // ⚠ Inverted in light mode. A white specular edge on a near-white panel is
+            // invisible; the light that "falls from above" has to be read as a *darker*
+            // rim below it instead, or the surface loses its edge entirely.
+            0f to if (isDark) Color.White.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.55f),
             0.055f to Color.Transparent,
         ),
     )
     .border(1.dp, rim, RoundedCornerShape(corner))
 
-/** The capsule: light fill, because the aura behind it is already smooth. */
-val GlassFill = Color.White.copy(alpha = 0.11f)
+/**
+ * The capsule fill.
+ *
+ * ⚠ **Inverts with the theme, and it has to.** On the navy, glass is a *lightening* of
+ * what is behind it — white at 11%. On the light page that same white is invisible, so
+ * light-mode glass is a near-opaque white panel that reads as raised instead: the frost
+ * comes from the fill, not from a blur this app deliberately does not do.
+ */
+val GlassFill: Color
+    @Composable @ReadOnlyComposable get() =
+        if (LocalSikaColors.current.isDark) Color.White.copy(alpha = 0.11f)
+        else Color.White.copy(alpha = 0.82f)
 
 /**
  * The dock sits over scrolling text, so it must **obscure**, not merely tint.
@@ -84,9 +107,16 @@ val GlassFill = Color.White.copy(alpha = 0.11f)
  * `0.94` leaves about 6%, which reads as a faint warmth rather than words. Paired with
  * [scrimBehindDock], content is nearly gone before it arrives.
  */
-val DockFill = Color(0xFF161B29).copy(alpha = 0.94f)
+val DockFill: Color
+    @Composable @ReadOnlyComposable get() =
+        if (LocalSikaColors.current.isDark) Color(0xFF161B29).copy(alpha = 0.94f)
+        else Color(0xFFFFFFFF).copy(alpha = 0.96f)
 
-val GlassRim = Color.White.copy(alpha = 0.14f)
+/** The hairline that catches light. White on the navy; a soft shadow line on the page. */
+val GlassRim: Color
+    @Composable @ReadOnlyComposable get() =
+        if (LocalSikaColors.current.isDark) Color.White.copy(alpha = 0.14f)
+        else Color(0xFF141821).copy(alpha = 0.10f)
 
 /**
  * A gradient that fades content out before it reaches the dock — the same trick iOS uses

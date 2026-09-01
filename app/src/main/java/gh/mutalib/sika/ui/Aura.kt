@@ -54,10 +54,13 @@ fun Aura(modifier: Modifier = Modifier, animated: Boolean = true) {
     val p2 = phase(34, "g2")
     val p3 = phase(30, "g3")
 
+    // ⚠ Read in composable scope. A Canvas draw block is not one, so a colour read inside
+    // it would be frozen at whichever theme was current when the file was written.
+    val ground = Bg
     Canvas(modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        drawRect(Bg)
+        drawRect(ground)
 
         // Each glow travels a small ellipse. The movement is tiny — 40-ish dp — because
         // the effect should read as light shifting, never as objects sliding about.
