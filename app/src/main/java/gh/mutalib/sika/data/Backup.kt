@@ -37,7 +37,19 @@ import gh.mutalib.sika.parser.Shape
  */
 object Backup {
 
-    const val VERSION = 1
+    /**
+     * ⚠ **Bumped to 2 on 2026-09-01 because version 1 silently dropped `gapNote`.**
+     *
+     * The column was added for the gap explanation and never reached the backup format, so an
+     * export looked complete, restored cleanly, and quietly lost the words Mutalib had typed
+     * about money no message could explain — the one field in the whole file that cannot be
+     * recovered from anywhere else. Found by actually running the export-wipe-import round
+     * trip, minutes before the wipe would have proved it the hard way.
+     *
+     * Version 1 files are still readable: the reader requires only the original sixteen
+     * columns and treats a seventeenth as optional.
+     */
+    const val VERSION = 2
     const val MIME = "text/csv"
 
     private const val S_TRANSACTIONS = "[transactions]"
@@ -47,8 +59,11 @@ object Backup {
     private val TX_HEADER = listOf(
         "txId", "occurredAt", "direction", "shape", "amount", "fee", "tax",
         "counterparty", "reference", "balanceAfter", "label", "labelSource", "note",
-        "parsedOk", "reconciled", "rawBody",
+        "parsedOk", "reconciled", "rawBody", "gapNote",
     )
+
+    /** What a version-1 file has. Anything beyond this is optional when reading. */
+    private const val TX_REQUIRED = 16
     private val CAT_HEADER = listOf("name", "sortOrder", "isDefault", "isProtected", "isHidden")
     private val RULE_HEADER = listOf("counterparty", "label", "createdAt")
 
@@ -74,7 +89,7 @@ object Backup {
                         t.amount.toString(), t.fee.toString(), t.tax?.toString(),
                         t.counterparty, t.reference, t.balanceAfter?.toString(),
                         t.label, t.labelSource.name, t.note,
-                        if (t.parsedOk) "1" else "0", t.reconciled.name, t.rawBody,
+                        if (t.parsedOk) "1" else "0", t.reconciled.name, t.rawBody, t.gapNote,
                     ),
                 ),
             )
@@ -180,7 +195,10 @@ object Backup {
      * A transaction with an unreadable amount is not a transaction with a zero amount.
      */
     private fun transaction(r: List<String?>): TransactionEntity? {
-        if (r.size < TX_HEADER.size) return null
+        // ⚠ The ORIGINAL sixteen, not TX_HEADER.size — otherwise adding a column here would
+        // make every file written by an older Sika unreadable, which is the opposite of what
+        // a backup format is for.
+        if (r.size < TX_REQUIRED) return null
         val txId = r[0]?.takeIf { it.isNotBlank() } ?: return null
         val occurredAt = r[1]?.toLongOrNull() ?: return null
         val direction = enumOrNull<Direction>(r[2]) ?: return null
@@ -208,6 +226,8 @@ object Backup {
             rawBody = r[15].orEmpty(),
             parsedOk = r[13] != "0",
             reconciled = enumOrNull<Reconciled>(r[14]) ?: Reconciled.UNCHECKED,
+            // Absent in a version-1 file, which is not an error.
+            gapNote = r.getOrNull(16),
         )
     }
 

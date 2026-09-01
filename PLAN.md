@@ -474,13 +474,33 @@ the binary-safe form, and the header was checked before anything was installed.
 - [x] **Cleanup.** Both injected rows deleted; back to exactly 148 / 13 / 1. `stopped=false`
       confirmed afterwards, so the live receiver is alive.
 
-⚠ **Still not verified, and both need a human at the phone:**
+- [x] **Export → clear data → import, for real.** Exported, `pm clear`'d the app to nothing —
+      no database, no permissions, a true reinstall — then restored through the app's own
+      *"Restoring after a reinstall?"* entry on the first-run permission screen.
+
+      **Everything came back**, checked field by field against a byte-exact pre-wipe copy:
+      148/148 transactions, 13/13 labels **on the same transactions**, 3/3 notes, the gap
+      explanation, 9 categories, 8 rules.
+
+      ⚠ **And it found a bug that would have destroyed data, minutes before it did.** The
+      export was missing `gapNote` entirely — the column was added for the gap feature and
+      never reached the backup format, so a restore would have silently dropped the words
+      Mutalib typed about money no message could explain. It is the one field in the file that
+      cannot be recovered from anywhere else. Format bumped to 2; version-1 files still read,
+      because adding a column must never make an older backup unreadable. **This is the whole
+      argument for running the destructive test rather than reasoning about it.**
+
+      ⚠ **A second, smaller finding from the same run:** the import reported "148 transactions,
+      9 categories, 8 rules" and said nothing about labels, because it only counted labels
+      filled into rows that already existed. On an empty phone — the case the feature exists
+      for — every label arrives inside a new row. The labels were restored; the sentence just
+      failed to mention the one thing the person is anxious about. Now counted properly.
+
+⚠ **Still not verified, and it needs a human at the phone:**
 
 - **The cash-out note box** (the task 17 fix). Its `RemoteInput` sits on the *confirm* step, so
   it needs a category button tapped on a real prompt. `CashOutReplyReceiver` is `exported=false`
   — correctly — so adb cannot drive it, which is a good sign and an inconvenient one.
-- **Export → clear data → import.** Destructive on the real ledger; not run without Mutalib
-  saying so. The database backup exists, so it is safe to attempt.
 
 ## Milestone 4 — Harden and ship
 

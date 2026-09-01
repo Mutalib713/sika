@@ -103,18 +103,33 @@ object BackupIo {
 
         // IGNORE on conflict is what makes this a merge: a txId already on the phone keeps the
         // row it has, labels and all. See SikaDatabase - REPLACE here would be catastrophic.
-        val before = transactions.count()
-        transactions.insertAll(parsed.transactions.map { it.copy(id = 0) })
-        val added = transactions.count() - before
+        //
+        // ⚠ **The returned ids say WHICH rows were new**, and that matters for the report
+        // rather than just the count: `insertAll` gives -1 for a row it ignored.
+        val ids = transactions.insertAll(parsed.transactions.map { it.copy(id = 0) })
+        val addedRows = parsed.transactions
+            .filterIndexed { i, _ -> ids.getOrElse(i) { -1L } != -1L }
+        val added = addedRows.size
 
-        var labels = 0
-        var notes = 0
+        // ⚠ **Labels that arrive INSIDE a new row still count as restored.** The first version
+        // counted only labels filled into rows that already existed, so a restore onto an
+        // empty phone — the case this feature exists for — reported "148 transactions,
+        // 9 categories, 8 rules" and said nothing about labels at all. The labels were there;
+        // the sentence just failed to mention the one thing the person was anxious about.
+        // Seen on the device on 2026-09-01 during the wipe-and-restore run.
+        var labels = addedRows.count { !it.label.isNullOrBlank() }
+        var notes = addedRows.count { !it.note.isNullOrBlank() } +
+            addedRows.count { !it.gapNote.isNullOrBlank() }
+
         parsed.transactions.forEach { t ->
             t.label?.takeIf { it.isNotBlank() }?.let { label ->
                 labels += transactions.restoreLabel(t.txId, label, t.labelSource)
             }
             t.note?.takeIf { it.isNotBlank() }?.let { note ->
                 notes += transactions.restoreNote(t.txId, note)
+            }
+            t.gapNote?.takeIf { it.isNotBlank() }?.let { note ->
+                notes += transactions.restoreGapNote(t.txId, note)
             }
         }
 

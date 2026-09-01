@@ -145,6 +145,10 @@ interface TransactionDao {
     @Query("UPDATE transactions SET note = :note WHERE txId = :txId AND note IS NULL")
     suspend fun restoreNote(txId: String, note: String): Int
 
+    /** And for what the missing money was. Same add-only guarantee. */
+    @Query("UPDATE transactions SET gapNote = :note WHERE txId = :txId AND gapNote IS NULL")
+    suspend fun restoreGapNote(txId: String, note: String): Int
+
     /**
      * Records what the money before this row actually was.
      *

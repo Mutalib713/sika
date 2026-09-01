@@ -144,9 +144,37 @@ class BackupTest {
 
     @Test
     fun `a file from a newer Sika is refused rather than half-read`() {
+        // Keyed off Backup.VERSION rather than a hardcoded 1, so bumping the format does not
+        // quietly turn this test into one that asserts nothing.
         val newer = Backup.write(listOf(tx()), emptyList(), emptyList())
-            .replaceFirst("SIKA BACKUP,1", "SIKA BACKUP,99")
+            .replaceFirst("SIKA BACKUP,${Backup.VERSION}", "SIKA BACKUP,99")
         assertNotNull(Backup.read(newer).fatal)
+    }
+
+    @Test
+    fun `a gap explanation survives the round trip`() {
+        // ⚠ It did not, until 2026-09-01. `gapNote` was added for the gap feature and never
+        // reached the backup format, so an export looked complete and quietly lost the one
+        // field in the file that cannot be recovered from anywhere else. Caught by running
+        // the real round trip on the phone, minutes before a wipe would have proved it.
+        val row = tx(txId = "9").copy(gapNote = "friend")
+        val back = Backup.read(Backup.write(listOf(row), emptyList(), emptyList()))
+        assertEquals("friend", back.transactions.single().gapNote)
+    }
+
+    @Test
+    fun `a version-1 file still reads, without a gap explanation`() {
+        // Adding a column must not make older backups unreadable - that is the opposite of
+        // what a backup format is for.
+        val v1 = "SIKA BACKUP,1\n[transactions]\n" +
+            "txId,occurredAt,direction,shape,amount,fee,tax,counterparty,reference," +
+            "balanceAfter,label,labelSource,note,parsedOk,reconciled,rawBody\n" +
+            "tx1,1000,OUT,PAYMENT_MADE,100,0,0,XXX,,900,Food,MANUAL,,1,OK,body\n"
+        val back = Backup.read(v1)
+        assertNull(back.fatal)
+        assertEquals(1, back.transactions.size)
+        assertEquals("Food", back.transactions.single().label)
+        assertNull(back.transactions.single().gapNote)
     }
 
     @Test
