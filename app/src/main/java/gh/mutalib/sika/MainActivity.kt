@@ -42,9 +42,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import gh.mutalib.sika.notify.CashOutPrompt
@@ -65,6 +67,7 @@ import gh.mutalib.sika.ui.report.ReportViewModel
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
+import gh.mutalib.sika.ui.theme.LocalSikaColors
 import gh.mutalib.sika.ui.theme.SikaTheme
 import gh.mutalib.sika.ui.theme.ThemePreference
 import gh.mutalib.sika.ui.theme.SurfaceRaised
@@ -98,6 +101,20 @@ class MainActivity : ComponentActivity() {
                 mode = mode,
                 onModeChange = { mode = it; ThemePreference.save(this, it) },
             ) {
+                // ⚠ The status bar is drawn by Android, not by Sika, so the theme does not
+                // reach it on its own. Caught on the device 2026-09-01: in light mode the
+                // clock and the notification icons stayed white on a near-white page and
+                // were all but invisible. `isAppearanceLightStatusBars` asks the system for
+                // DARK glyphs — the flag is named for the background, not the icons, which
+                // is the easiest thing in this API to get backwards.
+                val darkTheme = !LocalSikaColors.current.isDark
+                val view = LocalView.current
+                LaunchedEffect(darkTheme) {
+                    WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = darkTheme
+                        isAppearanceLightNavigationBars = darkTheme
+                    }
+                }
                 SikaApp(openRow)
             }
         }

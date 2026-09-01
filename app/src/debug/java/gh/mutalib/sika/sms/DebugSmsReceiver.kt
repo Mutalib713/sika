@@ -36,6 +36,24 @@ import kotlinx.coroutines.launch
 class DebugSmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Undo for an injected message. Debug builds only.
+        //
+        //   adb shell am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS         //     -n gh.mutalib.sika/.sms.DebugSmsReceiver --es forget 90000000777
+        val forget = intent.getStringExtra("forget")
+        if (!forget.isNullOrBlank()) {
+            val pendingForget = goAsync()
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    val gone = gh.mutalib.sika.data.SikaDatabase.get(context.applicationContext)
+                        .transactions().deleteByTxId(forget)
+                    Log.i(TAG, "debug-inject: forgot txId=$forget ($gone row(s))")
+                } finally {
+                    pendingForget.finish()
+                }
+            }
+            return
+        }
+
         val body = intent.getStringExtra("body")
         if (body.isNullOrBlank()) {
             Log.w(TAG, "debug-inject: no --es body supplied")

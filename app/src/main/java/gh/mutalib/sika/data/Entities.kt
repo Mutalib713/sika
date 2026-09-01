@@ -21,6 +21,15 @@ enum class LabelSource {
 
     /** Answered from the cash-out notification. Also a human decision. */
     PROMPT,
+
+    /**
+     * Guessed from a word in the reference or the counterparty — see [gh.mutalib.sika.ledger.Keywords].
+     *
+     * ⚠ **The weakest source there is, and the only one derived from language rather than
+     * from a decision.** It may only ever fill a row that has no label at all: a rule, a
+     * hand-set label and a prompt answer all outrank it.
+     */
+    AUTO_KEYWORD,
 }
 
 /** Whether this row's arithmetic agrees with the balance MoMo reported. Sacred Rule 3. */

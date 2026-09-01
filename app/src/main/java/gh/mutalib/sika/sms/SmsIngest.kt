@@ -5,7 +5,9 @@ import android.util.Log
 import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.toEntity
+import gh.mutalib.sika.ledger.Keywords
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
@@ -60,6 +62,16 @@ object SmsIngest {
             "$source: ${if (isNew) "recorded" else "already had"} ${row.shape} " +
                 "${row.direction} ${row.amount}p to '${row.counterparty}' txId=${row.txId}",
         )
+
+        // A guess from the words in the reference, for rows nothing else has claimed.
+        // Mutalib's "bread -> Food" question, 2026-08-31. Runs on both routes, unlike the
+        // prompt, because a guess costs nothing and interrupts nobody.
+        if (isNew) {
+            Keywords.categoryFor(row.reference, row.counterparty)?.let { guess ->
+                val filled = dao.setLabelIfUnset(id, guess, LabelSource.AUTO_KEYWORD)
+                if (filled > 0) Log.i(TAG, "$source: guessed '$guess' from the reference")
+            }
+        }
 
         // Only a genuinely new cash-out is worth asking about. `isNew` is what stops a
         // re-read of the same message asking twice — the dedupe doing double duty.

@@ -36,6 +36,14 @@ object CashOutPrompt {
     /** Extras on the reply broadcast. */
     const val EXTRA_ROW_ID = "gh.mutalib.sika.ROW_ID"
     const val EXTRA_LABEL = "gh.mutalib.sika.LABEL"
+    const val EXTRA_STEP = "gh.mutalib.sika.STEP"
+
+    /** Tapping a category only *proposes* it. Nothing is written yet. */
+    const val STEP_PICK = "pick"
+    /** Saving is a second, deliberate tap. This is the one that writes. */
+    const val STEP_SAVE = "save"
+    /** Back to the category list without writing anything. */
+    const val STEP_CHANGE = "change"
 
     /**
      * ⚠ **Android draws at most THREE action buttons on a notification.**
@@ -107,7 +115,7 @@ object CashOutPrompt {
                     // notifications, and passing 0 is the documented way to say so.
                     0,
                     category,
-                    replyIntent(context, rowId, category, index),
+                    replyIntent(context, rowId, category, index, STEP_PICK),
                 ).build(),
             )
         }
@@ -122,6 +130,46 @@ object CashOutPrompt {
             Log.i(TAG, "cash-out prompt shown for row $rowId (${quick.size} quick answers)")
         } catch (e: SecurityException) {
             Log.w(TAG, "cash-out prompt refused by the system for row $rowId", e)
+        }
+    }
+
+    /**
+     * Step two: a category has been proposed, and nothing has been written yet.
+     *
+     * ⚠ **Mutalib asked for this on 2026-08-31** — "when I select food let me click okay or
+     * something before I can leave that popup and save it". He is right, and the reason is
+     * sharper than convenience: the buttons sit in the notification shade, where a thumb is
+     * already swiping past. A single mis-tap silently relabelled a transaction with no undo
+     * and no visible trace, on the one screen where you are least likely to be looking.
+     *
+     * The proposal is held in the notification itself rather than in the database, so
+     * dismissing the shade without saving leaves the ledger exactly as it was.
+     */
+    fun showConfirm(context: Context, rowId: Long, amount: Long, category: String) {
+        if (!canPost(context)) return
+        ensureChannel(context)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("${amount.asCedis()} → $category")
+            .setContentText("Save it?")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // ⚠ NOT auto-cancel: the whole point is that it waits for a deliberate answer.
+            .setAutoCancel(false)
+            .setContentIntent(openSheetIntent(context, rowId))
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0, "Save", replyIntent(context, rowId, category, 0, STEP_SAVE),
+                ).build(),
+            )
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0, "Change", replyIntent(context, rowId, category, 1, STEP_CHANGE),
+                ).build(),
+            )
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId(rowId), builder.build())
+        } catch (e: SecurityException) {
+            Log.w(TAG, "cash-out confirm refused by the system for row $rowId", e)
         }
     }
 
@@ -162,10 +210,16 @@ object CashOutPrompt {
         rowId: Long,
         category: String,
         index: Int,
+        step: String,
     ): PendingIntent {
         val intent = Intent(context, CashOutReplyReceiver::class.java).apply {
             putExtra(EXTRA_ROW_ID, rowId)
             putExtra(EXTRA_LABEL, category)
+            putExtra(EXTRA_STEP, step)
+            // ⚠ The step is part of the *action*, not just an extra. PendingIntent matching
+            // ignores extras, so two intents differing only by step would collapse into one
+            // and "Save" would deliver whatever "Change" registered first.
+            action = step
         }
         return PendingIntent.getBroadcast(
             context,

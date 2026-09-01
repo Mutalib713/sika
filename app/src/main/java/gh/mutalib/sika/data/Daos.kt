@@ -35,6 +35,10 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE txId = :txId LIMIT 1")
     suspend fun byTxId(txId: String): TransactionEntity?
 
+    /** One row by its own id — what the cash-out prompt needs to re-post itself. */
+    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
+    suspend fun byId(id: Long): TransactionEntity?
+
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 
@@ -86,6 +90,26 @@ interface TransactionDao {
         """,
     )
     suspend fun applyRule(counterparty: String, label: String): Int
+
+    /**
+     * Fills in a guessed label, and **only** where nothing has claimed the row yet.
+     *
+     * ⚠ The `label IS NULL` clause is the whole safety property. Without it a keyword guess
+     * could overwrite a hand-set label or a prompt answer, which is precisely the failure
+     * `labelSource` exists to prevent.
+     */
+    @Query("UPDATE transactions SET label = :label, labelSource = :source WHERE id = :id AND label IS NULL")
+    suspend fun setLabelIfUnset(id: Long, label: String, source: LabelSource): Int
+
+    /**
+     * Removes one row by MTN's own id.
+     *
+     * Exists for the debug injector: a test message pushed through the ingest path is a
+     * real row afterwards, and leaving fabricated money in a ledger whose whole point is
+     * that its arithmetic checks out is not acceptable. Nothing in the shipping UI calls it.
+     */
+    @Query("DELETE FROM transactions WHERE txId = :txId")
+    suspend fun deleteByTxId(txId: String): Int
 
     @Query("UPDATE transactions SET reconciled = :state WHERE id = :id")
     suspend fun setReconciled(id: Long, state: Reconciled)
