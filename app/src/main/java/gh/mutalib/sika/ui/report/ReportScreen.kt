@@ -79,6 +79,10 @@ fun ReportScreen(
     // Held on the screen rather than in the ViewModel: it changes nothing about the data,
     // only which way you are looking at it, and it should reset to the bars on a fresh open.
     var chart by remember { mutableStateOf(ChartKind.BARS) }
+    // One selection per chart, cleared whenever the period changes — a bar index means
+    // nothing once the days underneath it are different days.
+    var pickedBar by remember(summary?.period) { mutableStateOf<Int?>(null) }
+    var pickedSlice by remember(summary?.period) { mutableStateOf<Int?>(null) }
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
@@ -112,7 +116,16 @@ fun ReportScreen(
             item {
                 Headline(summary)
                 Spacer(Modifier.height(16.dp))
-                ChartCard(summary, chart, mode) { chart = it }
+                ChartCard(
+                    s = summary,
+                    chart = chart,
+                    mode = mode,
+                    pickedBar = pickedBar,
+                    pickedSlice = pickedSlice,
+                    onChart = { chart = it; pickedBar = null; pickedSlice = null },
+                    onPickBar = { pickedBar = it },
+                    onPickSlice = { pickedSlice = it },
+                )
             }
 
             if (summary.tooLittleLabelledToBreakDown) {
@@ -268,7 +281,11 @@ private fun ChartCard(
     s: PeriodSummary,
     chart: ChartKind,
     mode: PeriodMode,
+    pickedBar: Int?,
+    pickedSlice: Int?,
     onChart: (ChartKind) -> Unit,
+    onPickBar: (Int?) -> Unit,
+    onPickSlice: (Int?) -> Unit,
 ) {
     Column(
         Modifier
@@ -278,19 +295,50 @@ private fun ChartCard(
             .padding(15.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when (chart) {
-                    ChartKind.BARS -> when (mode) {
-                        PeriodMode.WEEK -> "Day by day"
-                        PeriodMode.MONTH -> "Week by week"
-                        PeriodMode.SEMESTER, PeriodMode.ALL -> "Month by month"
+            val bar = pickedBar?.let { s.buckets.getOrNull(it) }
+            Column(Modifier.weight(1f)) {
+                if (chart == ChartKind.BARS && bar != null) {
+                    // ⚠ The figure sits where the title was, not in a floating bubble over
+                    // the chart. A tooltip pinned to a bar covers its neighbours — the ones
+                    // you are comparing it against — which is the only reason to tap it.
+                    Text(
+                        bar.amount.asCedis(),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = TextPrimary,
+                    )
+                    Text(
+                        if (bar.previous > 0) {
+                            val diff = bar.amount - bar.previous
+                            "${bar.label} · ${if (diff >= 0) "+" else "−"}" +
+                                "${abs(diff).asCedis()} on last ${mode.noun}"
+                        } else {
+                            bar.label
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                    )
+                } else {
+                    Text(
+                        when (chart) {
+                            ChartKind.BARS -> when (mode) {
+                                PeriodMode.WEEK -> "Day by day"
+                                PeriodMode.MONTH -> "Week by week"
+                                PeriodMode.SEMESTER, PeriodMode.ALL -> "Month by month"
+                            }
+                            ChartKind.RING -> "Where it went"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                    )
+                    if (chart == ChartKind.BARS) {
+                        Text(
+                            "Tap a bar for its figure",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted.copy(alpha = 0.75f),
+                        )
                     }
-                    ChartKind.RING -> "Where it went"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
+                }
+            }
             ChartToggle(chart, onChart)
         }
         // ⚠ The bars carry two series, so they need a key. Without it the pale bars read as
@@ -316,10 +364,19 @@ private fun ChartCard(
         }
         Spacer(Modifier.height(14.dp))
         when (chart) {
-            ChartKind.BARS -> BucketBars(s.buckets)
+            ChartKind.BARS -> BucketBars(
+                buckets = s.buckets,
+                selected = pickedBar,
+                onSelect = onPickBar,
+            )
             ChartKind.RING -> {
-                CategoryRing(s.slices, s.moneyOut)
-                RingLegend(s.slices)
+                CategoryRing(
+                    slices = s.slices,
+                    total = s.moneyOut,
+                    selected = pickedSlice,
+                    onSelect = onPickSlice,
+                )
+                RingLegend(s.slices, selected = pickedSlice, onSelect = onPickSlice)
             }
         }
     }
