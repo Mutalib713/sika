@@ -149,8 +149,14 @@ data class PeriodSummary(
  */
 private const val CLEAR_WINNER_RATIO = 1.4
 
-/** One bar of the chart. */
-data class BucketSpend(val label: String, val amount: Long)
+/**
+ * One bar of the chart.
+ *
+ * [previous] is the same slot one period earlier — last Wednesday for this Wednesday, week 2
+ * of last month for week 2 of this one. It is what the pale bar behind each solid one shows,
+ * and it is why that pale bar is worth drawing at all rather than being a plain track.
+ */
+data class BucketSpend(val label: String, val amount: Long, val previous: Long = 0)
 
 /** The label shown for spending nobody has categorised yet. */
 const val UNCATEGORISED = "Uncategorised"
@@ -213,13 +219,25 @@ fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): Perio
         transactionCount = inMonth.size,
         // Empty buckets are kept on purpose: a week with nothing spent on Thursday must
         // still draw a Thursday, or the chart quietly relabels which day was which.
-        buckets = period.buckets().map { bucket ->
-            BucketSpend(
-                label = bucket.label,
-                amount = inMonth
-                    .filter { it.direction == Direction.OUT && bucket.contains(dateOf(it, zone)) }
-                    .sumOf { it.outflow() },
-            )
+        buckets = run {
+            // The previous period is the same length, so its buckets line up one to one —
+            // except at a month boundary, where a 4-week month meets a 5-week one. Zipping
+            // by index and tolerating a short list is what keeps that from throwing.
+            val beforeBuckets = before.buckets()
+            period.buckets().mapIndexed { index, bucket ->
+                val prior = beforeBuckets.getOrNull(index)
+                BucketSpend(
+                    label = bucket.label,
+                    amount = inMonth
+                        .filter { it.direction == Direction.OUT && bucket.contains(dateOf(it, zone)) }
+                        .sumOf { it.outflow() },
+                    previous = prior?.let { p ->
+                        previous
+                            .filter { it.direction == Direction.OUT && p.contains(dateOf(it, zone)) }
+                            .sumOf { it.outflow() }
+                    } ?: 0,
+                )
+            }
         },
     )
 }

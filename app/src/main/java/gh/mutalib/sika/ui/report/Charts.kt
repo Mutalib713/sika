@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,6 +27,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.log10
 import gh.mutalib.sika.ledger.BucketSpend
 import gh.mutalib.sika.ledger.CategorySlice
 import gh.mutalib.sika.parser.asCedis
@@ -46,76 +50,177 @@ import gh.mutalib.sika.ui.theme.categoryColor
  */
 
 /**
- * Spend per bucket, with a faint full-height track behind every bar.
+ * Spend per bucket, with the same bucket one period earlier drawn faintly behind it.
  *
- * ⚠ **The track is the whole trick**, and it is what Mutalib meant by *"they have a way they
- * do it that is way nicer"*. Without it, a quiet day is a stub floating in space and the
- * chart has no shape until you read the labels. With it, every bucket occupies the same
- * visible slot and each bar reads as *a proportion of something* — so an empty Thursday
- * still looks like a Thursday that was empty, rather than a gap in the data.
+ * ⚠ **The pale bar is data, not decoration**, and that is the whole point of it. Mutalib
+ * sent a close-up of the reference chart on 2026-09-01 and said to trace it rather than
+ * describe it. The detail that settles the design is that **the pale bars are different
+ * heights from each other** — a plain track would be one constant height, so the pale bar
+ * must be carrying a value. With the reference's own "Current" legend, that value is the
+ * previous period.
+ *
+ * So this Wednesday's bar sits in front of last Wednesday's, and the chart answers a
+ * question the ring cannot: *is this week worse than the last one, and on which day*.
+ *
+ * ⚠ It degrades honestly. On "All time" there is no previous period, so nothing pale is
+ * drawn — rather than inventing a comparison against nothing.
  */
 @Composable
 fun BucketBars(
     buckets: List<BucketSpend>,
     modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = 96.dp,
+    height: androidx.compose.ui.unit.Dp = 118.dp,
 ) {
     if (buckets.isEmpty()) return
-    val peak = buckets.maxOf { it.amount }.coerceAtLeast(1L)
-    // The busiest bucket is highlighted, because "when was the worst of it" is the first
-    // question anyone asks of this chart.
+    // Both series share one scale, or the comparison is a lie: a taller pale bar has to mean
+    // more money, not a different axis.
+    val tallest = buckets.maxOf { maxOf(it.amount, it.previous) }
+    // ⚠ The axis tops out at a ROUND number, not at the tallest bar. Scaling to the data
+    // means the top gridline reads "GHS 91.37", which is a number nobody can measure
+    // against — and it makes every chart a different scale, so two weeks cannot be compared
+    // by eye. A round ceiling is what turns bars into a graph.
+    val ceiling = niceCeiling(tallest).coerceAtLeast(1L)
+    val hasPrevious = buckets.any { it.previous > 0 }
     val busiest = buckets.indexOfFirst { it.amount == buckets.maxOf { b -> b.amount } }
-    val track = Border
     val accent = Accent
+    val grid = Border
+    val many = buckets.size > 12
+    val gap = if (many) 2.dp else 6.dp
 
     Column(modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().height(height),
-            horizontalArrangement = Arrangement.spacedBy(if (buckets.size > 12) 2.dp else 7.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            buckets.forEachIndexed { index, bucket ->
-                val on = index == busiest && bucket.amount > 0
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(track.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.BottomCenter,
+        Row(Modifier.fillMaxWidth().height(height)) {
+            // The value axis. Three labels only — top, middle, nothing at the floor beyond
+            // a zero — because a money chart read at a glance needs a sense of scale, not a
+            // readable value for every bar. The exact figures live in the list below.
+            Column(
+                Modifier.fillMaxHeight().width(34.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End,
+            ) {
+                AxisLabel(ceiling)
+                AxisLabel(ceiling / 2)
+                AxisLabel(0)
+            }
+            Spacer(Modifier.width(7.dp))
+
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                // Gridlines sit behind the bars, at the same three heights as the labels.
+                Column(
+                    Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    val frac = bucket.amount.toFloat() / peak
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            // A bucket with real spending never renders as nothing: a hairline
-                            // is still a fact, and zero height would read as no data.
-                            .fillMaxHeight(if (bucket.amount > 0) frac.coerceAtLeast(0.04f) else 0f)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (on) accent else accent.copy(alpha = 0.42f)),
+                    repeat(3) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(grid.copy(alpha = if (it == 2) 0.9f else 0.45f)),
+                        )
+                    }
+                }
+                Row(
+                    Modifier.fillMaxSize(),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    buckets.forEach { bucket ->
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            // The taller of the two sets the column height; the solid bar is
+                            // drawn over the pale one from the baseline up.
+                            val tall = maxOf(bucket.amount, bucket.previous)
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(BAR_WIDTH)
+                                    .fillMaxHeight(fraction(tall, ceiling)),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                if (hasPrevious) {
+                                    Box(
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(RoundedCornerShape(7.dp))
+                                            .background(accent.copy(alpha = 0.20f)),
+                                    )
+                                }
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .fillMaxHeight(
+                                            if (tall > 0) bucket.amount.toFloat() / tall else 0f,
+                                        )
+                                        .clip(RoundedCornerShape(7.dp))
+                                        .background(accent),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(9.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.width(41.dp)) // clears the axis gutter, so labels line up
+            Row(
+                Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                buckets.forEachIndexed { index, bucket ->
+                    Text(
+                        // Long spans get every other label, or they overlap into mush.
+                        if (many && index % 2 == 1) "" else bucket.label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (index == busiest && bucket.amount > 0) Accent else TextMuted,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
-        Spacer(Modifier.height(7.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(if (buckets.size > 12) 2.dp else 7.dp),
-        ) {
-            buckets.forEachIndexed { index, bucket ->
-                Text(
-                    // Long spans get every other label, or they overlap into mush.
-                    if (buckets.size > 12 && index % 2 == 1) "" else bucket.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (index == busiest && bucket.amount > 0) Accent else TextMuted,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
     }
 }
+
+/** One rung of the value axis, in whole cedis — pesewas on an axis are noise. */
+@Composable
+private fun AxisLabel(pesewas: Long) {
+    Text(
+        (pesewas / 100).toString(),
+        style = MaterialTheme.typography.bodySmall,
+        color = TextMuted.copy(alpha = 0.75f),
+        maxLines = 1,
+    )
+}
+
+/**
+ * Rounds up to the next 1, 2 or 5 times a power of ten — 9137 becomes 10000, 3400 becomes
+ * 5000, 620 becomes 1000.
+ *
+ * This is what makes the gridlines land on numbers a person can hold: "100 / 50 / 0" rather
+ * than "91.37 / 45.69 / 0". It also keeps the scale stable between neighbouring periods, so
+ * two weeks of similar spending draw at the same size and can be compared by eye.
+ */
+private fun niceCeiling(value: Long): Long {
+    if (value <= 0) return 100
+    val magnitude = Math.pow(10.0, floor(log10(value.toDouble()))).toLong().coerceAtLeast(1)
+    val steps = ceil(value.toDouble() / magnitude)
+    val rounded = when {
+        steps <= 1 -> 1
+        steps <= 2 -> 2
+        steps <= 5 -> 5
+        else -> 10
+    }
+    return rounded * magnitude
+}
+
+/** A bucket with real money in it never renders as nothing — a hairline is still a fact. */
+private fun fraction(value: Long, ceiling: Long): Float =
+    if (value <= 0) 0f else (value.toFloat() / ceiling).coerceIn(0.035f, 1f)
+
+/** The bar fills this much of its slot. Taken from the reference, which leaves real air. */
+private const val BAR_WIDTH = 0.72f
 
 /**
  * The category ring.

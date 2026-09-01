@@ -293,6 +293,27 @@ private fun ChartCard(
             )
             ChartToggle(chart, onChart)
         }
+        // ⚠ The bars carry two series, so they need a key. Without it the pale bars read as
+        // this period's — which is exactly backwards on a day with no spending yet, where
+        // the pale bar is the ONLY thing drawn.
+        if (chart == ChartKind.BARS && s.buckets.any { it.previous > 0 }) {
+            Spacer(Modifier.height(9.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LegendDot(Accent.copy(alpha = 0.20f))
+                Text(
+                    "Last ${mode.noun}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+                Spacer(Modifier.width(14.dp))
+                LegendDot(Accent)
+                Text(
+                    "This ${mode.noun}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+            }
+        }
         Spacer(Modifier.height(14.dp))
         when (chart) {
             ChartKind.BARS -> BucketBars(s.buckets)
@@ -302,6 +323,17 @@ private fun ChartCard(
             }
         }
     }
+}
+
+@Composable
+private fun LegendDot(colour: Color) {
+    Box(
+        Modifier
+            .size(9.dp)
+            .clip(RoundedCornerShape(3.dp))
+            .background(colour),
+    )
+    Spacer(Modifier.width(6.dp))
 }
 
 @Composable

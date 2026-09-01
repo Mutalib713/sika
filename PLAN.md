@@ -273,6 +273,28 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         against a hand-checked total from the same month's raw messages. The numbers must
         match arithmetic done by hand, not just look plausible.
 
+- [ ] **13b. A note is not a category**
+  Mutalib's distinction, 2026-09-01: a cash-out for something one-off — a laptop repair, a
+  birthday — should be describable *without* becoming a category. The `+` is for things he
+  pays for repeatedly; a one-time thing wants a note.
+
+  Why it matters: today the only ways to describe a transaction are to pick `Other`, which
+  loses the information, or to invent a category, which pollutes the breakdown forever with
+  entries that hold one transaction each. That is how a category list stops meaning anything.
+
+  - **Note** — free text, this row only, never in the breakdown, never a rule.
+  - **Category** — reusable, drives the report, keeps the `+`.
+
+  It also blunts the one-off problem found in the task-13 research: a single large purchase
+  dominates the biggest-change callout and makes it useless. With a note the sentence can name
+  the transaction rather than assert a trend.
+
+  ⚠ **This adds a column, so it needs a real Room migration.** There is no
+  `fallbackToDestructiveMigration` on the database builder, deliberately — it means "wipe
+  everything if the schema changed", on the one dataset that cannot be rebuilt from the SMS
+  inbox. Bump the version and write the `ALTER TABLE` by hand.
+  **Verify:** set a note, force a schema upgrade, confirm every row and every label survives.
+
 - [ ] **14. Monthly notification**
   `AlarmManager`, exact, allow-while-idle, rescheduled after each firing.
   **Verify:** set the device clock to 23:58 on the last of a month, watch it fire, confirm it
