@@ -440,6 +440,41 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   its space with a cedi sign. Drawing a real mark is identity work with its own variants, and
   doing it inside this build would have been deciding it by accident.
 
+## Device verification — 2026-09-01, Pixel 6 Pro
+
+Everything below was run on the real phone against the real ledger. A byte-exact copy of the
+database was taken off the device first. ⚠ **The first copy was corrupt**: `adb shell cat`
+translates line endings on Windows and produced a file 202 bytes too long. `adb exec-out` is
+the binary-safe form, and the header was checked before anything was installed.
+
+- [x] **The migrations, over the real 148 rows.** v2 → v4 in one launch. Integrity ok.
+      148/148 transactions, 13/13 labels, 3/3 notes, 1/1 gap, 9/9 categories, 8/8 rules, both
+      new columns present, 0 categories hidden. **Nothing lost.**
+- [x] **First run.** The tour, the name, the student question with the dates revealed under
+      Yes. Home now greets him by a name that came from the flow rather than from a constant.
+- [x] **The gap card, in use.** His real GHS 5.00 gap renders with the window *between 21 and
+      22 Jul* — the widened window, showing the right days — and he has already explained it
+      ("friend"), so the explain path works on device too.
+- [x] **The gap alert.** Injected a message whose balance was GHS 5.00 short through the live
+      route. Detected (expected GHS 20.71, actual GHS 15.71), posted as *"GHS 5.00 is
+      unaccounted for"* with its reply action attached.
+- [x] **The monthly alarm.** Booked for `2026-10-01T09:00 Africa/Accra` on a phone whose clock
+      says 1 September, past 9am — `nextFire` proven against the real clock rather than a test
+      one. The `BOOT_COMPLETED` reschedule path also fired and worked.
+- [x] **Release log stripping**, proven on the artifact: `assembleRelease` then `strings` over
+      the APK. Name-bearing fragments absent, sanitised lines and a UI string present as
+      controls.
+- [x] **Cleanup.** Both injected rows deleted; back to exactly 148 / 13 / 1. `stopped=false`
+      confirmed afterwards, so the live receiver is alive.
+
+⚠ **Still not verified, and both need a human at the phone:**
+
+- **The cash-out note box** (the task 17 fix). Its `RemoteInput` sits on the *confirm* step, so
+  it needs a category button tapped on a real prompt. `CashOutReplyReceiver` is `exported=false`
+  — correctly — so adb cannot drive it, which is a good sign and an inconvenient one.
+- **Export → clear data → import.** Destructive on the real ledger; not run without Mutalib
+  saying so. The database backup exists, so it is safe to attempt.
+
 ## Milestone 4 — Harden and ship
 
 - [x] **17. `docs/security-checklist.md` end to end**, ticks committed. Done 2026-09-01.
