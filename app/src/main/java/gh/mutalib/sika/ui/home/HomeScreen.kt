@@ -1,5 +1,6 @@
 package gh.mutalib.sika.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,57 +18,63 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ledger.CategorySlice
+import gh.mutalib.sika.ledger.PeriodSummary
+import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.ThemeToggle
-import gh.mutalib.sika.ui.glass
-import gh.mutalib.sika.ui.specularSweep
+import gh.mutalib.sika.ui.report.BucketBars
 import gh.mutalib.sika.ui.theme.Accent
-import gh.mutalib.sika.ui.theme.CellMoneyStyle
+import gh.mutalib.sika.ui.theme.AccentContrast
+import gh.mutalib.sika.ui.theme.BalanceStyle
 import gh.mutalib.sika.ui.theme.Border
 import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.RowMoneyStyle
-import gh.mutalib.sika.ui.theme.TextMuted
-import gh.mutalib.sika.ui.theme.TextOnGlass
+import gh.mutalib.sika.ui.theme.StatMoneyStyle
+import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.SurfaceRaised
+import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
-import gh.mutalib.sika.ui.theme.Warn
+import gh.mutalib.sika.ui.theme.categoryColor
+import gh.mutalib.sika.ui.theme.categoryIcon
 import java.time.Instant
 import java.time.format.DateTimeFormatter
+import kotlin.math.abs
+
+internal const val OWNER = "Osman"
 
 /**
- * How many transactions Home shows before handing off to the full list.
+ * Screen 1 — Home, rebuilt as a dashboard on 2026-09-01.
  *
- * Mutalib's call, 2026-08-31: Home showed all 144 and became a wall. Home answers *where
- * am I right now*; the full history is a separate place you go on purpose.
- */
-private const val RECENT_COUNT = 5
-
-/**
- * Screen 1 of docs/screens.md, built to the direction in docs/ui-guidelines.md.
+ * **The shape Mutalib picked (H2):** a filled card carrying the month, then everything else
+ * about *this week* — the bars, then the categories under them — then the newest few rows.
  *
- * Layout is skeleton **B**, chosen from four: a glass capsule carrying the balance and the
- * in/out pair, then a short list on the field — no cards, because proximity and hairlines
- * do the work boxes usually get asked for.
+ * ⚠ **The card leads with the month and the section below it is the week, on purpose.** The
+ * month is the number people quote at themselves; the week is the one you can still do
+ * something about. Mixing them in one block would blur which question was being answered, so
+ * they are separated by a heading that names the span.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,25 +87,17 @@ fun HomeScreen(
     onSeeAll: () -> Unit = {},
     onTransactionClick: (TransactionEntity) -> Unit = {},
 ) {
-    val entrance = rememberEntrance(animated)
-    val recent = state.days.flatMap { it.rows }.take(RECENT_COUNT)
+    val pullState = rememberPullToRefreshState()
+    var pickedBar by remember(state.weekSummary?.period) { mutableStateOf<Int?>(null) }
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
 
-        val pullState = rememberPullToRefreshState()
-
         PullToRefreshBox(
             isRefreshing = refreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
             state = pullState,
             indicator = {
-                // The spinner every social app shows, in Sika's colours rather than
-                // Material's purple default. Mutalib asked for it explicitly after seeing
-                // the skeleton alone — and he is right that the spinner is what tells you
-                // *your pull registered*, which the skeleton cannot: the skeleton only
-                // appears once the refresh is already running.
                 PullToRefreshDefaults.Indicator(
                     state = pullState,
                     isRefreshing = refreshing,
@@ -108,325 +107,332 @@ fun HomeScreen(
                 )
             },
         ) {
-        // Behind the spinner, the skeleton replaces the list, so the shape of what is
-        // coming is visible while it loads.
-        if (refreshing) {
-            LoadingState(animated = animated, showHeader = false)
-            return@PullToRefreshBox
-        }
+            LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 50.dp, bottom = 150.dp),
+            ) {
+                item { Greeting(state); Spacer(Modifier.height(16.dp)) }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            // Bottom padding clears the floating dock — content scrolls behind it, which is
-            // the point of a floating navigation layer.
-            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 54.dp, bottom = 130.dp),
-        ) {
-            item { MonthHeader(state) }
-            item { Spacer(Modifier.height(18.dp)) }
-            item { BalanceCapsule(state, animated, entrance) }
-
-            // The status strips. Both sit flush with the capsule's left edge and share one
-            // vertical rhythm, so they read as a set rather than two stray lines.
-            // Only the gap gets a strip. The category count lives in the header subtitle,
-            // and saying it twice on one screen made both instances easier to ignore.
-            if (state.gaps > 0) item { StatusStrip(R.drawable.ic_warning, gapText(state), Warn) }
-
-            if (state.isEmpty) {
-                item { EmptyMonth() }
-            } else {
-                item { SectionHeading("Recent") }
-                items(recent, key = { it.id }) { row ->
-                    TransactionRow(row, onClick = { onTransactionClick(row) })
-                    if (row !== recent.last()) HorizontalDivider(color = Border, thickness = 1.dp)
+                if (state.isEmpty) {
+                    item { EmptyMonth() }
+                    return@LazyColumn
                 }
-                item { SeeAllButton(state.total, onSeeAll) }
+
+                item {
+                    state.monthSummary?.let { HeroCard(it) }
+                    Spacer(Modifier.height(11.dp))
+                    state.monthSummary?.let { StatPair(it) }
+                }
+
+                item { Spacer(Modifier.height(20.dp)); SectionHeading("This week") }
+
+                item {
+                    state.weekSummary?.let { week ->
+                        WeekChart(week, pickedBar) { pickedBar = it }
+                        Spacer(Modifier.height(6.dp))
+                        // Categories for the SAME week as the chart above — his instruction.
+                        week.slices.take(3).forEach { CategoryRow(it) }
+                        if (week.slices.isEmpty()) NothingSpentThisWeek()
+                    }
+                }
+
+                item {
+                    Spacer(Modifier.height(22.dp))
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        SectionHeading("Recent", Modifier.weight(1f))
+                        Text(
+                            // ⚠ "View all", never "See all 146". The count changes every time
+                            // a message lands, so a label carrying it is stale the moment it
+                            // is read — and it makes the control look like it is reporting a
+                            // number rather than offering a door.
+                            "View all",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Accent,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(onClick = onSeeAll)
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
+                        )
+                    }
+                }
+
+                items(state.recent, key = { it.id }) { row ->
+                    TransactionRow(row) { onTransactionClick(row) }
+                }
             }
-        }
         }
     }
 }
 
-/**
- * Whose phone this is. Hardcoded on purpose — Sika is a single-user app sideloaded to one
- * device (PROFILE.md § 2), so asking for a name would be a setup step that buys nothing.
- */
-internal const val OWNER = "Osman"
-
-/**
- * The greeting, and the month.
- *
- * ⚠ **The month chip is here instead of a notification bell, hamburger or brightness
- * toggle.** Mutalib asked for one of those and was unsure which; none of the three has a
- * job in Sika. Its notifications are system notifications, so a bell would open nothing.
- * Settings is already a tab, so a hamburger is a second route to one place.
- *
- * ⚠ The line that used to sit here — "the app is dark-only by design, so a brightness
- * toggle would toggle nothing" — stopped being true on 2026-08-31, when Mutalib asked for
- * light mode and put the control in this corner.
- *
- * Changing month is the one thing genuinely worth reaching for from here, so that is what
- * the corner does.
- */
 @Composable
-private fun MonthHeader(state: HomeState) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column {
+private fun Greeting(state: HomeState) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
             Text(
                 "${greeting()}, $OWNER",
                 style = MaterialTheme.typography.headlineSmall,
                 color = TextPrimary,
             )
-            Spacer(Modifier.height(3.dp))
             Text(
                 subtitle(state),
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextMuted,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
         ThemeToggle()
-        Row(
-            Modifier.clip(RoundedCornerShape(15.dp)).glass(corner = 15.dp)
-                .padding(start = 13.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                MONTH_SHORT.format(state.month),
-                style = MaterialTheme.typography.titleMedium,
-                color = TextOnGlass,
-            )
-            Icon(
-                painterResource(R.drawable.ic_chevron_down),
-                contentDescription = "Change month",
-                tint = TextOnGlass,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        }
     }
 }
 
-/** Africa/Accra, so the greeting matches the clock on the wall rather than a server's. */
-internal fun greeting(): String = when (java.time.LocalTime.now(ACCRA).hour) {
-    in 0..11 -> "Good morning"
-    in 12..16 -> "Good afternoon"
-    else -> "Good evening"
-}
-
-/** One honest line about the state of the ledger, not a slogan. */
-private fun subtitle(state: HomeState): String = when {
-    state.isEmpty -> "Nothing recorded this month yet"
-    state.gaps > 0 -> "${state.total} transactions · ${state.gaps} to check"
-    state.unlabelled == state.total -> "${state.total} transactions · none categorised yet"
-    state.unlabelled > 0 -> "${state.total} transactions · ${state.unlabelled} need a category"
-    else -> "${state.total} transactions, all accounted for"
-}
-
 /**
- * Four labelled figures on one glass surface.
+ * The headline card — a filled block in the accent, from the reference Mutalib sent.
  *
- * ⚠ **Restructured 2026-08-31.** It was one enormous balance with a smaller in/out pair,
- * and Mutalib said two things about it: he could not tell which figure was which, and the
- * balance was not the most relevant number anyway. Both fair — a 44sp number with an 11sp
- * label reads as *the* number, and everything beside it reads as a footnote.
- *
- * So every figure now gets the same label treatment and a comparable size, separated by
- * hairlines rather than by shouting. This is **not** the four-card dashboard grid he
- * rejected: it is one glass surface with four cells, so the navigation-layer rule holds and
- * nothing is boxed.
- *
- * Order is deliberate — **Out first.** What left is the question the app exists to answer.
+ * ⚠ **The progress row is NOT a budget.** In the reference it is a savings goal with a
+ * target and a "$550 left" line. Sika has neither goals nor budgets, both deliberately out
+ * of v1, so drawing that bar would mean inventing a target. It shows how much of the month
+ * is categorised instead — a true number, and the one that decides whether the report can
+ * explain anything. It puts the app's own honesty on the first screen rather than at the
+ * bottom of the third.
  */
 @Composable
-private fun BalanceCapsule(state: HomeState, animated: Boolean, entrance: EntranceClock) {
-    val balance = ((state.balance ?: 0L) * entrance.count).toLong()
-
+private fun HeroCard(month: PeriodSummary) {
+    val labelled = 1f - month.uncategorisedShare
     Column(
         Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                translationY = (1f - entrance.capsuleDrop) * -320f
-                alpha = entrance.capsuleFade
-            }
-            .glass(corner = 30.dp)
-            .specularSweep(enabled = animated)
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .clip(RoundedCornerShape(24.dp))
+            .background(Accent)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
-        // ⚠ The period is named on the label, not implied by the screen.
-        //
-        // "OUT" alone does not say out of *what* — this month, this semester, all time?
-        // Mutalib caught it 2026-08-31, and it matters because the app exists to answer
-        // "what did I spend this month / this semester". A figure whose period you have to
-        // infer is a figure you cannot act on.
-        //
-        // [HomeState.periodLabel] carries the answer, so when semester ranges arrive in
-        // v1.1 these labels follow without touching this composable.
-        Rising(entrance, 0) {
-            Row(Modifier.fillMaxWidth()) {
-                Cell("SPENT IN ${state.periodLabel}", "−" + state.moneyOut.plain(), TextPrimary, Modifier.weight(1f))
-                Cell("RECEIVED IN ${state.periodLabel}", "+" + state.moneyIn.plain(), Accent, Modifier.weight(1f))
-            }
+        Text(
+            "SPENT IN ${MONTH_FULL.format(month.period.start).uppercase()}",
+            style = LabelStyle,
+            // Dark ink on the aqua, never white — 1.49:1. docs/ui-guidelines.md.
+            color = AccentContrast.copy(alpha = 0.68f),
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(month.moneyOut.asCedis(), style = BalanceStyle, color = AccentContrast)
+
+        month.biggestChange?.change?.let { change ->
+            Spacer(Modifier.height(7.dp))
+            Text(
+                "${if (change > 0) "↑" else "↓"} ${abs(change).asCedis()} on ${month.slices.firstOrNull()?.label ?: "last month"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = AccentContrast,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(AccentContrast.copy(alpha = 0.13f))
+                    .padding(horizontal = 10.dp, vertical = 3.dp),
+            )
         }
-        Spacer(Modifier.height(16.dp))
-        Rising(entrance, 1) {
-            HorizontalDivider(color = TextOnGlass.copy(alpha = 0.16f), thickness = 1.dp)
+
+        Spacer(Modifier.height(13.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(AccentContrast.copy(alpha = 0.16f)),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(labelled.coerceIn(0f, 1f))
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(AccentContrast),
+            )
         }
-        Spacer(Modifier.height(16.dp))
-        Rising(entrance, 2) {
-            Row(Modifier.fillMaxWidth()) {
-                Cell(
-                    "SPENT TODAY",
-                    if (state.spentToday == 0L) "—" else "−" + state.spentToday.plain(),
-                    TextPrimary,
-                    Modifier.weight(1f),
-                )
-                Cell(
-                    "BALANCE NOW",
-                    if (state.balance == null) "—" else balance.plain(),
-                    TextPrimary,
-                    Modifier.weight(1f),
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "${Math.round(labelled * 100)}% categorised",
+                style = MaterialTheme.typography.bodySmall,
+                color = AccentContrast.copy(alpha = 0.75f),
+            )
+            if (month.unlabelledCashOut > 0) {
+                Text(
+                    "${month.unlabelledCashOut.asCedis()} unexplained",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AccentContrast.copy(alpha = 0.75f),
                 )
             }
         }
     }
 }
 
-/** One labelled figure. Same treatment every time, which is what makes them comparable. */
 @Composable
-private fun Cell(label: String, value: String, colour: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
-    Column(modifier) {
-        Text(label, style = LabelStyle, color = TextOnGlass)
-        Spacer(Modifier.height(5.dp))
-        Text(value, style = CellMoneyStyle, color = colour)
+private fun StatPair(month: PeriodSummary) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        Stat("RECEIVED", month.moneyIn.asCedis(), Accent, Modifier.weight(1f))
+        Stat("LEFT NOW", month.closingBalance?.asCedis() ?: "—", TextPrimary, Modifier.weight(1f))
     }
 }
 
-/** `1663.20` — the currency lives in the capsule's context, not on every figure. */
-private fun Long.plain(): String = asCedis().removePrefix("GHS ")
-
-/** One line of capsule content, rising into place on its own beat. */
 @Composable
-private fun Rising(entrance: EntranceClock, index: Int, content: @Composable () -> Unit) {
-    val p = entrance.content(index)
-    Box(
-        Modifier.graphicsLayer {
-            translationY = (1f - p) * 46f
-            alpha = p
-        },
-    ) { content() }
-}
-
-/**
- * A status line under the capsule: a reconciliation gap, or a count of unlabelled rows.
- *
- * ⚠ 20 dp of air above it and flush with the capsule's left edge — measured fix,
- * 2026-08-31. It previously sat tight under the capsule and looked like a caption that had
- * slipped, rather than a separate statement.
- */
-@Composable
-private fun StatusStrip(icon: Int?, text: String, tint: androidx.compose.ui.graphics.Color) {
-    Row(
-        Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun Stat(label: String, value: String, colour: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(17.dp))
+            .background(Surface)
+            .padding(horizontal = 13.dp, vertical = 11.dp),
     ) {
-        if (icon != null) {
-            Icon(painterResource(icon), contentDescription = null, tint = tint, modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(10.dp))
-        }
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = tint)
+        Text(label, style = LabelStyle, color = TextMuted)
+        Spacer(Modifier.height(4.dp))
+        Text(value, style = StatMoneyStyle, color = colour, maxLines = 1)
     }
 }
 
 @Composable
-private fun SectionHeading(text: String) {
+private fun WeekChart(week: PeriodSummary, picked: Int?, onPick: (Int?) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Surface)
+            .padding(15.dp),
+    ) {
+        val bar = picked?.let { week.buckets.getOrNull(it) }
+        if (bar != null) {
+            Text(bar.amount.asCedis(), style = MaterialTheme.typography.headlineSmall, color = TextPrimary)
+            Text(bar.label, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+        } else {
+            Text(
+                week.moneyOut.asCedis(),
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary,
+            )
+            Text(
+                "spent this week · tap a bar",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted,
+            )
+        }
+        Spacer(Modifier.height(13.dp))
+        BucketBars(week.buckets, height = 92.dp, selected = picked, onSelect = onPick)
+    }
+}
+
+@Composable
+private fun CategoryRow(slice: CategorySlice) {
+    val colour = categoryColor(slice.label.takeIf { it != UNCATEGORISED })
+    Column(Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(31.dp).clip(RoundedCornerShape(10.dp))
+                    .background(colour.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painterResource(categoryIcon(slice.label)),
+                    contentDescription = null,
+                    tint = colour,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+            Spacer(Modifier.width(11.dp))
+            Column(Modifier.weight(1f)) {
+                Text(slice.label, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                Text(
+                    "${Math.round(slice.share * 100)}% of the week",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+            }
+            Text(slice.amount.asCedis(), style = StatMoneyStyle, color = TextPrimary)
+        }
+        Spacer(Modifier.height(6.dp))
+        Box(
+            Modifier.padding(start = 42.dp).fillMaxWidth().height(3.dp)
+                .clip(RoundedCornerShape(2.dp)).background(Border),
+        ) {
+            Box(
+                Modifier.fillMaxWidth(slice.share.coerceIn(0f, 1f)).height(3.dp)
+                    .clip(RoundedCornerShape(2.dp)).background(colour),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NothingSpentThisWeek() {
     Text(
-        text.uppercase(),
-        style = LabelStyle,
+        "Nothing spent yet this week.",
+        style = MaterialTheme.typography.bodyMedium,
         color = TextMuted,
-        modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
+        modifier = Modifier.padding(top = 14.dp),
     )
 }
 
-/** Hands off to the full history. Names what it does and how much there is of it. */
 @Composable
-private fun SeeAllButton(total: Int, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 14.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .glass(corner = 16.dp)
-            .padding(vertical = 15.dp),
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        Text(
-            "See all $total transactions",
-            style = MaterialTheme.typography.titleMedium,
-            color = Accent,
-        )
-    }
+private fun SectionHeading(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.headlineSmall,
+        color = TextPrimary,
+        modifier = modifier,
+    )
 }
 
 @Composable
-private fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
+internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
+    val colour = categoryColor(row.label)
+    val incoming = row.direction == Direction.IN
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 13.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 9.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(Surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).glass(corner = 13.dp))
-        Spacer(Modifier.width(13.dp))
+        Box(
+            Modifier.size(31.dp).clip(RoundedCornerShape(10.dp))
+                .background(colour.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painterResource(categoryIcon(row.label)),
+                contentDescription = null,
+                tint = colour,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+        Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 row.counterparty.ifBlank { "Unreadable message" },
                 style = MaterialTheme.typography.titleMedium,
                 color = TextPrimary,
+                maxLines = 1,
             )
-            Spacer(Modifier.height(3.dp))
             Text(
                 (row.label ?: "Add category") + " · " +
                     TIME.format(Instant.ofEpochMilli(row.occurredAt).atZone(ACCRA)),
                 style = MaterialTheme.typography.bodySmall,
-                color = TextMuted,
+                color = if (row.label == null) TextMuted else colour,
             )
         }
-        Column(horizontalAlignment = Alignment.End) {
-            val incoming = row.direction == Direction.IN
-            Text(
-                (if (incoming) "+" else "−") + row.amount.asCedis().removePrefix("GHS "),
-                style = RowMoneyStyle,
-                // Colour reinforces; the sign carries the meaning. docs/ui-guidelines.md.
-                color = if (incoming) Accent else TextPrimary,
-            )
-            row.balanceAfter?.let {
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    it.asCedis().removePrefix("GHS "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted,
-                )
-            }
-        }
+        Text(
+            (if (incoming) "+" else "−") + row.amount.asCedis(),
+            style = RowMoneyStyle,
+            color = if (incoming) Accent else TextPrimary,
+        )
     }
 }
 
 @Composable
 private fun EmptyMonth() {
     Column(
-        Modifier.fillMaxWidth().padding(top = 64.dp).alpha(1f),
+        Modifier.fillMaxWidth().padding(top = 80.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
             "Nothing yet this month",
             style = MaterialTheme.typography.headlineSmall,
             color = TextPrimary,
-            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             "Transactions appear here as MoMo texts arrive.",
             style = MaterialTheme.typography.bodyMedium,
@@ -436,18 +442,20 @@ private fun EmptyMonth() {
     }
 }
 
-private fun gapText(state: HomeState): String {
-    val gap = state.firstGap ?: return "${state.gaps} transactions don't add up"
-    val day = DAY.format(Instant.ofEpochMilli(gap.occurredAt).atZone(ACCRA))
-    return if (state.gaps == 1) {
-        "One transaction on $day doesn't add up"
-    } else {
-        "${state.gaps} transactions don't add up, from $day"
-    }
+private fun subtitle(state: HomeState): String = when {
+    state.gaps > 0 -> "${state.gaps} ${if (state.gaps == 1) "transaction doesn't" else "transactions don't"} add up"
+    state.unlabelled > 0 -> "${state.unlabelled} still need a category"
+    state.total == 1 -> "1 transaction, all accounted for"
+    state.total > 0 -> "${state.total} transactions, all accounted for"
+    else -> "Nothing recorded this month yet"
 }
 
+/** Africa/Accra, so the greeting matches the clock on the wall rather than a server's. */
+internal fun greeting(): String = when (java.time.LocalTime.now(ACCRA).hour) {
+    in 0..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
+}
 
-private val MONTH = DateTimeFormatter.ofPattern("MMMM")
-private val MONTH_SHORT = DateTimeFormatter.ofPattern("MMM")
-private val DAY = DateTimeFormatter.ofPattern("d MMMM")
-private val TIME = DateTimeFormatter.ofPattern("h:mma")
+private val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mma")
+private val MONTH_FULL: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM")

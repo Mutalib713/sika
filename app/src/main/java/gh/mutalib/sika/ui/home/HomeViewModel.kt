@@ -3,19 +3,20 @@ package gh.mutalib.sika.ui.home
 import android.app.Application
 import android.content.Context
 import android.util.Log
-import gh.mutalib.sika.TAG
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
-import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.data.TransactionEntity
-import gh.mutalib.sika.ledger.inflow
-import gh.mutalib.sika.ledger.outflow
-import gh.mutalib.sika.parser.Direction
+import gh.mutalib.sika.ledger.Period
+import gh.mutalib.sika.ledger.PeriodSummary
+import gh.mutalib.sika.ledger.summarise
+import gh.mutalib.sika.ledger.today
+import gh.mutalib.sika.sms.Sweeper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,36 +37,34 @@ data class DayGroup(val label: String, val rows: List<TransactionEntity>)
 data class HomeState(
     val month: YearMonth = YearMonth.now(ACCRA),
     val loading: Boolean = true,
-    /** The most recent stated balance in this month. Null when the month has nothing in it. */
-    val balance: Long? = null,
-    val balanceAt: Long? = null,
-    val moneyIn: Long = 0,
-    val moneyOut: Long = 0,
+    /**
+     * This month, for the headline card.
+     *
+     * The month is the figure worth leading with — it is the one people quote at themselves,
+     * and it is the span the report defaults to.
+     */
+    val monthSummary: PeriodSummary? = null,
+    /**
+     * This week, for the chart and the categories under it.
+     *
+     * ⚠ Mutalib's instruction, 2026-09-01: *"for the home one the categories should be based
+     * on the weekly aspects, which the daily there"*. Everything below the headline card is
+     * about this week, so the bars and the categories beneath them describe the same stretch
+     * of time. A weekly chart over monthly categories would look coherent and be answering
+     * two different questions.
+     */
+    val weekSummary: PeriodSummary? = null,
+    /** The five newest rows, for the short list on Home. */
+    val recent: List<TransactionEntity> = emptyList(),
     val gaps: Int = 0,
     /** The oldest unexplained gap, which is the one worth chasing first. */
     val firstGap: TransactionEntity? = null,
     val unlabelled: Int = 0,
+    /** Every transaction this month, grouped by day — what the all-transactions screen shows. */
     val days: List<DayGroup> = emptyList(),
-    /** Every transaction in this month, for the "See all" hand-off. */
     val total: Int = 0,
-    /**
-     * What has left the wallet today. The one idea worth taking from the dashboard
-     * comparison on 2026-08-31 — and unlike the rest of that dashboard, Sika can answer it
-     * from real messages without asking Mutalib to type anything.
-     */
-    val spentToday: Long = 0,
-    val countToday: Int = 0,
-    /**
-     * What period the SPENT/RECEIVED figures cover, as it appears on their labels — "AUG"
-     * today, "SEM 1" once semester ranges land in v1.1.
-     *
-     * ⚠ Carried in state rather than derived in the composable so the labels follow the
-     * period automatically. A figure whose period you have to infer is one you cannot act
-     * on, which is what Mutalib caught when the labels just said OUT and IN.
-     */
-    val periodLabel: String = "",
 ) {
-    val isEmpty: Boolean get() = !loading && days.isEmpty()
+    val isEmpty: Boolean get() = !loading && total == 0
 }
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -108,14 +107,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Re-reads the inbox and re-runs reconciliation, on demand.
      *
-     * The live receiver already records messages as they arrive, so this is not how the
-     * ledger normally stays current — it is the manual catch-up for the case Android drops
-     * a broadcast, and the gesture people reach for by reflex when a screen might be stale.
-     *
      * ⚠ **A minimum visible duration is deliberate.** The sweep finishes in well under a
      * second on 300 messages, and an indicator that vanishes before it is seen reads as
-     * "nothing happened" rather than "checked, nothing new". 600 ms is long enough to
-     * register and short enough not to feel slow.
+     * "nothing happened" rather than "checked, nothing new".
      */
     fun refresh(context: Context) {
         if (_refreshing.value) return
@@ -141,71 +135,59 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The whole ledger as a Flow, folded into one month's view.
+     * The whole ledger, folded into what Home shows.
      *
-     * Reading everything and filtering in memory rather than querying per month: 144 rows
-     * is nothing, and it means changing month is instant with no round trip. Revisit if the
-     * ledger ever reaches thousands — `observeBetween` already exists for that day.
+     * Reading everything and folding in memory rather than querying per period: a few hundred
+     * rows is nothing, and it means the month card and the week chart come from one read
+     * rather than three. Revisit if the ledger ever reaches thousands.
      */
     val state: StateFlow<HomeState> = dao.observeAll()
-        .map { all -> fold(all, YearMonth.now(ACCRA)) }
+        .map { all -> fold(all) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
-    private fun fold(all: List<TransactionEntity>, month: YearMonth): HomeState {
-        val inMonth = all.filter {
-            YearMonth.from(Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA)) == month
-        }
+    private fun fold(all: List<TransactionEntity>): HomeState {
+        val now = today(ACCRA)
+        val month = Period.monthOf(now)
+        val week = Period.weekOf(now)
 
-        val today = LocalDate.now(ACCRA)
-        val todays = inMonth.filter {
-            Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA).toLocalDate() == today
-        }
+        val inMonth = all.filter { month.contains(dateOf(it)) }
 
         val days = inMonth
-            .groupBy { Instant.ofEpochMilli(it.occurredAt).atZone(ACCRA).toLocalDate() }
+            .groupBy { dateOf(it) }
             .toSortedMap(reverseOrder())
             .map { (date, rows) -> DayGroup(dayLabel(date), rows.sortedByDescending { it.occurredAt }) }
 
         return HomeState(
-            month = month,
+            month = YearMonth.from(month.start),
             loading = false,
-            // The newest row's own stated balance. Not a running total we computed —
-            // showing our arithmetic where MoMo's own figure exists would be inventing a
-            // number, and this app's whole argument is that it does not do that.
-            balance = inMonth.firstOrNull { it.balanceAfter != null }?.balanceAfter,
-            balanceAt = inMonth.firstOrNull { it.balanceAfter != null }?.occurredAt,
-            // ⚠ Both through `inflow`/`outflow` — see ledger/MonthSummary.kt. Until task 13
-            // this line summed bare `amount` while `spentToday` below summed `amount + fee`,
-            // so two figures on the same card were computed differently. The fee and tax are
-            // money that left the wallet: Reconciler proves it, because MoMo's own stated
-            // balance only agrees with `previous − amount − fee − tax`.
-            moneyIn = inMonth.filter { it.direction == Direction.IN }.sumOf { it.inflow() },
-            moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.outflow() },
+            monthSummary = summarise(all, month, ACCRA),
+            weekSummary = summarise(all, week, ACCRA),
+            recent = all.sortedByDescending { it.occurredAt }.take(RECENT_ROWS),
             gaps = inMonth.count { it.reconciled == Reconciled.GAP },
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
             unlabelled = inMonth.count { it.label == null },
             days = days,
             total = inMonth.size,
-            periodLabel = PERIOD.format(month).uppercase(),
-            spentToday = todays.filter { it.direction == Direction.OUT }.sumOf { it.outflow() },
-            countToday = todays.size,
         )
     }
 
+    private fun dateOf(row: TransactionEntity): LocalDate =
+        Instant.ofEpochMilli(row.occurredAt).atZone(ACCRA).toLocalDate()
+
     private fun dayLabel(date: LocalDate): String {
-        val today = LocalDate.now(ACCRA)
+        val now = today(ACCRA)
         return when (date) {
-            today -> "Today"
-            today.minusDays(1) -> "Yesterday"
+            now -> "Today"
+            now.minusDays(1) -> "Yesterday"
             else -> DAY_FORMAT.format(date).uppercase()
         }
     }
 
     private companion object {
         const val MIN_VISIBLE_MS = 600L
+        /** Five is what fits without Home becoming the list it links to. */
+        const val RECENT_ROWS = 5
         val DAY_FORMAT: java.time.format.DateTimeFormatter =
             java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")
-        val PERIOD: java.time.format.DateTimeFormatter =
-            java.time.format.DateTimeFormatter.ofPattern("MMM")
     }
 }
