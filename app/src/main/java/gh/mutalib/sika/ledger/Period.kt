@@ -28,6 +28,17 @@ enum class PeriodMode {
      * install is close to the truth and, more importantly, is *derived* rather than made up.
      */
     SEMESTER,
+
+    /**
+     * Everything on record, oldest transaction to today.
+     *
+     * Added 2026-09-01 at Mutalib's request. Its comparison against "the previous period" is
+     * meaningless by construction — there is nothing before everything — so [Period.previous]
+     * returns an empty range and the change columns simply do not appear. That is the honest
+     * outcome: a report that shows "↑ 100%" against nothing is worse than one that shows
+     * nothing at all.
+     */
+    ALL,
     ;
 
     /**
@@ -42,6 +53,18 @@ enum class PeriodMode {
         WEEK -> "week"
         MONTH -> "month"
         SEMESTER -> "semester"
+        ALL -> "record"
+    }
+
+    /**
+     * What one bar of the chart covers — Mutalib's rule, 2026-09-01: *"if it's on weekly show
+     * me the daily, if on month show me monthly"*. Each period splits into the next unit down,
+     * so a bar is always something you can point at and recognise.
+     */
+    val bucket: BucketUnit get() = when (this) {
+        WEEK -> BucketUnit.DAY
+        MONTH -> BucketUnit.WEEK
+        SEMESTER, ALL -> BucketUnit.MONTH
     }
 }
 
@@ -68,6 +91,7 @@ data class Period(
         }
         PeriodMode.MONTH -> MONTH_FULL.format(start)
         PeriodMode.SEMESTER -> "Since ${DAY_MONTH.format(start)}"
+        PeriodMode.ALL -> "All time"
     }
 
     /** The same length of time, immediately before this one. What "against last" compares to. */
@@ -80,6 +104,38 @@ data class Period(
             val days = ChronoUnit.DAYS.between(start, endExclusive)
             Period(mode, start.minusDays(days), start)
         }
+        // Nothing precedes everything. An empty range means no row matches it, so every
+        // "vs last" column disappears rather than comparing against a fiction.
+        PeriodMode.ALL -> Period(mode, start, start)
+    }
+
+    /**
+     * The chart's bars: this period cut into its next unit down, oldest first.
+     *
+     * Empty buckets are kept, and that matters — a week with no spending on Thursday must
+     * still draw a Thursday, or the chart silently rewrites which day was which.
+     */
+    fun buckets(): List<Bucket> {
+        val out = mutableListOf<Bucket>()
+        var cursor = start
+        var guard = 0
+        while (cursor.isBefore(endExclusive) && guard++ < MAX_BUCKETS) {
+            val next = when (mode.bucket) {
+                BucketUnit.DAY -> cursor.plusDays(1)
+                BucketUnit.WEEK -> cursor.plusWeeks(1)
+                BucketUnit.MONTH -> YearMonth.from(cursor).plusMonths(1).atDay(1)
+            }
+            val end = if (next.isAfter(endExclusive)) endExclusive else next
+            out += Bucket(bucketLabel(cursor, out.size), cursor, end)
+            cursor = next
+        }
+        return out
+    }
+
+    private fun bucketLabel(at: LocalDate, index: Int): String = when (mode.bucket) {
+        BucketUnit.DAY -> DAY_NAME.format(at)
+        BucketUnit.WEEK -> "W${index + 1}"
+        BucketUnit.MONTH -> MONTH_SHORT.format(at)
     }
 
     /** Moved [steps] periods later (negative for earlier). */
@@ -90,6 +146,8 @@ data class Period(
             val days = ChronoUnit.DAYS.between(start, endExclusive)
             Period(mode, start.plusDays(days * steps), endExclusive.plusDays(days * steps))
         }
+        // There is nowhere to step to. All time is all time.
+        PeriodMode.ALL -> this
     }
 
     fun contains(date: LocalDate): Boolean = !date.isBefore(start) && date.isBefore(endExclusive)
@@ -101,6 +159,16 @@ data class Period(
         private val MONTH_FULL: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM yyyy")
         private val MONTH_SHORT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM")
         private val DAY_MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM")
+        private val DAY_NAME: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE")
+
+        /**
+         * A ceiling on how many bars one chart may hold.
+         *
+         * ⚠ Not decoration — a guard. "All time" over a long ledger would otherwise try to
+         * draw a bar per month forever, and a loop over dates with no bound is how a chart
+         * becomes a hang.
+         */
+        private const val MAX_BUCKETS = 400
 
         /** The week containing [date], Monday first. */
         fun weekOf(date: LocalDate): Period {
@@ -124,14 +192,31 @@ data class Period(
             Period(PeriodMode.SEMESTER, from, today.plusDays(1))
 
         /** The current period for a mode, given where "now" is. */
-        fun current(mode: PeriodMode, today: LocalDate, semesterStart: LocalDate?): Period =
+        fun current(
+            mode: PeriodMode,
+            today: LocalDate,
+            semesterStart: LocalDate?,
+            oldest: LocalDate? = null,
+        ): Period =
             when (mode) {
                 PeriodMode.WEEK -> weekOf(today)
                 PeriodMode.MONTH -> monthOf(today)
                 PeriodMode.SEMESTER ->
                     semesterFrom(semesterStart ?: today.withDayOfMonth(1), today)
+                // Oldest row to today. `oldest` is null on an empty ledger, where "all time"
+                // is this month and the screen says so rather than drawing years of nothing.
+                PeriodMode.ALL ->
+                    Period(mode, oldest ?: today.withDayOfMonth(1), today.plusDays(1))
             }
     }
+}
+
+/** What one bar of the chart covers. */
+enum class BucketUnit { DAY, WEEK, MONTH }
+
+/** One bar: its label, and the half-open range of days it covers. */
+data class Bucket(val label: String, val start: LocalDate, val endExclusive: LocalDate) {
+    fun contains(date: LocalDate): Boolean = !date.isBefore(start) && date.isBefore(endExclusive)
 }
 
 /** Today, in Accra. Kept here so no screen has to remember which zone the ledger uses. */

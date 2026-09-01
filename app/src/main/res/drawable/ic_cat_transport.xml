@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "bus" - the project's only icon set. See docs/ui-guidelines.md.
+     Stroke is white; every use tints it via Icon(tint = ...). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M8,6v6M15,6v6M2,12h19.6M18,18h3s0.5,-1.7 0.8,-2.8a4,4 0 0 0 0,-2.4l-1.4,-5C20.1,6.8 19.1,6 18,6H4a2,2 0 0 0 -2,2v10h3M10,18H5M14,18h-3"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

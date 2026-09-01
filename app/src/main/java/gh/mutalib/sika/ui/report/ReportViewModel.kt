@@ -39,6 +39,9 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
      */
     private val semesterStart = MutableStateFlow<LocalDate?>(null)
 
+    /** The oldest transaction on record — where "All" begins. */
+    private val oldest = MutableStateFlow<LocalDate?>(null)
+
     private val _mode = MutableStateFlow(PeriodMode.MONTH)
     val mode: StateFlow<PeriodMode> = _mode
 
@@ -49,9 +52,16 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            val oldest = dao.oldestTimestamp()
-            if (oldest != null) {
-                semesterStart.value = Instant.ofEpochMilli(oldest).atZone(ACCRA).toLocalDate()
+            val first = dao.oldestTimestamp()
+            if (first != null) {
+                val date = Instant.ofEpochMilli(first).atZone(ACCRA).toLocalDate()
+                semesterStart.value = date
+                oldest.value = date
+                // The period was built before the ledger was read, so "All" and "Semester"
+                // would otherwise sit on the fallback range until the mode was tapped.
+                if (_mode.value == PeriodMode.ALL || _mode.value == PeriodMode.SEMESTER) {
+                    _period.value = Period.current(_mode.value, today(ACCRA), date, date)
+                }
             }
         }
     }
@@ -68,7 +78,7 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
     /** Switching mode always lands on the *current* week/month/semester, never a stale offset. */
     fun setMode(mode: PeriodMode) {
         _mode.value = mode
-        _period.value = Period.current(mode, today(ACCRA), semesterStart.value)
+        _period.value = Period.current(mode, today(ACCRA), semesterStart.value, oldest.value)
     }
 
     fun step(steps: Long) {

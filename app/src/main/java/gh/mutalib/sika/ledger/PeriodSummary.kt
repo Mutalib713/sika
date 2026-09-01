@@ -89,6 +89,8 @@ data class PeriodSummary(
     val unlabelledCashOut: Long,
     val hasPrevious: Boolean,
     val transactionCount: Int,
+    /** The bar chart: this period cut into days, weeks or months. Never empty. */
+    val buckets: List<BucketSpend> = emptyList(),
 ) {
     /** In minus out. Negative means the month spent more than it took in. */
     val net: Long get() = moneyIn - moneyOut
@@ -146,6 +148,9 @@ data class PeriodSummary(
  * genuine standout still gets its sentence.
  */
 private const val CLEAR_WINNER_RATIO = 1.4
+
+/** One bar of the chart. */
+data class BucketSpend(val label: String, val amount: Long)
 
 /** The label shown for spending nobody has categorised yet. */
 const val UNCATEGORISED = "Uncategorised"
@@ -206,6 +211,16 @@ fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): Perio
             .sumOf { it.outflow() },
         hasPrevious = previous.isNotEmpty(),
         transactionCount = inMonth.size,
+        // Empty buckets are kept on purpose: a week with nothing spent on Thursday must
+        // still draw a Thursday, or the chart quietly relabels which day was which.
+        buckets = period.buckets().map { bucket ->
+            BucketSpend(
+                label = bucket.label,
+                amount = inMonth
+                    .filter { it.direction == Direction.OUT && bucket.contains(dateOf(it, zone)) }
+                    .sumOf { it.outflow() },
+            )
+        },
     )
 }
 
