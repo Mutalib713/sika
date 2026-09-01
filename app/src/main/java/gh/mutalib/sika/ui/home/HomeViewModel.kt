@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.CategoryEntity
+import gh.mutalib.sika.data.DemoMode
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
@@ -21,7 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -62,6 +63,8 @@ data class HomeState(
     val unlabelled: Int = 0,
     /** Every transaction this month, grouped by day — what the all-transactions screen shows. */
     val days: List<DayGroup> = emptyList(),
+    /** Every transaction on record, grouped by day — what the "All time" filter reads. */
+    val allDays: List<DayGroup> = emptyList(),
     val total: Int = 0,
 ) {
     val isEmpty: Boolean get() = !loading && total == 0
@@ -141,9 +144,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * rows is nothing, and it means the month card and the week chart come from one read
      * rather than three. Revisit if the ledger ever reaches thousands.
      */
-    val state: StateFlow<HomeState> = dao.observeAll()
-        .map { all -> fold(all) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
+    val state: StateFlow<HomeState> = combine(dao.observeAll(), DemoMode.rows) { all, demo ->
+        // Demo rows replace the ledger for display only; nothing is ever written.
+        fold(demo ?: all)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState())
 
     private fun fold(all: List<TransactionEntity>): HomeState {
         val now = today(ACCRA)
@@ -152,10 +156,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
         val inMonth = all.filter { month.contains(dateOf(it)) }
 
-        val days = inMonth
+        fun byDay(rows: List<TransactionEntity>) = rows
             .groupBy { dateOf(it) }
             .toSortedMap(reverseOrder())
-            .map { (date, rows) -> DayGroup(dayLabel(date), rows.sortedByDescending { it.occurredAt }) }
+            .map { (date, day) -> DayGroup(dayLabel(date), day.sortedByDescending { it.occurredAt }) }
+
+        val days = byDay(inMonth)
 
         return HomeState(
             month = YearMonth.from(month.start),
@@ -167,6 +173,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
             unlabelled = inMonth.count { it.label == null },
             days = days,
+            allDays = byDay(all),
             total = inMonth.size,
         )
     }

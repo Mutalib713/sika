@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -30,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,12 +53,29 @@ import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
 import gh.mutalib.sika.ui.theme.categoryColor
 
+/** How far back the list reaches. */
+private enum class Span(val label: String) {
+    THIS_MONTH("This month"),
+    EVERYTHING("All time"),
+}
+
+/** A size of transaction, in pesewas. */
+private enum class Size(val label: String, val min: Long, val max: Long) {
+    ANY("Any amount", 0, Long.MAX_VALUE),
+    SMALL("Under GHS 20", 0, 2_000),
+    MEDIUM("GHS 20 - 100", 2_000, 10_000),
+    LARGE("Over GHS 100", 10_000, Long.MAX_VALUE),
+}
+
 /** What the list is currently narrowed to. */
 private data class Filters(
+    val span: Span = Span.THIS_MONTH,
     val category: String? = null,
-    val incomingOnly: Boolean = false,
-    val unlabelledOnly: Boolean = false,
-)
+    val size: Size = Size.ANY,
+    val query: String = "",
+) {
+    val categoryLabel: String get() = category ?: "All categories"
+}
 
 /**
  * Screen 4 — every transaction this month, with filters.
@@ -76,12 +97,16 @@ fun AllTransactionsScreen(
     onTransactionClick: (TransactionEntity) -> Unit = {},
 ) {
     var filters by remember { mutableStateOf(Filters()) }
+    var searching by remember { mutableStateOf(false) }
 
-    val categories = remember(state.days) {
-        state.days.flatMap { it.rows }.mapNotNull { it.label }.distinct().sorted()
+    // The month-only list was what shipped first, and it quietly hid most of the ledger -
+    // two rows on screen out of 148 on record. "All time" reads the whole thing.
+    val source = if (filters.span == Span.EVERYTHING) state.allDays else state.days
+    val categories = remember(state.allDays) {
+        state.allDays.flatMap { it.rows }.mapNotNull { it.label }.distinct().sorted()
     }
-    val days = remember(state.days, filters) {
-        state.days
+    val days = remember(source, filters) {
+        source
             .map { day -> day.copy(rows = day.rows.filter { it.matches(filters) }) }
             // A day whose every row was filtered out must not leave its heading behind.
             .filter { it.rows.isNotEmpty() }
@@ -116,7 +141,13 @@ fun AllTransactionsScreen(
                         "Transactions",
                         style = MaterialTheme.typography.headlineSmall,
                         color = TextPrimary,
+                        modifier = Modifier.weight(1f),
                     )
+                    SmallIconButton(R.drawable.ic_search, "Search") { searching = !searching }
+                }
+                if (searching) {
+                    Spacer(Modifier.height(10.dp))
+                    SearchField(filters.query) { filters = filters.copy(query = it) }
                 }
                 Spacer(Modifier.height(12.dp))
             }
@@ -126,18 +157,23 @@ fun AllTransactionsScreen(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    Chip("All", filters == Filters()) { filters = Filters() }
-                    Chip("Money in", filters.incomingOnly) {
-                        filters = Filters(incomingOnly = !filters.incomingOnly)
-                    }
-                    Chip("No category", filters.unlabelledOnly) {
-                        filters = Filters(unlabelledOnly = !filters.unlabelledOnly)
-                    }
-                    categories.forEach { name ->
-                        Chip(name, filters.category == name) {
-                            filters = Filters(category = name.takeIf { filters.category != name })
-                        }
-                    }
+                    MenuChip(
+                        label = filters.span.label,
+                        on = filters.span != Span.THIS_MONTH,
+                        options = Span.entries.map { it.label },
+                    ) { i -> filters = filters.copy(span = Span.entries[i]) }
+
+                    MenuChip(
+                        label = filters.categoryLabel,
+                        on = filters.category != null,
+                        options = listOf("All categories") + categories,
+                    ) { i -> filters = filters.copy(category = categories.getOrNull(i - 1)) }
+
+                    MenuChip(
+                        label = filters.size.label,
+                        on = filters.size != Size.ANY,
+                        options = Size.entries.map { it.label },
+                    ) { i -> filters = filters.copy(size = Size.entries[i]) }
                 }
                 Spacer(Modifier.height(12.dp))
                 Summary(shown, days)
@@ -158,29 +194,123 @@ fun AllTransactionsScreen(
     }
 }
 
-private fun TransactionEntity.matches(f: Filters): Boolean = when {
-    f.incomingOnly -> direction == Direction.IN
-    f.unlabelledOnly -> label == null
-    f.category != null -> label == f.category
-    else -> true
+/** Every active filter must pass. They narrow together rather than replacing each other. */
+private fun TransactionEntity.matches(f: Filters): Boolean {
+    if (f.category != null && label != f.category) return false
+    val size = amount + fee
+    if (size < f.size.min || size >= f.size.max) return false
+    if (f.query.isNotBlank() &&
+        !counterparty.contains(f.query, ignoreCase = true) &&
+        !(label ?: "").contains(f.query, ignoreCase = true)
+    ) {
+        return false
+    }
+    return true
 }
 
 @Composable
-private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
+private fun SmallIconButton(icon: Int, description: String, onClick: () -> Unit) {
     Box(
-        Modifier
-            .clip(RoundedCornerShape(17.dp))
-            .background(if (on) Accent else Surface)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.size(40.dp).clip(RoundedCornerShape(20.dp)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            // Dark ink on the aqua, never white — docs/ui-guidelines.md.
-            color = if (on) AccentContrast else TextMuted,
-            maxLines = 1,
+        Icon(
+            painterResource(icon),
+            contentDescription = description,
+            tint = TextMuted,
+            modifier = Modifier.size(20.dp),
         )
+    }
+}
+
+@Composable
+private fun SearchField(value: String, onValue: (String) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Surface)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValue,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
+            cursorBrush = SolidColor(Accent),
+            modifier = Modifier.weight(1f),
+            decorationBox = { inner ->
+                if (value.isEmpty()) {
+                    Text(
+                        "Search a shop or a category",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMuted,
+                    )
+                }
+                inner()
+            },
+        )
+    }
+}
+
+/**
+ * A chip that opens a menu - the shape from the reference.
+ *
+ * It shows the CURRENT choice rather than the name of the field: "GHS 20 - 100", not
+ * "Amount". A chip reading "Amount" makes you open it to find out what it is doing, which
+ * is the one thing a row of filters must never require.
+ */
+@Composable
+private fun MenuChip(
+    label: String,
+    on: Boolean,
+    options: List<String>,
+    onPick: (Int) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(17.dp))
+                .background(if (on) Accent else Surface)
+                .clickable { open = true }
+                .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                // Dark ink on the aqua, never white - docs/ui-guidelines.md.
+                color = if (on) AccentContrast else TextMuted,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                painterResource(R.drawable.ic_chevron_down),
+                contentDescription = null,
+                tint = if (on) AccentContrast else TextMuted,
+                modifier = Modifier.size(15.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            containerColor = Surface,
+        ) {
+            options.forEachIndexed { index, option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            option,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (option == label) Accent else TextPrimary,
+                        )
+                    },
+                    onClick = { onPick(index); open = false },
+                )
+            }
+        }
     }
 }
 

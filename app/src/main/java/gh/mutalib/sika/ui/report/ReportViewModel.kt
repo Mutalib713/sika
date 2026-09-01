@@ -3,6 +3,7 @@ package gh.mutalib.sika.ui.report
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import gh.mutalib.sika.data.DemoMode
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.ledger.Period
 import gh.mutalib.sika.ledger.PeriodMode
@@ -72,7 +73,9 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
      * and it makes switching mode instant with no round trip.
      */
     val summary: StateFlow<PeriodSummary?> =
-        combine(dao.observeAll(), _period) { all, period -> summarise(all, period, ACCRA) }
+        combine(dao.observeAll(), _period, DemoMode.rows) { all, period, demo ->
+            summarise(demo ?: all, period, ACCRA)
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Switching mode always lands on the *current* week/month/semester, never a stale offset. */

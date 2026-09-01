@@ -54,6 +54,18 @@ class DebugSmsReceiver : BroadcastReceiver() {
             return
         }
 
+        // Fabricated rows for looking at a full screen. ⚠ Never written to the database.
+        //
+        //   adb shell am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS         //     -n gh.mutalib.sika/.sms.DebugSmsReceiver --es demo on
+        val demo = intent.getStringExtra("demo")
+        if (!demo.isNullOrBlank()) {
+            gh.mutalib.sika.data.DemoMode.set(
+                if (demo == "off") null else DemoRows.build(java.time.LocalDate.now()),
+            )
+            Log.i(TAG, "debug-inject: demo mode ${if (demo == "off") "off" else "on"}")
+            return
+        }
+
         // Fires the end-of-day nudge now, rather than waiting for 9pm.
         //
         //   adb shell am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS         //     -n gh.mutalib.sika/.sms.DebugSmsReceiver --es nudge now
