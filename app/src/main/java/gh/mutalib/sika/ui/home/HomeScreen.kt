@@ -174,19 +174,36 @@ fun HomeScreen(
                     Spacer(Modifier.height(22.dp))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                         SectionHeading("Recent", Modifier.weight(1f))
-                        Text(
-                            // ⚠ "View all", never "See all 146". The count changes every time
-                            // a message lands, so a label carrying it is stale the moment it
-                            // is read — and it makes the control look like it is reporting a
-                            // number rather than offering a door.
-                            "View all",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Accent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
+                        // ⚠ **A chip, not bare text.** As plain accent-coloured words beside
+                        // the heading it read as a caption rather than a control — Mutalib
+                        // could not see it was tappable. A filled shape and an arrow are what
+                        // say "this goes somewhere"; colour alone does not.
+                        //
+                        // "View all", never "See all 146": the count changes every time a
+                        // message lands, so a label carrying it is stale the moment it is
+                        // read, and it makes the control look like it is reporting a number
+                        // rather than offering a door.
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Accent.copy(alpha = 0.14f))
                                 .clickable(onClick = onSeeAll)
-                                .padding(horizontal = 8.dp, vertical = 5.dp),
-                        )
+                                .padding(start = 13.dp, end = 9.dp, top = 8.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                "View all",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Accent,
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                painterResource(R.drawable.ic_forward_double),
+                                contentDescription = null,
+                                tint = Accent,
+                                modifier = Modifier.size(15.dp),
+                            )
+                        }
                     }
                 }
 
