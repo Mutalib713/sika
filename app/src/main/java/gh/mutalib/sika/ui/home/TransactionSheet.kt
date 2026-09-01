@@ -1,5 +1,6 @@
 package gh.mutalib.sika.ui.home
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -27,12 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -92,6 +95,13 @@ fun TransactionSheet(
     var adding by remember(row.id) { mutableStateOf(false) }
     var newName by remember(row.id) { mutableStateOf("") }
     var showRaw by remember(row.id) { mutableStateOf(false) }
+
+    // ⚠ The keyboard does not leave with the sheet on its own. Focus lives on the note field,
+    // and dismissing the sheet removes the field from composition without ever telling the
+    // input method — so the keyboard sits over whatever screen you land on, belonging to a
+    // field that no longer exists. Clearing focus on the way out is what closes it.
+    val focus = LocalFocusManager.current
+    DisposableEffect(row.id) { onDispose { focus.clearFocus(force = true) } }
 
     Column(
         modifier
@@ -208,15 +218,28 @@ fun TransactionSheet(
         // ways to describe a transaction were to file it under Other, losing the detail, or
         // to invent a category that then sits in the breakdown forever holding one row.
         //
-        // It is optional and it is last, because most transactions do not need it.
+        // ⚠ **It has to LOOK like a field.** The first version was a filled box with grey
+        // placeholder text, and he did not know it was typeable until he happened to tap it.
+        // A placeholder is not an affordance: it reads as a caption. An outline, a pencil and
+        // a label above it are what say "you write here" before anything is touched.
+        Text("WHAT WAS IT FOR?", style = LabelStyle, color = TextMuted)
+        Spacer(Modifier.height(7.dp))
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(14.dp))
                 .background(Surface)
-                .padding(horizontal = 14.dp, vertical = 13.dp),
+                .border(1.dp, if (note.isEmpty()) Border else Accent, RoundedCornerShape(14.dp))
+                .padding(horizontal = 13.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Icon(
+                painterResource(R.drawable.ic_pencil),
+                contentDescription = null,
+                tint = if (note.isEmpty()) TextMuted else Accent,
+                modifier = Modifier.size(15.dp),
+            )
+            Spacer(Modifier.width(10.dp))
             BasicTextField(
                 value = note,
                 onValueChange = { note = it.take(NOTE_LIMIT) },
@@ -230,7 +253,7 @@ fun TransactionSheet(
                 decorationBox = { inner ->
                     if (note.isEmpty()) {
                         Text(
-                            "What was it for? (optional)",
+                            "Tap to write - optional",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextMuted,
                         )
@@ -238,6 +261,13 @@ fun TransactionSheet(
                     inner()
                 },
             )
+            if (note.isNotEmpty()) {
+                Text(
+                    "${note.length}/$NOTE_LIMIT",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+            }
         }
 
         Spacer(Modifier.height(10.dp))

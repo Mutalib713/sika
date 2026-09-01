@@ -314,12 +314,13 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                 )
                 Dock(
                     selected = tab,
-                    // ⚠ Choosing a tab also leaves the transactions list. Without the reset
-                    // the dock looked dead from that screen: the tab highlight moved, and
-                    // the `when` below still matched `showingAll` first, so the content
-                    // never changed. A control that highlights without navigating is worse
-                    // than one that does nothing at all.
-                    onSelect = { tab = it; showingAll = false },
+                    // ⚠ Choosing a tab leaves the transactions list AND closes any open
+                    // sheet. Without the first reset the dock looked dead from that screen:
+                    // the tab highlight moved while the branch below still matched
+                    // `showingAll`, so nothing changed. Without the second, the sheet stayed
+                    // floating over whichever screen you switched to — it belongs to a row
+                    // on the list you just left, so it has nothing to say about Home.
+                    onSelect = { tab = it; showingAll = false; sheetFor = null },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()

@@ -1,6 +1,7 @@
 package gh.mutalib.sika.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -225,14 +226,25 @@ private fun SmallIconButton(icon: Int, description: String, onClick: () -> Unit)
 
 @Composable
 private fun SearchField(value: String, onValue: (String) -> Unit) {
+    // ⚠ Outlined, with the magnifier inside it. A filled box with grey placeholder text
+    // does not read as typeable - the same mistake the note field made, found by Mutalib on
+    // 2026-09-01. A placeholder is not an affordance.
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(Surface)
+            .border(1.dp, if (value.isEmpty()) Border else Accent, RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            painterResource(R.drawable.ic_search),
+            contentDescription = null,
+            tint = if (value.isEmpty()) TextMuted else Accent,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(10.dp))
         BasicTextField(
             value = value,
             onValueChange = onValue,
