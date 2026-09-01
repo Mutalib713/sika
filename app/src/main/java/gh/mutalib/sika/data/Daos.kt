@@ -115,6 +115,15 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE txId = :txId")
     suspend fun deleteByTxId(txId: String): Int
 
+    /**
+     * Sets or clears a row's note.
+     *
+     * Separate from [setLabel] on purpose: a note and a category are different facts about a
+     * transaction, and writing one must never disturb the other. Passing null clears it.
+     */
+    @Query("UPDATE transactions SET note = :note WHERE id = :id")
+    suspend fun setNote(id: Long, note: String?)
+
     @Query("UPDATE transactions SET reconciled = :state WHERE id = :id")
     suspend fun setReconciled(id: Long, state: Reconciled)
 

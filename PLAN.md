@@ -273,7 +273,7 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         against a hand-checked total from the same month's raw messages. The numbers must
         match arithmetic done by hand, not just look plausible.
 
-- [ ] **13b. A note is not a category**
+- [x] **13b. A note is not a category** — done 2026-09-01
   Mutalib's distinction, 2026-09-01: a cash-out for something one-off — a laptop repair, a
   birthday — should be describable *without* becoming a category. The `+` is for things he
   pays for repeatedly; a one-time thing wants a note.
@@ -293,7 +293,19 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   `fallbackToDestructiveMigration` on the database builder, deliberately — it means "wipe
   everything if the schema changed", on the one dataset that cannot be rebuilt from the SMS
   inbox. Bump the version and write the `ALTER TABLE` by hand.
-  **Verify:** set a note, force a schema upgrade, confirm every row and every label survives.
+  **Verified on the real device by upgrading in place over his 148 rows.**
+  Before: 148 rows, 5 labels, `user_version` 1, no `note` column.
+  After: 148 rows, 5 labels, `user_version` 2, `note` present. Nothing lost.
+
+  That is the route that matters, and it is safe precisely because the builder has no
+  `fallbackToDestructiveMigration` — a broken migration fails to open rather than quietly
+  wiping anything. ⚠ `MigrationTest` exists in `androidTest` but was **not** run:
+  `connectedDebugAndroidTest` uninstalls the app when it finishes, and the uninstall would
+  take the ledger with it. Run it on a fresh device or after a CSV export.
+
+  Also shipped: **a text box inside the cash-out notification** (`RemoteInput`), so the
+  one-off answer can be typed in the shade without opening the app — which is the whole
+  reason the prompt exists.
 
 - [ ] **14. Monthly notification**
   `AlarmManager`, exact, allow-while-idle, rescheduled after each firing.

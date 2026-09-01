@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 import androidx.room.TypeConverters
 
 /**
@@ -16,7 +19,7 @@ import androidx.room.TypeConverters
  */
 @Database(
     entities = [TransactionEntity::class, RuleEntity::class, CategoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -36,8 +39,27 @@ abstract class SikaDatabase : RoomDatabase() {
                 instance ?: build(context.applicationContext).also { instance = it }
             }
 
+        /**
+         * Version 1 to 2: a per-transaction note.
+         *
+         * ⚠ **`ADD COLUMN` and nothing else.** SQLite adds the column to the existing table
+         * in place, so every row, every label, every cash-out answer and every reconciliation
+         * result survives untouched. The alternative Room offers - drop and recreate - would
+         * destroy the one dataset that cannot be rebuilt from the SMS inbox.
+         *
+         * The column is nullable with no default, which is what makes it safe: existing rows
+         * get NULL, meaning "no note", which is exactly true of every row written before this
+         * column existed.
+         */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE transactions ADD COLUMN note TEXT")
+            }
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
+                .addMigrations(MIGRATION_1_2)
                 // ⚠ **No `fallbackToDestructiveMigration()`.** It is the usual shortcut and
                 // it means "if the schema changed, delete everything and start over" — on a
                 // ledger whose whole value is months of history, and whose labels are the

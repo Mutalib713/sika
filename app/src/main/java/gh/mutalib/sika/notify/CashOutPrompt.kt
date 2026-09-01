@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
@@ -54,6 +55,11 @@ object CashOutPrompt {
     const val STEP_SAVE = "save"
     /** Back to the category list without writing anything. */
     const val STEP_CHANGE = "change"
+    /** A typed description arriving from the notification's own text box. */
+    const val STEP_NOTE = "note"
+
+    /** The key the typed text arrives under. */
+    const val KEY_NOTE = "gh.mutalib.sika.NOTE_TEXT"
 
     /**
      * ⚠ **Android draws at most THREE action buttons on a notification.**
@@ -190,11 +196,40 @@ object CashOutPrompt {
                     0, "Change", replyIntent(context, rowId, category, 1, STEP_CHANGE),
                 ).build(),
             )
+            .addAction(noteAction(context, rowId, category))
         try {
             NotificationManagerCompat.from(context).notify(notificationId(rowId), builder.build())
         } catch (e: SecurityException) {
             Log.w(TAG, "cash-out confirm refused by the system for row $rowId", e)
         }
+    }
+
+    /**
+     * A text box inside the notification, for saying what the money actually went on.
+     *
+     * ⚠ **This is the one-off case Mutalib asked for on 2026-09-01**, and it is deliberately
+     * not another category. The buttons above file the cash-out under something he spends on
+     * repeatedly; this is for the laptop repair that will never happen again. Inventing a
+     * category for it would leave an entry in the breakdown forever holding a single row.
+     *
+     * `RemoteInput` is what lets the shade take typed text without opening the app, which is
+     * the whole reason the prompt exists — the answer is worth having precisely because it
+     * costs nothing to give.
+     */
+    private fun noteAction(context: Context, rowId: Long, category: String): NotificationCompat.Action {
+        val input = RemoteInput.Builder(KEY_NOTE)
+            .setLabel("What was it for?")
+            .build()
+        return NotificationCompat.Action.Builder(
+            0,
+            "Say what it was",
+            replyIntent(context, rowId, category, 2, STEP_NOTE),
+        )
+            .addRemoteInput(input)
+            // Without this the system opens the app to collect the text, which defeats the
+            // point of asking in the shade.
+            .setAllowGeneratedReplies(false)
+            .build()
     }
 
     fun cancel(context: Context, rowId: Long) {

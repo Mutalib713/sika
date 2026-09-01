@@ -102,6 +102,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Sets or clears a row's note — what this one payment was actually for.
+     *
+     * Never writes a rule, and never touches the label. A note describes one transaction and
+     * generalises to nothing, which is the entire difference between it and a category.
+     */
+    fun setNote(row: TransactionEntity, note: String?) {
+        viewModelScope.launch { dao.setNote(row.id, note) }
+    }
+
     private val _refreshing = MutableStateFlow(false)
 
     /** True while a pull-to-refresh sweep is running. */

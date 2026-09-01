@@ -91,6 +91,23 @@ data class TransactionEntity(
     val labelSource: LabelSource = LabelSource.NONE,
 
     /**
+     * What this particular payment was actually for, in Mutalib's own words.
+     *
+     * ⚠ **A note is not a category, and keeping them apart is the whole point.** His
+     * distinction, 2026-09-01: the `+` is for things he pays for repeatedly; a laptop repair
+     * or a birthday is a one-off that deserves a description without becoming a category.
+     *
+     * Before this the only ways to describe a transaction were to file it under `Other`,
+     * which loses the information, or to invent a category, which then sits in the breakdown
+     * forever holding a single transaction. Do that a few times and the category list stops
+     * meaning anything.
+     *
+     * So a note belongs to exactly one row. It never appears in the breakdown, never becomes
+     * a learn-once rule, and never affects a total.
+     */
+    val note: String? = null,
+
+    /**
      * The original SMS, kept verbatim — Sacred Rule 6.
      *
      * This is what makes a parser fix retroactive: correct a pattern, re-run it over

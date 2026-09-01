@@ -339,6 +339,7 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         onPick = { category, alsoRemember ->
                             vm.setCategory(sheetRow, category, alsoRemember)
                         },
+                        onNote = { vm.setNote(sheetRow, it) },
                         onAddCategory = vm::addCategory,
                         onDismiss = { sheetFor = null },
                     )

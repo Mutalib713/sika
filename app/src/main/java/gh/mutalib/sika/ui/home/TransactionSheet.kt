@@ -49,6 +49,7 @@ import gh.mutalib.sika.ui.theme.Border
 import gh.mutalib.sika.ui.theme.CellMoneyStyle
 import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.SurfaceRaised
+import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextOnGlass
 import gh.mutalib.sika.ui.theme.TextPrimary
@@ -69,6 +70,7 @@ fun TransactionSheet(
     row: TransactionEntity,
     categories: List<CategoryEntity>,
     onPick: (category: String, alsoRemember: Boolean) -> Unit,
+    onNote: (String?) -> Unit,
     onAddCategory: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -86,6 +88,7 @@ fun TransactionSheet(
     // that counterparty. A label is the one thing in this app that cannot be rebuilt from
     // the SMS inbox, so it is exactly the thing that should not be one accidental tap away.
     var selected by remember(row.id) { mutableStateOf(row.label) }
+    var note by remember(row.id) { mutableStateOf(row.note.orEmpty()) }
     var adding by remember(row.id) { mutableStateOf(false) }
     var newName by remember(row.id) { mutableStateOf("") }
     var showRaw by remember(row.id) { mutableStateOf(false) }
@@ -196,16 +199,61 @@ fun TransactionSheet(
             }
         }
 
+        Spacer(Modifier.height(6.dp))
+
+        // ---- what it actually was, for the one-off case ----
+        //
+        // Mutalib's distinction, 2026-09-01: the chips above are for things he pays for
+        // repeatedly; this is for a laptop repair or a birthday. Before it existed, the only
+        // ways to describe a transaction were to file it under Other, losing the detail, or
+        // to invent a category that then sits in the breakdown forever holding one row.
+        //
+        // It is optional and it is last, because most transactions do not need it.
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Surface)
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicTextField(
+                value = note,
+                onValueChange = { note = it.take(NOTE_LIMIT) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
+                cursorBrush = SolidColor(Accent),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = ImeAction.Done,
+                ),
+                modifier = Modifier.weight(1f),
+                decorationBox = { inner ->
+                    if (note.isEmpty()) {
+                        Text(
+                            "What was it for? (optional)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextMuted,
+                        )
+                    }
+                    inner()
+                },
+            )
+        }
+
         Spacer(Modifier.height(10.dp))
 
         // ---- the one action that writes anything ----
-        val changed = selected != null && selected != row.label
+        val changed = (selected != null && selected != row.label) ||
+            note.trim() != row.note.orEmpty()
         Box(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(26.dp))
                 .background(if (changed) Accent else Border)
                 .clickable(enabled = changed) {
+                    // The note is saved whether or not a category changed — they are
+                    // independent facts about the same row.
+                    onNote(note.trim().takeIf { it.isNotEmpty() })
                     selected?.let { onPick(it, alsoRemember) }
                     onDismiss()
                 }
@@ -218,7 +266,7 @@ fun TransactionSheet(
                 when {
                     changed -> "Save"
                     selected != null -> "Saved as $selected"
-                    else -> "Pick a category"
+                    else -> "Pick a category, or write what it was"
                 },
                 style = MaterialTheme.typography.titleMedium,
                 // Dark text on the aqua, never white — docs/ui-guidelines.md. On the
@@ -348,5 +396,11 @@ private fun Detail(label: String, value: String) {
         Text(value, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
     }
 }
+
+/**
+ * Long enough for "laptop screen repair at Kejetia", short enough that it stays a note.
+ * A note that grows into a paragraph is a diary, and this app is a ledger.
+ */
+private const val NOTE_LIMIT = 60
 
 private val WHEN = DateTimeFormatter.ofPattern("EEE d MMM, h:mma")

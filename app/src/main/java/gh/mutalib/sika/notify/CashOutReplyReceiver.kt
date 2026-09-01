@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.core.app.RemoteInput
 import gh.mutalib.sika.TAG
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.SikaDatabase
@@ -52,6 +53,20 @@ class CashOutReplyReceiver : BroadcastReceiver() {
                 }
 
                 when (step) {
+                    // Typed in the shade. Saves the words AND the proposed category, since
+                    // someone who bothered to describe it has clearly decided.
+                    CashOutPrompt.STEP_NOTE -> {
+                        val typed = RemoteInput.getResultsFromIntent(intent)
+                            ?.getCharSequence(CashOutPrompt.KEY_NOTE)
+                            ?.toString()
+                            ?.trim()
+                            ?.take(60)
+                        db.transactions().setNote(rowId, typed?.takeIf { it.isNotEmpty() })
+                        db.transactions().setLabel(rowId, label, LabelSource.PROMPT)
+                        CashOutPrompt.cancel(app, rowId)
+                        Log.i(TAG, "cash-out row $rowId noted from the shade")
+                    }
+
                     // Proposed only. Nothing is written.
                     CashOutPrompt.STEP_PICK ->
                         CashOutPrompt.showConfirm(app, rowId, row.amount, label)
