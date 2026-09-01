@@ -92,6 +92,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * a decision made by hand.
      */
     fun setCategory(row: TransactionEntity, category: String, alsoRemember: Boolean) {
+        // Demo rows are not in the database, so an edit has to land on them instead. See
+        // DemoMode.edit for why a sandbox that ignores input is worse than none.
+        if (DemoMode.active) {
+            DemoMode.edit(row.id) { it.copy(label = category, labelSource = LabelSource.MANUAL) }
+            if (alsoRemember && row.counterparty.isNotBlank()) {
+                DemoMode.rows.value.orEmpty()
+                    .filter { it.counterparty == row.counterparty }
+                    .forEach { match ->
+                        DemoMode.edit(match.id) { it.copy(label = category, labelSource = LabelSource.AUTO_RULE) }
+                    }
+            }
+            return
+        }
         viewModelScope.launch {
             dao.setLabel(row.id, category, LabelSource.MANUAL)
             if (alsoRemember && row.counterparty.isNotBlank()) {
@@ -109,6 +122,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * generalises to nothing, which is the entire difference between it and a category.
      */
     fun setNote(row: TransactionEntity, note: String?) {
+        if (DemoMode.active) {
+            DemoMode.edit(row.id) { it.copy(note = note) }
+            return
+        }
         viewModelScope.launch { dao.setNote(row.id, note) }
     }
 

@@ -325,6 +325,12 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   labels, not behind an icon. `ic_theme_auto.xml` was deleted when it fell out of use;
   regenerate the Lucide `sun-moon` glyph when this task lands.
 
+  ⚠ **Deleting the starter categories must be possible** — Mutalib's request, 2026-09-01.
+  The data layer already allows it: `CategoryDao.delete` carries `AND isProtected = 0`, and
+  only `Other` is protected, so the other eight starters are deletable and always were. What
+  is missing is the UI. Deleting a category moves its transactions to `Other` and says so
+  before it happens (docs/screens.md, screen 6) — losing a category must never lose money.
+
 - [ ] **16. Error and empty states**
   Permission denied, no messages found, nothing this month, reconciliation gap detected.
   **Verify:** trigger each one deliberately and screenshot it.

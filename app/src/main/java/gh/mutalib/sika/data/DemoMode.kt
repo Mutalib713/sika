@@ -32,4 +32,23 @@ object DemoMode {
     fun set(value: List<TransactionEntity>?) {
         _rows.value = value
     }
+
+    val active: Boolean get() = _rows.value != null
+
+    /**
+     * Applies an edit to the fabricated rows.
+     *
+     * ⚠ **Without this, demo mode is a trap.** The screens read demo rows while the sheet
+     * still writes to the real database, so labelling something appeared to do nothing —
+     * Mutalib set a row to "Other", saved, and watched it stay "Airtime". The write had
+     * succeeded; it just landed somewhere the screen was not looking.
+     *
+     * A sandbox that silently ignores input is worse than no sandbox: it teaches you the app
+     * is broken. Edits now land on the demo rows, so the app behaves exactly as it would on
+     * real data — and still never touches the database.
+     */
+    fun edit(id: Long, change: (TransactionEntity) -> TransactionEntity) {
+        val current = _rows.value ?: return
+        _rows.value = current.map { if (it.id == id) change(it) else it }
+    }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -101,7 +102,16 @@ fun TransactionSheet(
     // input method — so the keyboard sits over whatever screen you land on, belonging to a
     // field that no longer exists. Clearing focus on the way out is what closes it.
     val focus = LocalFocusManager.current
-    DisposableEffect(row.id) { onDispose { focus.clearFocus(force = true) } }
+    val keyboard = LocalSoftwareKeyboardController.current
+    DisposableEffect(row.id) {
+        onDispose {
+            // Both, and neither is redundant. Clearing focus tells Compose the field is done;
+            // hide() tells the system window to go away. Focus alone left the keyboard up on
+            // the screen behind the sheet.
+            focus.clearFocus(force = true)
+            keyboard?.hide()
+        }
+    }
 
     Column(
         modifier
@@ -137,6 +147,12 @@ fun TransactionSheet(
             style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
         )
+        // What it was, if it was ever written down. Shown here rather than only inside the
+        // field, so reopening a row tells you the answer without making you look for it.
+        row.note?.takeIf { it.isNotBlank() }?.let { written ->
+            Spacer(Modifier.height(4.dp))
+            Text(written, style = MaterialTheme.typography.titleMedium, color = Accent)
+        }
 
         Spacer(Modifier.height(22.dp))
 
@@ -211,62 +227,71 @@ fun TransactionSheet(
 
         Spacer(Modifier.height(6.dp))
 
-        // ---- what it actually was, for the one-off case ----
+        // ---- what it actually was ----
         //
-        // Mutalib's distinction, 2026-09-01: the chips above are for things he pays for
-        // repeatedly; this is for a laptop repair or a birthday. Before it existed, the only
-        // ways to describe a transaction were to file it under Other, losing the detail, or
-        // to invent a category that then sits in the breakdown forever holding one row.
-        //
-        // ⚠ **It has to LOOK like a field.** The first version was a filled box with grey
-        // placeholder text, and he did not know it was typeable until he happened to tap it.
-        // A placeholder is not an affordance: it reads as a caption. An outline, a pencil and
-        // a label above it are what say "you write here" before anything is touched.
-        Text("WHAT WAS IT FOR?", style = LabelStyle, color = TextMuted)
-        Spacer(Modifier.height(7.dp))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(Surface)
-                .border(1.dp, if (note.isEmpty()) Border else Accent, RoundedCornerShape(14.dp))
-                .padding(horizontal = 13.dp, vertical = 13.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painterResource(R.drawable.ic_pencil),
-                contentDescription = null,
-                tint = if (note.isEmpty()) TextMuted else Accent,
-                modifier = Modifier.size(15.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            BasicTextField(
-                value = note,
-                onValueChange = { note = it.take(NOTE_LIMIT) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
-                cursorBrush = SolidColor(Accent),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = ImeAction.Done,
-                ),
-                modifier = Modifier.weight(1f),
-                decorationBox = { inner ->
-                    if (note.isEmpty()) {
-                        Text(
-                            "Tap to write - optional",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextMuted,
-                        )
-                    }
-                    inner()
-                },
-            )
-            if (note.isNotEmpty()) {
-                Text(
-                    "${note.length}/$NOTE_LIMIT",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted,
+        // ⚠ **Only for "Other", at Mutalib's instruction 2026-09-01.** Every category
+        // is already a description: a row filed under Food does not need words saying it
+        // was food. "Other" is the one that explains nothing by itself, and it is exactly
+        // where a one-off — a laptop repair, a birthday — ends up. Showing the field
+        // everywhere made it look like paperwork owed on every transaction.
+        if (selected == "Other") {
+            // ---- what it actually was, for the one-off case ----
+            //
+            // Mutalib's distinction, 2026-09-01: the chips above are for things he pays for
+            // repeatedly; this is for a laptop repair or a birthday. Before it existed, the only
+            // ways to describe a transaction were to file it under Other, losing the detail, or
+            // to invent a category that then sits in the breakdown forever holding one row.
+            //
+            // ⚠ **It has to LOOK like a field.** The first version was a filled box with grey
+            // placeholder text, and he did not know it was typeable until he happened to tap it.
+            // A placeholder is not an affordance: it reads as a caption. An outline, a pencil and
+            // a label above it are what say "you write here" before anything is touched.
+            Text("WHAT WAS IT FOR?", style = LabelStyle, color = TextMuted)
+            Spacer(Modifier.height(7.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Surface)
+                    .border(1.dp, if (note.isEmpty()) Border else Accent, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 13.dp, vertical = 13.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painterResource(R.drawable.ic_pencil),
+                    contentDescription = null,
+                    tint = if (note.isEmpty()) TextMuted else Accent,
+                    modifier = Modifier.size(15.dp),
                 )
+                Spacer(Modifier.width(10.dp))
+                BasicTextField(
+                    value = note,
+                    onValueChange = { note = it.take(NOTE_LIMIT) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary),
+                    cursorBrush = SolidColor(Accent),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = ImeAction.Done,
+                    ),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { inner ->
+                        if (note.isEmpty()) {
+                            Text(
+                                "Tap to write - optional",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextMuted,
+                            )
+                        }
+                        inner()
+                    },
+                )
+                if (note.isNotEmpty()) {
+                    Text(
+                        "${note.length}/$NOTE_LIMIT",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted,
+                    )
+                }
             }
         }
 
@@ -274,16 +299,18 @@ fun TransactionSheet(
 
         // ---- the one action that writes anything ----
         val changed = (selected != null && selected != row.label) ||
-            note.trim() != row.note.orEmpty()
+            (selected == "Other" && note.trim() != row.note.orEmpty())
         Box(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(26.dp))
                 .background(if (changed) Accent else Border)
                 .clickable(enabled = changed) {
-                    // The note is saved whether or not a category changed — they are
-                    // independent facts about the same row.
-                    onNote(note.trim().takeIf { it.isNotEmpty() })
+                    // ⚠ A note written under "Other" is dropped if the row ends up somewhere
+                    // else. Keeping it would store words the screen no longer shows, which is
+                    // how a ledger starts holding things nobody can see or correct.
+                    val keep = if (selected == "Other") note.trim().takeIf { it.isNotEmpty() } else null
+                    onNote(keep)
                     selected?.let { onPick(it, alsoRemember) }
                     onDismiss()
                 }

@@ -59,8 +59,12 @@ fun categoryColor(name: String?): Color {
 /**
  * The icon for a category.
  *
- * Falls back to the "other" glyph rather than to nothing: a row with no icon reads as a
- * rendering failure, while the ellipsis reads as "uncategorised", which is the truth.
+ * ⚠ **"Other" and "no category" are different things and must not share a glyph.** They did
+ * until 2026-09-01, when Mutalib pointed out that a transaction he had deliberately filed
+ * under Other looked identical to one nobody had touched. "Other" is a decision — a box you
+ * chose to put something in. Uncategorised is an open question, and gets a question mark.
+ *
+ * Never falls back to nothing: a row with no icon reads as a rendering failure.
  */
 fun categoryIcon(name: String?): Int = when (name) {
     "Food" -> R.drawable.ic_cat_food
@@ -71,5 +75,6 @@ fun categoryIcon(name: String?): Int = when (name) {
     "Provisions" -> R.drawable.ic_cat_provisions
     "Printing" -> R.drawable.ic_cat_printing
     "Sent home" -> R.drawable.ic_cat_sent_home
-    else -> R.drawable.ic_cat_other
+    "Other" -> R.drawable.ic_cat_other
+    else -> R.drawable.ic_cat_none
 }

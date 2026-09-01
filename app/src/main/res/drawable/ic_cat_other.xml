@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lucide "ellipsis" - the project's only icon set. See docs/ui-guidelines.md.
-     Stroke is white; every use tints it via Icon(tint = ...). -->
+<!-- Lucide "package" - the project's only icon set. See docs/ui-guidelines.md.
+     ⚠ "Other" is a REAL category and must not look like the absence of one. It used to
+     share the ellipsis with unlabelled rows, so a transaction filed under Other and one
+     nobody had touched were indistinguishable in the list. A box says "put it here";
+     ic_cat_none's question mark says "nobody has said yet". -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:pathData="M12,12h0.01M19,12h0.01M5,12h0.01"
+        android:pathData="M11,21.7a2,2 0 0 0 2,0l7,-4A2,2 0 0 0 21,16V8a2,2 0 0 0 -1,-1.7l-7,-4a2,2 0 0 0 -2,0l-7,4A2,2 0 0 0 3,8v8a2,2 0 0 0 1,1.7zM12,22V12M3.3,7L12,12l8.7,-5"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"

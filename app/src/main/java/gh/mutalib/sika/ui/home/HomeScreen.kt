@@ -500,8 +500,14 @@ internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
                 color = TextPrimary,
                 maxLines = 1,
             )
+            // ⚠ **A note replaces the category name, it does not follow it.** Mutalib asked
+            // how he was meant to see what he had written, and "Other - laptop repair" was
+            // the obvious answer. It is the wrong one: "Other" means "not one of the named
+            // ones", so it says nothing, and spending half the line on it pushes out the half
+            // that says everything. The icon and the colour still mark the row as Other, so
+            // nothing is lost by letting the words be the useful ones.
             Text(
-                (row.label ?: "Add category") + " · " +
+                (row.note?.takeIf { it.isNotBlank() } ?: row.label ?: "Add category") + " · " +
                     TIME.format(Instant.ofEpochMilli(row.occurredAt).atZone(ACCRA)),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (row.label == null) TextMuted else colour,
