@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -42,6 +43,7 @@ import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.parser.asCedis
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
@@ -213,7 +215,16 @@ private fun ModeSwitch(mode: PeriodMode, onMode: (PeriodMode) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(21.dp)).background(Surface),
     ) {
-        PeriodMode.entries.forEach { option ->
+        // ⚠ **Semester is hidden for anyone who said they are not a student.** Mutalib's
+        // shape, 2026-09-01: a segment that means nothing to the person reading it is worse
+        // than one less choice, and "Since 1 September" is not an answer to any question a
+        // non-student is asking.
+        val offered = if (OnboardingPrefs.isStudent(LocalContext.current)) {
+            PeriodMode.entries
+        } else {
+            PeriodMode.entries.filter { it != PeriodMode.SEMESTER }
+        }
+        offered.forEach { option ->
             val on = option == mode
             Box(
                 Modifier

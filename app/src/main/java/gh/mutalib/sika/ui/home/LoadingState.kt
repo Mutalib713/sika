@@ -83,7 +83,7 @@ fun LoadingState(
             // read, so faking it as a grey bar would be pretending not to know something.
             if (showHeader) {
                 Text(
-                    "${greeting()}, $OWNER",
+                    greetingLine(),
                     style = MaterialTheme.typography.headlineSmall,
                     color = TextPrimary,
                 )

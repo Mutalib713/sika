@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,10 +34,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import gh.mutalib.sika.BuildConfig
 import gh.mutalib.sika.R
 import gh.mutalib.sika.notify.NotificationPrefs
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.home.ACCRA
+import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.Danger
 import gh.mutalib.sika.ui.theme.LocalSetThemeMode
@@ -70,6 +75,7 @@ fun SettingsScreen(
     onRoute: (SettingsRoute) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onRunSetupAgain: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -80,6 +86,17 @@ fun SettingsScreen(
     var cashOut by remember { mutableStateOf(NotificationPrefs.cashOutPrompt(context)) }
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
     var gapAlert by remember { mutableStateOf(NotificationPrefs.gapAlert(context)) }
+
+    // Read into state rather than straight from prefs, so editing one updates the row under
+    // your thumb instead of on the next visit to this screen.
+    var ownerName by remember { mutableStateOf(OnboardingPrefs.name(context)) }
+    var isStudent by remember { mutableStateOf(OnboardingPrefs.isStudent(context)) }
+    var termStart by remember { mutableStateOf(OnboardingPrefs.termStart(context)) }
+    var termEnd by remember { mutableStateOf(OnboardingPrefs.termEnd(context)) }
+    var editing by remember { mutableStateOf<Personal?>(null) }
+    val termOver = remember(termEnd) {
+        termEnd != null && LocalDate.now(ACCRA).isAfter(termEnd)
+    }
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
@@ -101,6 +118,68 @@ fun SettingsScreen(
                         title = "Appearance",
                         onClick = { choosingTheme = true },
                     ) { ValueAndChevron(mode.label) }
+                }
+            }
+
+            item {
+                SectionLabel("YOU")
+                SettingsCard {
+                    SettingsRow(
+                        icon = R.drawable.ic_message,
+                        title = "Your name",
+                        subtitle = ownerName ?: "Not set — the greeting says the time of day",
+                        onClick = { editing = Personal.NAME },
+                    ) { Chevron() }
+                    RowDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_calendar,
+                        title = "Semester",
+                        subtitle = termSubtitle(isStudent, termStart, termEnd),
+                        tint = if (termOver) Warn else TextMuted,
+                        onClick = { editing = Personal.SEMESTER },
+                    ) { Chevron() }
+                    RowDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_sparkles,
+                        title = "Show the tour again",
+                        subtitle = "The four screens from first run",
+                        onClick = onRunSetupAgain,
+                    ) { Chevron() }
+                }
+                // ⚠ A term that has finished keeps reporting on itself. Every figure in the
+                // semester view stays correct about the wrong stretch of time, which is the
+                // kind of wrong nobody spots.
+                if (termOver) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Warn.copy(alpha = 0.10f))
+                            .padding(12.dp),
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_warning),
+                            contentDescription = null,
+                            tint = Warn,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        Column {
+                            Text(
+                                "Your semester ended on " + termEnd?.format(SHORT_DATE) + ".",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = TextPrimary,
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                "The report is still using those dates. Set the new term when " +
+                                    "you know it.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -214,6 +293,35 @@ fun SettingsScreen(
         }
     }
 
+    when (editing) {
+        Personal.NAME -> NameDialog(
+            initial = ownerName,
+            onSave = {
+                OnboardingPrefs.setName(context, it)
+                ownerName = it
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+
+        Personal.SEMESTER -> SemesterDialog(
+            initialStudent = isStudent,
+            initialStart = termStart,
+            initialEnd = termEnd,
+            onSave = { student, start, end ->
+                OnboardingPrefs.setStudent(context, student)
+                OnboardingPrefs.setTerm(context, start, end)
+                isStudent = student
+                termStart = start
+                termEnd = end
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+
+        null -> Unit
+    }
+
     if (choosingTheme) {
         AppearanceDialog(
             current = mode,
@@ -315,6 +423,17 @@ private fun rulesSubtitle(count: Int): String = when (count) {
     0 -> "Nothing learned yet"
     1 -> "One shop labels itself now"
     else -> "$count shops label themselves now"
+}
+
+/** Which of the two first-run answers is being edited. */
+private enum class Personal { NAME, SEMESTER }
+
+private val SHORT_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM")
+
+private fun termSubtitle(student: Boolean, start: LocalDate?, end: LocalDate?): String = when {
+    !student -> "Not a student — the semester view is hidden"
+    start == null || end == null -> "Dates not set, so Sika is still guessing"
+    else -> start.format(SHORT_DATE) + " – " + end.format(SHORT_DATE) + " " + end.year
 }
 
 private fun reviewSubtitle(count: Int): String = when (count) {

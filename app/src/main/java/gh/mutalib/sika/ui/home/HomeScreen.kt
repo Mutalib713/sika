@@ -44,7 +44,9 @@ import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
+import androidx.compose.ui.platform.LocalContext
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.report.BucketBars
 import gh.mutalib.sika.ui.theme.Accent
@@ -64,7 +66,19 @@ import java.time.Instant
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
-internal const val OWNER = "Osman"
+/**
+ * The greeting, with or without a name.
+ *
+ * ⚠ **This replaced `const val OWNER = "Osman"`**, which was welded into the binary in two
+ * places — wrong for anyone else and right for Mutalib only by luck. A blank name is a real
+ * answer, not a missing one: someone who skipped the question gets the time of day and no
+ * comma after it.
+ */
+@Composable
+internal fun greetingLine(): String {
+    val name = OnboardingPrefs.name(LocalContext.current)
+    return if (name.isNullOrBlank()) greeting() else greeting() + ", " + name
+}
 
 /**
  * Screen 1 — Home, rebuilt as a dashboard on 2026-09-01.
@@ -255,7 +269,7 @@ private fun Greeting(state: HomeState) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(
-                "${greeting()}, $OWNER",
+                greetingLine(),
                 style = MaterialTheme.typography.headlineSmall,
                 color = TextPrimary,
             )

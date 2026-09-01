@@ -409,6 +409,37 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   money with remembered money in one figure with no way to tell them apart later. Left as-is
   until Mutalib says otherwise.
 
+- [x] **First run: a tour, and the two questions** — Mutalib's, 2026-09-01. He overruled the
+  recommendation against a tour, and his reason was better than the objection: I was arguing
+  against decorative feature cards, and his point was that Sika has features **nobody can
+  discover** — reconciliation only shows itself the day something breaks, and the semester view
+  is one segment in a switcher you might never press.
+
+  Four tour screens (what Sika is · it reads for you · it checks its own maths · week, month,
+  semester), skippable from the first, then SMS access, then the name, then student-and-dates,
+  then notifications. Each feature screen shows a real fragment of the app rather than an
+  illustration of it. **Learning your shops is deliberately absent** — "always this" sits in
+  the sheet the first time you label anything, so it teaches itself.
+
+  ⚠ **`OWNER = "Osman"` is gone.** It was a compile-time constant in the binary in two places:
+  wrong for anyone else, right for Mutalib only by luck. A blank name is a real answer, so the
+  greeting drops the comma rather than inventing something.
+
+  ⚠ **The semester question closes PROFILE.md § 11's open item.** `SEMESTER` ran from the
+  oldest transaction on record, which is not the start of a term but the date this phone first
+  got a MoMo text — on a two-year-old number, "this semester" meant two years. A stored term
+  now wins, the old guess survives as the fallback for "I don't know the dates yet", and a
+  **No** to "are you a student" removes the segment entirely. Settings carries all of it back,
+  including a warning when the term's end date has passed.
+
+  **Verified:** `check: PASS`, 106 unit tests, 0 failures. ⚠ **Not run on the phone.** The
+  whole flow is untriggered, and the two migrations still have not met the real 148 rows.
+
+  ⚠ **Still a placeholder: the app has no launcher icon at all** — no `mipmap`, no
+  `android:icon`, so it is Android's blank default on the home screen. The intro screen holds
+  its space with a cedi sign. Drawing a real mark is identity work with its own variants, and
+  doing it inside this build would have been deciding it by accident.
+
 ## Milestone 4 — Harden and ship
 
 - [ ] **17. `docs/security-checklist.md` end to end**, ticks committed.

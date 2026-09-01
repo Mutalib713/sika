@@ -36,6 +36,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import gh.mutalib.sika.data.Backup
+import gh.mutalib.sika.data.BackupIo
 import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
@@ -66,6 +68,8 @@ import gh.mutalib.sika.ui.home.AllTransactionsScreen
 import gh.mutalib.sika.ui.home.HomeScreen
 import gh.mutalib.sika.ui.home.HomeViewModel
 import gh.mutalib.sika.ui.home.LoadingState
+import gh.mutalib.sika.ui.onboarding.OnboardingFlow
+import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.home.TransactionSheet
 import gh.mutalib.sika.ui.report.ReportScreen
 import gh.mutalib.sika.ui.report.ReportViewModel
@@ -86,6 +90,7 @@ import gh.mutalib.sika.ui.theme.ThemePreference
 import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
+import kotlinx.coroutines.launch
 
 /** One tag for the whole app, so `adb logcat -s Sika` shows everything and nothing else. */
 const val TAG = "Sika"
@@ -146,6 +151,8 @@ class MainActivity : ComponentActivity() {
 }
 
 private sealed interface Gate {
+    /** First run: the tour and the questions. See ui/onboarding/OnboardingFlow.kt. */
+    data object Onboarding : Gate
     data object NeedsPermission : Gate
     data object Denied : Gate
     data object Sweeping : Gate
@@ -158,15 +165,25 @@ private fun SikaApp(openRow: MutableState<Long?>) {
     val context = LocalContext.current
     val animated = remember { animationsEnabled(context) }
 
+    // ⚠ Onboarding outranks the permission gate, and it has to: the flow ASKS for the
+    // permission itself, at a point where there is a reason to say yes. Letting the old gate
+    // win would show the bare system dialog first and make the tour pointless.
     var gate by remember {
+        val granted = SMS_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
         mutableStateOf<Gate>(
-            if (SMS_PERMISSIONS.all {
-                    ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-                }
-            ) {
-                Gate.Sweeping
-            } else {
-                Gate.NeedsPermission
+            when {
+                !OnboardingPrefs.done(context) -> Gate.Onboarding
+                granted -> Gate.Sweeping
+                else -> Gate.NeedsPermission
+            },
+        )
+    }
+    var smsGranted by remember {
+        mutableStateOf(
+            SMS_PERMISSIONS.all {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
             },
         )
     }
@@ -176,7 +193,11 @@ private fun SikaApp(openRow: MutableState<Long?>) {
     ) { results ->
         // Both or neither. READ_SMS alone gives a ledger that only updates when the app is
         // opened; RECEIVE_SMS alone gives no history at all.
-        gate = if (results.values.all { it }) Gate.Sweeping else Gate.Denied
+        val ok = results.values.all { it }
+        smsGranted = ok
+        // During onboarding the flow decides what comes next; it watches `smsGranted` and
+        // moves on by itself. Outside it, the old two-way gate still applies.
+        if (gate !is Gate.Onboarding) gate = if (ok) Gate.Sweeping else Gate.Denied
     }
 
     LaunchedEffect(gate) {
@@ -201,15 +222,60 @@ private fun SikaApp(openRow: MutableState<Long?>) {
         ActivityResultContracts.RequestPermission(),
     ) { /* Either answer is fine. CashOutPrompt.canPost checks before every post. */ }
 
-    LaunchedEffect(gate) {
-        if (gate is Gate.Ready && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !CashOutPrompt.canPost(context)
-        ) {
-            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+    // ⚠ **No automatic notification prompt any more.** It used to fire on reaching Home,
+    // which would now be the SECOND time of asking — onboarding puts the case in words first,
+    // and Android only ever shows its dialog once. Asking again on every launch after a
+    // refusal is how an app teaches someone to refuse harder.
+
+    val scope = rememberCoroutineScope()
+    var restoreResult by remember { mutableStateOf<String?>(null) }
+    val restoreDuringSetup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                val r = BackupIo.import(context, it)
+                restoreResult = r.error ?: when {
+                    r.changedNothing -> "That file held nothing new."
+                    else -> "Restored " + r.added + " transactions and " + r.labels + " labels."
+                }
+            }
         }
     }
 
     when (gate) {
+        // ⚠ The restore result is drawn OVER the flow rather than replacing it: importing is
+        // a detour, not a destination, and someone who restored still has the rest of first
+        // run to finish.
+        Gate.Onboarding -> Box(Modifier.fillMaxSize()) {
+            OnboardingFlow(
+            smsGranted = smsGranted,
+            onRequestSms = { ask.launch(SMS_PERMISSIONS) },
+            onRequestNotifications = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
+            // Restoring is the whole reason someone reinstalling is here. Sending them
+            // through the rest of the flow first would mean re-labelling by hand before
+            // finding the file that had it all.
+            onRestore = { restoreDuringSetup.launch(BACKUP_TYPES) },
+            onFinished = { gate = if (smsGranted) Gate.Sweeping else Gate.Denied },
+            )
+            restoreResult?.let { message ->
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(horizontal = 26.dp, vertical = 100.dp),
+                ) {
+                    SettingsToast(gh.mutalib.sika.ui.settings.Toast(message)) {
+                        restoreResult = null
+                    }
+                }
+            }
+        }
+
         Gate.NeedsPermission -> Curtain(
             animated,
             actions = {
@@ -365,6 +431,14 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                             // `sika.csv` tells you nothing about which one to restore.
                             onExport = { exportTo.launch(Backup.fileName(today(ACCRA))) },
                             onImport = { importFrom.launch(BACKUP_TYPES) },
+                            // ⚠ Clears the "done" flag and drops back into the flow. It does
+                            // NOT clear the answers: someone re-watching the tour should find
+                            // their own name already in the field, not a blank one.
+                            onRunSetupAgain = {
+                                OnboardingPrefs.setDone(context, false)
+                                settingsRoute = SettingsRoute.ROOT
+                                gate = Gate.Onboarding
+                            },
                         )
                     }
 

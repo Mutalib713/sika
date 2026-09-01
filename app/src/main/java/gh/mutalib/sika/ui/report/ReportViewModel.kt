@@ -11,6 +11,7 @@ import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.ledger.summarise
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.ui.home.ACCRA
+import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -51,17 +52,29 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
     )
     val period: StateFlow<Period> = _period
 
+    /**
+     * ⚠ **A term the user typed beats the guess from the ledger.**
+     *
+     * Until 2026-09-01 SEMESTER ran from the oldest transaction on record, which is only the
+     * start of a term by coincidence — it is really the date this phone first got a MoMo text.
+     * Onboarding now asks, so the answer is used when there is one and the old guess stays as
+     * the fallback for "I don't know the dates yet".
+     */
+    private val storedTerm: LocalDate? =
+        OnboardingPrefs.termStart(app).takeIf { OnboardingPrefs.isStudent(app) }
+
     init {
         viewModelScope.launch {
             val first = dao.oldestTimestamp()
             if (first != null) {
                 val date = Instant.ofEpochMilli(first).atZone(ACCRA).toLocalDate()
-                semesterStart.value = date
+                semesterStart.value = storedTerm ?: date
                 oldest.value = date
                 // The period was built before the ledger was read, so "All" and "Semester"
                 // would otherwise sit on the fallback range until the mode was tapped.
                 if (_mode.value == PeriodMode.ALL || _mode.value == PeriodMode.SEMESTER) {
-                    _period.value = Period.current(_mode.value, today(ACCRA), date, date)
+                    _period.value =
+                        Period.current(_mode.value, today(ACCRA), semesterStart.value, date)
                 }
             }
         }
