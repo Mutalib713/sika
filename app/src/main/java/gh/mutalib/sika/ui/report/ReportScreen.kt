@@ -37,20 +37,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
 import gh.mutalib.sika.ledger.CategorySlice
-import gh.mutalib.sika.ledger.MonthSummary
+import gh.mutalib.sika.ledger.Period
+import gh.mutalib.sika.ledger.PeriodMode
+import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.parser.asCedis
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.theme.Accent
+import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.BalanceStyle
 import gh.mutalib.sika.ui.theme.Border
 import gh.mutalib.sika.ui.theme.LabelStyle
 import gh.mutalib.sika.ui.theme.StatMoneyStyle
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
-import java.time.YearMonth
-import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 
 /**
@@ -73,10 +74,12 @@ import kotlin.math.abs
  */
 @Composable
 fun ReportScreen(
-    summary: MonthSummary?,
+    summary: PeriodSummary?,
+    mode: PeriodMode,
     canStepForward: Boolean,
     animated: Boolean,
     onStep: (Long) -> Unit,
+    onMode: (PeriodMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -87,12 +90,14 @@ fun ReportScreen(
             contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 54.dp, bottom = 150.dp),
         ) {
             item {
-                MonthHeader(
-                    month = summary?.month ?: YearMonth.now(),
+                PeriodHeader(
+                    label = summary?.period?.label ?: "",
                     canStepForward = canStepForward,
                     onStep = onStep,
                 )
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(14.dp))
+                ModeSwitch(mode = mode, onMode = onMode)
+                Spacer(Modifier.height(24.dp))
             }
 
             if (summary == null) {
@@ -124,12 +129,12 @@ fun ReportScreen(
                     Spacer(Modifier.height(4.dp))
                 }
                 items(summary.slices, key = { it.label }) { slice ->
-                    SliceRow(slice, rank = summary.slices.indexOf(slice))
+                    SliceRow(slice, summary.slices.indexOf(slice), summary.period.mode.noun)
                 }
                 item {
                     summary.biggestChange?.let {
                         Spacer(Modifier.height(20.dp))
-                        BiggestChange(it)
+                        BiggestChange(it, summary.period.mode.noun)
                     }
                 }
             }
@@ -143,10 +148,10 @@ fun ReportScreen(
 }
 
 @Composable
-private fun MonthHeader(month: YearMonth, canStepForward: Boolean, onStep: (Long) -> Unit) {
+private fun PeriodHeader(label: String, canStepForward: Boolean, onStep: (Long) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
-            MONTH.format(month),
+            label,
             style = MaterialTheme.typography.headlineSmall,
             color = TextPrimary,
             modifier = Modifier.weight(1f),
@@ -158,6 +163,43 @@ private fun MonthHeader(month: YearMonth, canStepForward: Boolean, onStep: (Long
         // Disabled rather than hidden: a control that vanishes reads as a glitch, and a
         // greyed one says "there is nothing later", which is the true reason.
         Chevron(back = false, enabled = canStepForward) { onStep(1) }
+    }
+}
+
+/**
+ * Week / Month / Semester — Mutalib's request, 2026-08-31.
+ *
+ * A segmented row rather than a dropdown: three options, all worth reaching in one tap, and
+ * a menu would hide which one you are currently looking at. The selected pill carries the
+ * accent with dark text on it, never white (docs/ui-guidelines.md).
+ */
+@Composable
+private fun ModeSwitch(mode: PeriodMode, onMode: (PeriodMode) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Border.copy(alpha = 0.5f)),
+    ) {
+        PeriodMode.entries.forEach { option ->
+            val on = option == mode
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(22.dp))
+                    .then(if (on) Modifier.background(Accent) else Modifier)
+                    .clickable { onMode(option) }
+                    .padding(vertical = 11.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    when (option) {
+                        PeriodMode.WEEK -> "Week"
+                        PeriodMode.MONTH -> "Month"
+                        PeriodMode.SEMESTER -> "Semester"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (on) AccentContrast else TextMuted,
+                )
+            }
+        }
     }
 }
 
@@ -173,7 +215,7 @@ private fun Chevron(back: Boolean, enabled: Boolean, onClick: () -> Unit) {
     ) {
         Icon(
             painterResource(R.drawable.ic_chevron_down),
-            contentDescription = if (back) "Previous month" else "Next month",
+            contentDescription = if (back) "Previous period" else "Next period",
             tint = TextMuted,
             // One chevron asset, rotated. Lucide's set is the only source of icons here,
             // and rotating beats shipping a second nearly identical file.
@@ -190,7 +232,7 @@ private fun Chevron(back: Boolean, enabled: Boolean, onClick: () -> Unit) {
  * competing headlines.
  */
 @Composable
-private fun Headline(s: MonthSummary) {
+private fun Headline(s: PeriodSummary) {
     Text("SPENT", style = LabelStyle, color = TextMuted)
     Spacer(Modifier.height(4.dp))
     Text(s.moneyOut.asCedis(), style = BalanceStyle, color = TextPrimary)
@@ -275,7 +317,7 @@ private fun StackedBand(slices: List<CategorySlice>) {
 }
 
 @Composable
-private fun SliceRow(slice: CategorySlice, rank: Int) {
+private fun SliceRow(slice: CategorySlice, rank: Int, unit: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 11.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -317,7 +359,7 @@ private fun SliceRow(slice: CategorySlice, rank: Int) {
         slice.changePercent?.let { percent ->
             Spacer(Modifier.height(5.dp))
             Text(
-                (if (percent >= 0) "↑ " else "↓ ") + abs(percent) + "% on last month" +
+                (if (percent >= 0) "↑ " else "↓ ") + abs(percent) + "% on the previous $unit" +
                     " (" + (if (percent >= 0) "+" else "−") + abs(slice.change ?: 0).asCedis() + ")",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextMuted,
@@ -328,7 +370,7 @@ private fun SliceRow(slice: CategorySlice, rank: Int) {
 
 /** The one sentence on the screen. Only shown when there genuinely is one story. */
 @Composable
-private fun BiggestChange(slice: CategorySlice) {
+private fun BiggestChange(slice: CategorySlice, unit: String) {
     val change = slice.change ?: return
     val direction = if (change > 0) "up" else "down"
     Column(
@@ -339,7 +381,7 @@ private fun BiggestChange(slice: CategorySlice) {
             .padding(horizontal = 18.dp, vertical = 16.dp),
     ) {
         Text(
-            "${slice.label} went $direction ${abs(change).asCedis()} this month.",
+            "${slice.label} went $direction ${abs(change).asCedis()} this $unit.",
             style = MaterialTheme.typography.titleMedium,
             color = TextPrimary,
         )
@@ -363,7 +405,7 @@ private fun BiggestChange(slice: CategorySlice) {
  * the numbers above it believable.
  */
 @Composable
-private fun HonestyNote(s: MonthSummary) {
+private fun HonestyNote(s: PeriodSummary) {
     HorizontalDivider(color = Border)
     Spacer(Modifier.height(16.dp))
     if (s.unlabelledCashOut > 0) {
@@ -380,7 +422,7 @@ private fun HonestyNote(s: MonthSummary) {
         )
     } else {
         Text(
-            "Every cedi this month is accounted for.",
+            "Every cedi in this ${s.period.mode.noun} is accounted for.",
             style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
         )
@@ -388,7 +430,7 @@ private fun HonestyNote(s: MonthSummary) {
     if (!s.hasPrevious) {
         Spacer(Modifier.height(10.dp))
         Text(
-            "This is the first month on record, so there is nothing to compare it against.",
+            "Nothing before this to compare it against.",
             style = MaterialTheme.typography.bodySmall,
             color = TextMuted,
         )
@@ -408,7 +450,7 @@ private fun HonestyNote(s: MonthSummary) {
  * stay, because those are true regardless of labelling.
  */
 @Composable
-private fun NothingLabelledYet(s: MonthSummary) {
+private fun NothingLabelledYet(s: PeriodSummary) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -423,7 +465,8 @@ private fun NothingLabelledYet(s: MonthSummary) {
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "${Math.round(s.uncategorisedShare * 100)}% of this month has no category. " +
+            // "this month" was wrong the moment the period could be a week or a semester.
+            "${Math.round(s.uncategorisedShare * 100)}% of this period has no category. " +
                 "Tap any transaction on Home to label it — label one shop once and every " +
                 "payment to it is labelled from then on.",
             style = MaterialTheme.typography.bodyMedium,
@@ -436,13 +479,13 @@ private fun NothingLabelledYet(s: MonthSummary) {
 private fun EmptyMonth() {
     Column(Modifier.fillMaxWidth().padding(top = 60.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            "Nothing this month",
+            "Nothing in this period",
             style = MaterialTheme.typography.headlineSmall,
             color = TextPrimary,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "No MoMo messages arrived in this month. Try the arrows to look at another one.",
+            "No MoMo messages arrived in this stretch. Try the arrows, or a different mode.",
             style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
             textAlign = TextAlign.Center,
@@ -461,4 +504,3 @@ private fun rampColor(accent: Color, rank: Int): Color =
 
 private val RAMP = listOf(1f, 0.78f, 0.60f, 0.45f, 0.33f, 0.24f)
 private const val BAND_SEGMENTS = 5
-private val MONTH = DateTimeFormatter.ofPattern("MMMM yyyy")

@@ -4,7 +4,7 @@ import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.Shape
 import java.time.Instant
-import java.time.YearMonth
+import java.time.LocalDate
 import java.time.ZoneId
 
 /**
@@ -79,9 +79,9 @@ data class CategorySlice(
  */
 const val MIN_COMPARISON_BASE = 2_000L
 
-/** Everything screen 3 needs for one month. */
-data class MonthSummary(
-    val month: YearMonth,
+/** Everything screen 3 needs for one stretch of time. */
+data class PeriodSummary(
+    val period: Period,
     val moneyIn: Long,
     val moneyOut: Long,
     val closingBalance: Long?,
@@ -157,12 +157,13 @@ const val UNCATEGORISED = "Uncategorised"
  * previous month needs both, and doing the split here keeps the caller from having to know
  * that a "month" is a zone-dependent idea.
  */
-fun summarise(all: List<TransactionEntity>, month: YearMonth, zone: ZoneId): MonthSummary {
+fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): PeriodSummary {
     // parsedOk = false rows are review-queue placeholders with every money field zero.
     // They must not reach a total: they exist to be looked at, not counted.
     val real = all.filter { it.parsedOk }
-    val inMonth = real.filter { monthOf(it, zone) == month }
-    val previous = real.filter { monthOf(it, zone) == month.minusMonths(1) }
+    val before = period.previous()
+    val inMonth = real.filter { period.contains(dateOf(it, zone)) }
+    val previous = real.filter { before.contains(dateOf(it, zone)) }
 
     val moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.outflow() }
     val moneyIn = inMonth.filter { it.direction == Direction.IN }.sumOf { it.inflow() }
@@ -187,11 +188,11 @@ fun summarise(all: List<TransactionEntity>, month: YearMonth, zone: ZoneId): Mon
         }
         .sortedByDescending { it.amount }
 
-    return MonthSummary(
-        month = month,
+    return PeriodSummary(
+        period = period,
         moneyIn = moneyIn,
         moneyOut = moneyOut,
-        // The newest stated balance in the month, not a figure we computed. Showing our own
+        // The newest stated balance in the period, not a figure we computed. Showing our own
         // arithmetic where MoMo's exists would be inventing a number.
         closingBalance = inMonth
             .filter { it.balanceAfter != null }
@@ -208,5 +209,5 @@ fun summarise(all: List<TransactionEntity>, month: YearMonth, zone: ZoneId): Mon
     )
 }
 
-private fun monthOf(row: TransactionEntity, zone: ZoneId): YearMonth =
-    YearMonth.from(Instant.ofEpochMilli(row.occurredAt).atZone(zone))
+private fun dateOf(row: TransactionEntity, zone: ZoneId): LocalDate =
+    Instant.ofEpochMilli(row.occurredAt).atZone(zone).toLocalDate()

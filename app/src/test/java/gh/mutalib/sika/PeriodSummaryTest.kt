@@ -3,6 +3,8 @@ package gh.mutalib.sika
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.ledger.outflow
+import gh.mutalib.sika.ledger.Period
+import gh.mutalib.sika.ledger.PeriodMode
 import gh.mutalib.sika.ledger.summarise
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.Shape
@@ -12,7 +14,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
-import java.time.YearMonth
 import java.time.ZoneId
 
 /**
@@ -23,10 +24,10 @@ import java.time.ZoneId
  * and the test asserts the total. A test that computes the expectation the same way the
  * code does would agree with a bug.
  */
-class MonthSummaryTest {
+class PeriodSummaryTest {
 
     private val accra: ZoneId = ZoneId.of("Africa/Accra")
-    private val august = YearMonth.of(2026, 8)
+    private val august = Period.monthOf(java.time.LocalDate.of(2026, 8, 15))
 
     /**
      * ⚠ The one that caught a real inconsistency. Before task 13, Home summed `amount` for

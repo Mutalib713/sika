@@ -54,6 +54,28 @@ class DebugSmsReceiver : BroadcastReceiver() {
             return
         }
 
+        // Fires the end-of-day nudge now, rather than waiting for 9pm.
+        //
+        //   adb shell am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS         //     -n gh.mutalib.sika/.sms.DebugSmsReceiver --es nudge now
+        if (!intent.getStringExtra("nudge").isNullOrBlank()) {
+            val pendingNudge = goAsync()
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    val zone = gh.mutalib.sika.ui.home.ACCRA
+                    val day = java.time.LocalDate.now(zone)
+                    val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
+                    val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                    val n = gh.mutalib.sika.data.SikaDatabase.get(context.applicationContext)
+                        .transactions().countUnlabelledBetween(from, to)
+                    Log.i(TAG, "debug-inject: nudge, $n unlabelled today")
+                    gh.mutalib.sika.notify.DailyNudge.show(context.applicationContext, n)
+                } finally {
+                    pendingNudge.finish()
+                }
+            }
+            return
+        }
+
         val body = intent.getStringExtra("body")
         if (body.isNullOrBlank()) {
             Log.w(TAG, "debug-inject: no --es body supplied")

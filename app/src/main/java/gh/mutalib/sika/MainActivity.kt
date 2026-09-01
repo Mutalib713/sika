@@ -50,6 +50,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import gh.mutalib.sika.notify.CashOutPrompt
+import gh.mutalib.sika.notify.DailyNudge
 import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.Dock
@@ -173,6 +174,11 @@ private fun SikaApp(openRow: MutableState<Long?>) {
         }
     }
 
+    // Re-booked on every launch rather than once ever. Alarms do not survive a reinstall,
+    // a "force stop", or Android reclaiming them, and re-setting one that already exists
+    // is free — the PendingIntent matches and simply replaces it.
+    LaunchedEffect(Unit) { DailyNudge.schedule(context, ACCRA) }
+
     // Notifications are asked for SECOND, and only once SMS is granted.
     //
     // Two dialogs at once is how you get both refused: the first is the one the whole app
@@ -260,14 +266,15 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                     tab == Tab.Report -> {
                         val rvm: ReportViewModel = viewModel()
                         val summary by rvm.summary.collectAsStateWithLifecycle()
-                        // Read so the arrow re-enables when the month changes; the
-                        // ViewModel's own function is the authority on whether it can.
-                        val reportMonth by rvm.month.collectAsStateWithLifecycle()
+                        val reportMode by rvm.mode.collectAsStateWithLifecycle()
+                        val canForward by rvm.canStepForward.collectAsStateWithLifecycle()
                         ReportScreen(
                             summary = summary,
-                            canStepForward = reportMonth < java.time.YearMonth.now(ACCRA),
+                            mode = reportMode,
+                            canStepForward = canForward,
                             animated = animated,
                             onStep = rvm::step,
+                            onMode = rvm::setMode,
                         )
                     }
 

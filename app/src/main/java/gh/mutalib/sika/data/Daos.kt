@@ -72,6 +72,10 @@ interface TransactionDao {
     @Query("SELECT MAX(occurredAt) FROM transactions")
     suspend fun newestTimestamp(): Long?
 
+    /** The oldest transaction, which is where a semester starts until Mutalib says otherwise. */
+    @Query("SELECT MIN(occurredAt) FROM transactions WHERE parsedOk = 1")
+    suspend fun oldestTimestamp(): Long?
+
     /**
      * Sets a label by hand. Writes [LabelSource.MANUAL] so a rule can never overwrite it —
      * a human decision outranks a guess.
@@ -116,6 +120,17 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions WHERE parsedOk = 1 AND label IS NULL")
     fun observeUnlabelledCount(): Flow<Int>
+
+    /**
+     * How many of one day's transactions still have no category — what the end-of-day
+     * nudge counts before deciding whether it has anything worth saying.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM transactions " +
+            "WHERE parsedOk = 1 AND label IS NULL " +
+            "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive",
+    )
+    suspend fun countUnlabelledBetween(fromInclusive: Long, toExclusive: Long): Int
 
     @Query("SELECT COUNT(*) FROM transactions WHERE reconciled = 'GAP'")
     fun observeGapCount(): Flow<Int>

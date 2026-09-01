@@ -53,6 +53,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!--
+      RECEIVE_BOOT_COMPLETED: the end-of-day nudge.
+
+      Android discards every scheduled alarm when the phone restarts. Without this the
+      nudge would work perfectly until the first reboot and then stop for good - silently,
+      because nothing appears to break. This is the only reason it is here.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
       required="true", not the required="false" lint suggests.
 
       Lint asks for this tag so an app does not accidentally exclude tablets and ChromeOS,
@@ -133,6 +142,22 @@
         <receiver
             android:name=".notify.CashOutReplyReceiver"
             android:exported="false" />
+
+        <!--
+          The end-of-day nudge, and its re-scheduling after a restart.
+
+          exported="false" but WITH an intent-filter, which looks contradictory and is not:
+          BOOT_COMPLETED is delivered by the system regardless of the exported flag, while
+          everything else on the phone stays locked out. The alarm itself arrives through a
+          PendingIntent, which needs no export either.
+        -->
+        <receiver
+            android:name=".notify.DailyNudgeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
