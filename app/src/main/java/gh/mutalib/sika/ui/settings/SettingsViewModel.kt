@@ -9,6 +9,7 @@ import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
+import gh.mutalib.sika.data.TransactionEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +60,18 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val toast: StateFlow<Toast?> = _toast
     fun clearToast() { _toast.value = null }
 
+    /**
+     * The full result of an import, held only when there is something a one-line toast cannot
+     * say — namely *which* rows could not be read.
+     *
+     * ⚠ A count is not enough here. "3 rows could not be read" tells you something went wrong
+     * and gives you no way to look at it; the line numbers let the file be opened and the rows
+     * found. Mutalib's own instinct about gaps applies to this too: knowing is the point.
+     */
+    private val _importReport = MutableStateFlow<BackupIo.Import?>(null)
+    val importReport: StateFlow<BackupIo.Import?> = _importReport
+    fun clearImportReport() { _importReport.value = null }
+
     private val _busy = MutableStateFlow(false)
 
     /** True while a file is being read or written, so the row can say so instead of looking dead. */
@@ -84,6 +97,10 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState())
 
     val rules: StateFlow<List<RuleEntity>> = ruleDao.observeAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Messages the parser refused, newest first. Sacred Rule 7 made visible. */
+    val reviewQueue: StateFlow<List<TransactionEntity>> = transactions.observeReviewQueue()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // ------------------------------------------------------------------ categories
@@ -170,10 +187,13 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
             _busy.value = true
             val r = BackupIo.import(getApplication(), uri)
             _busy.value = false
-            _toast.value = when {
-                r.error != null -> Toast(r.error, bad = true)
-                r.changedNothing -> Toast("Everything in that file was already here.")
-                else -> Toast(summarise(r))
+            when {
+                r.error != null -> _toast.value = Toast(r.error, bad = true)
+                r.changedNothing -> _toast.value = Toast("Everything in that file was already here.")
+                // Something was skipped: the numbers deserve a panel, not a line that
+                // disappears in three seconds.
+                r.problems.isNotEmpty() -> _importReport.value = r
+                else -> _toast.value = Toast(summarise(r))
             }
         }
     }

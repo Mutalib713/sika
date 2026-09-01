@@ -47,7 +47,7 @@ import gh.mutalib.sika.ui.theme.ThemeMode
 import gh.mutalib.sika.ui.theme.Warn
 
 /** Where Settings can send you. Kept here so MainActivity has one thing to switch on. */
-enum class SettingsRoute { ROOT, CATEGORIES, RULES }
+enum class SettingsRoute { ROOT, CATEGORIES, RULES, REVIEW }
 
 /**
  * Settings.
@@ -79,6 +79,7 @@ fun SettingsScreen(
 
     var cashOut by remember { mutableStateOf(NotificationPrefs.cashOutPrompt(context)) }
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
+    var gapAlert by remember { mutableStateOf(NotificationPrefs.gapAlert(context)) }
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
@@ -146,6 +147,17 @@ fun SettingsScreen(
                             NotificationPrefs.setEndOfDay(context, it)
                         }
                     }
+                    RowDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_warning,
+                        title = "Tell me when a balance doesn't tally",
+                        subtitle = "The moment money moves with no message to explain it",
+                    ) {
+                        SettingsSwitch(gapAlert) {
+                            gapAlert = it
+                            NotificationPrefs.setGapAlert(context, it)
+                        }
+                    }
                 }
             }
 
@@ -165,15 +177,18 @@ fun SettingsScreen(
                         subtitle = rulesSubtitle(state.rulesCount),
                         onClick = { onRoute(SettingsRoute.RULES) },
                     ) { Chevron() }
-                    if (state.needsReview > 0) {
-                        RowDivider()
-                        SettingsRow(
-                            icon = R.drawable.ic_inbox,
-                            title = "Needs a look",
-                            subtitle = "${state.needsReview} messages Sika could not read",
-                            tint = Warn,
-                        ) { Chevron() }
-                    }
+                    RowDivider()
+                    // ⚠ Always shown, and always tappable. It shipped for an hour with a
+                    // chevron and no destination, which is the thing a comment two files away
+                    // says never to do. When the queue is empty the screen behind it is the
+                    // good news, so hiding the row would hide the reassurance too.
+                    SettingsRow(
+                        icon = R.drawable.ic_inbox,
+                        title = "Needs a look",
+                        subtitle = reviewSubtitle(state.needsReview),
+                        tint = if (state.needsReview > 0) Warn else TextMuted,
+                        onClick = { onRoute(SettingsRoute.REVIEW) },
+                    ) { Chevron() }
                     RowDivider()
                     SettingsRow(
                         icon = R.drawable.ic_download,
@@ -300,6 +315,12 @@ private fun rulesSubtitle(count: Int): String = when (count) {
     0 -> "Nothing learned yet"
     1 -> "One shop labels itself now"
     else -> "$count shops label themselves now"
+}
+
+private fun reviewSubtitle(count: Int): String = when (count) {
+    0 -> "Every message was readable"
+    1 -> "1 message Sika could not read"
+    else -> "$count messages Sika could not read"
 }
 
 private fun themeIcon(mode: ThemeMode): Int = when (mode) {

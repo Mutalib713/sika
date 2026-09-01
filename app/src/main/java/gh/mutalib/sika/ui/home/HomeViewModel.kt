@@ -15,6 +15,7 @@ import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ledger.Period
 import gh.mutalib.sika.ledger.PeriodSummary
+import gh.mutalib.sika.ledger.Reconciler
 import gh.mutalib.sika.ledger.summarise
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.sms.Sweeper
@@ -34,6 +35,26 @@ import java.time.ZoneId
 val ACCRA: ZoneId = ZoneId.of("Africa/Accra")
 
 data class DayGroup(val label: String, val rows: List<TransactionEntity>)
+
+/**
+ * Money that moved with no message to explain it.
+ *
+ * ⚠ **[untilMillis] is when it was CAUGHT, not when it happened.** The arithmetic fails on the
+ * message *after* the missing one, so all that is genuinely known is a window. Mutalib asked
+ * how Sika could know about a message that never came, and this is the honest shape of the
+ * answer: an exact amount, and a range of dates.
+ */
+data class GapDetail(
+    /** The transaction that revealed it. */
+    val rowId: Long,
+    /** How much the balance moved beyond what the messages account for. Always positive. */
+    val amount: Long,
+    /** The transaction before it. Null when the very first checkable row is already a gap. */
+    val sinceMillis: Long?,
+    val untilMillis: Long,
+    /** What Mutalib said it was, if he has said. */
+    val note: String?,
+)
 
 data class HomeState(
     val month: YearMonth = YearMonth.now(ACCRA),
@@ -60,14 +81,36 @@ data class HomeState(
     val gaps: Int = 0,
     /** The oldest unexplained gap, which is the one worth chasing first. */
     val firstGap: TransactionEntity? = null,
+    /**
+     * The newest gap, with enough detail to say something useful about it.
+     *
+     * Newest rather than oldest: a hole from last week is one you might still remember, and
+     * remembering is the only way it ever gets a name.
+     */
+    val gap: GapDetail? = null,
     val unlabelled: Int = 0,
     /** Every transaction this month, grouped by day — what the all-transactions screen shows. */
     val days: List<DayGroup> = emptyList(),
     /** Every transaction on record, grouped by day — what the "All time" filter reads. */
     val allDays: List<DayGroup> = emptyList(),
     val total: Int = 0,
+    /**
+     * Every transaction on record, not just this month's.
+     *
+     * ⚠ **This exists because one empty state was doing two jobs and getting one of them
+     * wrong.** [isEmpty] means "nothing THIS MONTH", and the screen told both a phone with 148
+     * transactions and a brand-new install the same thing: *transactions appear here as MoMo
+     * texts arrive*. For the second phone that is advice to wait, and waiting will not help.
+     */
+    val totalEver: Int = 0,
+    /** The newest transaction on record — proof, for a month that has none yet. */
+    val lastEver: TransactionEntity? = null,
 ) {
+    /** Nothing this month. There may be plenty of history. */
     val isEmpty: Boolean get() = !loading && total == 0
+
+    /** Nothing at all, ever. A different situation with a different answer. */
+    val neverAnything: Boolean get() = !loading && totalEver == 0
 }
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -160,6 +203,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Records what the money behind a gap actually was.
+     *
+     * ⚠ **Writes the note and nothing else.** It does not clear the `GAP` flag: MTN still
+     * never sent that message, and remembering the purchase does not make it exist. Passing
+     * null clears the explanation again.
+     */
+    fun explainGap(rowId: Long, what: String?) {
+        val clean = what?.trim()?.takeIf { it.isNotEmpty() }
+        if (DemoMode.active) {
+            DemoMode.edit(rowId) { it.copy(gapNote = clean) }
+            return
+        }
+        viewModelScope.launch { dao.setGapNote(rowId, clean) }
+    }
+
     /** Adds a category from the sheet. IGNORE on conflict, so a duplicate name is harmless. */
     fun addCategory(name: String) {
         val clean = name.trim()
@@ -196,6 +255,29 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
         val days = byDay(inMonth)
 
+        // The reconciliation verdicts are already stored on the rows by ReconcilePass; this
+        // re-runs the pure arithmetic only to recover the SIZE of each hole, which is not a
+        // column. Cheap on a few hundred rows, and it keeps the ledger free of a derived
+        // number that could drift out of step with the rows it came from.
+        val ordered = all.filter { it.parsedOk }
+            .sortedWith(compareBy({ it.occurredAt }, { it.id }))
+        val previousOf = ordered.withIndex().associate { (i, row) ->
+            row.id to ordered.getOrNull(i - 1)?.occurredAt
+        }
+        val newestGap = Reconciler.reconcile(all)
+            .filter { it.state == Reconciled.GAP }
+            .mapNotNull { check ->
+                val row = ordered.firstOrNull { it.id == check.id } ?: return@mapNotNull null
+                GapDetail(
+                    rowId = row.id,
+                    amount = kotlin.math.abs(check.difference ?: 0L),
+                    sinceMillis = previousOf[row.id],
+                    untilMillis = row.occurredAt,
+                    note = row.gapNote,
+                )
+            }
+            .maxByOrNull { it.untilMillis }
+
         return HomeState(
             month = YearMonth.from(month.start),
             loading = false,
@@ -203,11 +285,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             weekSummary = summarise(all, week, ACCRA),
             recent = all.sortedByDescending { it.occurredAt }.take(RECENT_ROWS),
             gaps = inMonth.count { it.reconciled == Reconciled.GAP },
+            gap = newestGap,
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
             unlabelled = inMonth.count { it.label == null },
             days = days,
             allDays = byDay(all),
             total = inMonth.size,
+            totalEver = all.size,
+            lastEver = all.maxByOrNull { it.occurredAt },
         )
     }
 

@@ -76,6 +76,16 @@ private data class Filters(
     val query: String = "",
 ) {
     val categoryLabel: String get() = category ?: "All categories"
+
+    /**
+     * True when nothing is narrowing the list.
+     *
+     * ⚠ The difference between "nothing matches your filter" and "you have no transactions"
+     * is the difference between a problem you can solve in one tap and one you cannot solve at
+     * all. The screen showed the first message in both cases until 2026-09-01.
+     */
+    val isDefault: Boolean
+        get() = category == null && size == Size.ANY && query.isBlank()
 }
 
 /**
@@ -181,7 +191,12 @@ fun AllTransactionsScreen(
             }
 
             if (days.isEmpty()) {
-                item { NothingMatches() }
+                // An empty ledger is not a filter problem, and telling someone to "try another
+                // filter" when they have no transactions at all is advice that cannot work.
+                item {
+                    if (filters.isDefault && state.allDays.isEmpty()) NothingHereYet()
+                    else NothingMatches()
+                }
                 return@LazyColumn
             }
 
@@ -370,6 +385,29 @@ private fun DayHeading(day: DayGroup) {
                 color = TextMuted,
             )
         }
+    }
+}
+
+/** No transactions at all — nothing to do with the filters. */
+@Composable
+private fun NothingHereYet() {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 60.dp, start = 20.dp, end = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "Nothing here yet",
+            style = MaterialTheme.typography.headlineSmall,
+            color = TextPrimary,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Every MoMo message Sika reads becomes a row on this screen. None have been read " +
+                "yet, so there is nothing to show — this is not a filter hiding them.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMuted,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

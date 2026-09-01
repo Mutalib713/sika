@@ -29,16 +29,30 @@ object ReconcilePass {
         val checks = Reconciler.reconcile(rows)
         for (c in checks) dao.setReconciled(c.id, c.state)
 
+        // Chronological, so the row before a gap can be found by position. That row's time is
+        // what opens the window the missing money moved inside.
+        val ordered = rows.sortedWith(compareBy({ it.occurredAt }, { it.id }))
+        val previousOf = ordered.withIndex().associate { (i, row) ->
+            row.id to ordered.getOrNull(i - 1)?.occurredAt
+        }
+
         val gaps = checks.filter { it.state == Reconciled.GAP }.map { c ->
             val row = byId.getValue(c.id)
             Gap(
+                rowId = row.id,
                 whenMillis = row.occurredAt,
+                // ⚠ **When the hole OPENED, not when it was caught.** The check fires on the
+                // message after the missing one, so this row's own date is the far end of the
+                // window. Reporting it as the date of the loss sends someone looking on the
+                // wrong day - Mutalib's question, 2026-09-01.
+                sinceMillis = previousOf[row.id],
                 counterparty = row.counterparty,
                 shape = row.shape.name,
                 amount = row.amount,
                 expected = c.expected ?: 0L,
                 actual = c.actual ?: 0L,
                 difference = c.difference ?: 0L,
+                explained = row.gapNote,
             )
         }
 
@@ -63,7 +77,11 @@ object ReconcilePass {
 }
 
 data class Gap(
+    /** The transaction that revealed it — the one *after* the hole. */
+    val rowId: Long,
     val whenMillis: Long,
+    /** The transaction before it, which opens the window. Null when this is the first one. */
+    val sinceMillis: Long?,
     val counterparty: String,
     val shape: String,
     val amount: Long,
@@ -71,6 +89,8 @@ data class Gap(
     val actual: Long,
     /** actual − expected. Positive means the balance is higher than the maths predicted. */
     val difference: Long,
+    /** What Mutalib said the missing money was, if he has said. */
+    val explained: String? = null,
 ) {
     fun date(): String = FORMAT.format(Instant.ofEpochMilli(whenMillis).atZone(ACCRA))
 }

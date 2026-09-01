@@ -366,9 +366,48 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   rather than looking live and doing nothing. The monthly-summary switch is deliberately absent
   until task 14 gives it something to switch.
 
-- [ ] **16. Error and empty states**
-  Permission denied, no messages found, nothing this month, reconciliation gap detected.
-  **Verify:** trigger each one deliberately and screenshot it.
+- [x] **16. Error and empty states**
+  Shipped 2026-09-01. Six states that had no design, plus a screen Settings was already
+  pointing at.
+
+  **Verified:** `check: PASS`, 102 unit tests, 0 failures. ⚠ **Not yet triggered on the phone**
+  — PLAN's own verification for this task is "trigger each one deliberately and screenshot it",
+  and that needs the Pixel. Built and compiled, not yet seen.
+
+  - **Home told two situations the same thing.** `isEmpty` means "nothing THIS MONTH", so a
+    brand-new install with no MoMo messages at all got *"transactions appear here as MoMo texts
+    arrive"* — advice to wait, on a phone where waiting cannot help. Now two states:
+    `NothingEverRead` says Sika can only read what is still in the inbox and offers `*170#`
+    (Mutalib's request) **with its limit attached** — MTN emails a PDF, and Sika cannot read a
+    PDF. `EmptyMonth` does the opposite job and names the last transaction as proof the app
+    works.
+  - **The transactions list** said "nothing matches that" with no filter on. Now
+    `NothingHereYet` when the ledger is genuinely empty.
+  - **Screen 4 exists.** `ReviewQueueScreen`. It shipped an hour earlier as a Settings row with
+    a chevron and no destination — the exact thing a comment in the same codebase forbids.
+  - **The import report** is a panel with the line numbers, not a count in a toast.
+
+- [x] **A gap says what it found, and can be answered** — Mutalib's requests, 2026-09-01:
+  *"if the user remembers he can do something about it"* and *"add an alert immediately the
+  balance doesn't tally"*.
+
+  - `GapCard` on Home, under the money. A gap was one line of grey subtitle before this.
+  - `GapAlert` fires the moment a live message fails the check, with a text box in the shade.
+    ⚠ **Live route only, never the sweep** — same rule as the cash-out prompt, same reason: the
+    sweep re-reads everything, so alerting from it would post one notification per historic gap
+    on first run.
+  - ⚠ **It names a WINDOW, not a day.** The check fails on the message *after* the missing one,
+    so that date is when it was caught. The earlier copy said "missing from 28 August", which
+    would send him looking on the wrong day. `GapWindowTest` pins all four cases.
+  - ⚠ **Explaining a gap does not clear it, and does not enter any total.** MTN still sent no
+    message. `setGapNote` touches nothing else; a check that can be switched off by typing into
+    it is not a check.
+
+  **Open, deliberately not decided:** whether an explained gap should also count in the category
+  breakdown. The argument for is real — the balance proves the money left, so "spent this month"
+  is currently under by exactly that amount. The argument against is that it mixes measured
+  money with remembered money in one figure with no way to tell them apart later. Left as-is
+  until Mutalib says otherwise.
 
 ## Milestone 4 — Harden and ship
 

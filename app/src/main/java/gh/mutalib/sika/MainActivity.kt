@@ -70,7 +70,9 @@ import gh.mutalib.sika.ui.home.TransactionSheet
 import gh.mutalib.sika.ui.report.ReportScreen
 import gh.mutalib.sika.ui.report.ReportViewModel
 import gh.mutalib.sika.ui.settings.CategoriesScreen
+import gh.mutalib.sika.ui.settings.ImportReportDialog
 import gh.mutalib.sika.ui.settings.LearnedRulesScreen
+import gh.mutalib.sika.ui.settings.ReviewQueueScreen
 import gh.mutalib.sika.ui.settings.SettingsRoute
 import gh.mutalib.sika.ui.settings.SettingsScreen
 import gh.mutalib.sika.ui.settings.SettingsToast
@@ -263,8 +265,10 @@ private fun SikaApp(openRow: MutableState<Long?>) {
             val svm: SettingsViewModel = viewModel()
             val settings by svm.state.collectAsStateWithLifecycle()
             val rules by svm.rules.collectAsStateWithLifecycle()
+            val reviewQueue by svm.reviewQueue.collectAsStateWithLifecycle()
             val busy by svm.busy.collectAsStateWithLifecycle()
             val toast by svm.toast.collectAsStateWithLifecycle()
+            val importReport by svm.importReport.collectAsStateWithLifecycle()
 
             // Asked directly rather than inferred from `gate`. Inside Gate.Ready the answer is
             // effectively always yes — Android kills the process when a permission is revoked —
@@ -338,6 +342,12 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                             onAdd = svm::add,
                         )
 
+                        SettingsRoute.REVIEW -> ReviewQueueScreen(
+                            queue = reviewQueue,
+                            animated = animated,
+                            onBack = { settingsRoute = SettingsRoute.ROOT },
+                        )
+
                         SettingsRoute.RULES -> LearnedRulesScreen(
                             rules = rules,
                             animated = animated,
@@ -366,6 +376,7 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         onSeeAll = { showingAll = true },
                         onOpenReport = { tab = Tab.Report },
                         onTransactionClick = { sheetFor = it.id },
+                        onExplainGap = vm::explainGap,
                     )
                 }
                 // Fades the list out before it reaches the dock, so rows never collide with
@@ -408,6 +419,10 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                         .navigationBarsPadding()
                         .padding(horizontal = 22.dp, vertical = 22.dp),
                 )
+            }
+
+            importReport?.let { report ->
+                ImportReportDialog(report, onDismiss = svm::clearImportReport)
             }
 
             if (sheetRow != null) {

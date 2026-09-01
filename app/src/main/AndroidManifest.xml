@@ -144,6 +144,16 @@
             android:exported="false" />
 
         <!--
+          What the missing money was, typed into the balance-gap alert.
+
+          exported="false" for the same reason as the one above: the only thing that may
+          reach it is the PendingIntent this app handed to the system.
+        -->
+        <receiver
+            android:name=".notify.GapReplyReceiver"
+            android:exported="false" />
+
+        <!--
           The end-of-day nudge, and its re-scheduling after a restart.
 
           exported="false" but WITH an intent-filter, which looks contradictory and is not:

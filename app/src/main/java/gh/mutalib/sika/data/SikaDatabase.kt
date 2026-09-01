@@ -19,7 +19,7 @@ import androidx.room.TypeConverters
  */
 @Database(
     entities = [TransactionEntity::class, RuleEntity::class, CategoryEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -77,9 +77,22 @@ abstract class SikaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 3 to 4: an explanation for money that never got a message.
+         *
+         * Nullable with no default, like the note column in 1 to 2 and for the same reason:
+         * every existing row gets NULL, which means "unexplained", which is exactly true of
+         * every gap recorded before there was any way to explain one.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE transactions ADD COLUMN gapNote TEXT")
+            }
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 // ⚠ **No `fallbackToDestructiveMigration()`.** It is the usual shortcut and
                 // it means "if the schema changed, delete everything and start over" — on a
                 // ledger whose whole value is months of history, and whose labels are the

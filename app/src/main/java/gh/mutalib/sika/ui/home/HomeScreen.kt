@@ -88,6 +88,7 @@ fun HomeScreen(
     onSeeAll: () -> Unit = {},
     onOpenReport: () -> Unit = {},
     onTransactionClick: (TransactionEntity) -> Unit = {},
+    onExplainGap: (Long, String?) -> Unit = { _, _ -> },
 ) {
     val pullState = rememberPullToRefreshState()
     var pickedBar by remember(state.weekSummary?.period) { mutableStateOf<Int?>(null) }
@@ -127,7 +128,7 @@ fun HomeScreen(
                 item { Greeting(state); Spacer(Modifier.height(16.dp)) }
 
                 if (state.isEmpty) {
-                    item { EmptyMonth() }
+                    item { if (state.neverAnything) NothingEverRead() else EmptyMonth(state) }
                     return@LazyColumn
                 }
 
@@ -145,6 +146,19 @@ fun HomeScreen(
                         }
                         Spacer(Modifier.height(11.dp))
                         Rising(entrance, 2) { StatPair(month) }
+                    }
+                }
+
+                // Directly under the money, because it is about the money. A gap used to be
+                // one line of grey subtitle under the greeting - Sacred Rule 3 checks the
+                // arithmetic on every sweep, and whispering the result is most of the way back
+                // to not checking.
+                state.gap?.let { gap ->
+                    item {
+                        Spacer(Modifier.height(11.dp))
+                        Rising(entrance, 2) {
+                            GapCard(gap, onExplain = { onExplainGap(gap.rowId, it) })
+                        }
                     }
                 }
 
@@ -521,26 +535,96 @@ internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Nothing this month, but there is history.
+ *
+ * ⚠ **The opposite job to [NothingEverRead], and the two used to share one composable.** Here
+ * the app is working and the month is simply quiet, so the useful thing is proof: name the
+ * last transaction. "Transactions appear here as texts arrive" is true and says nothing.
+ */
 @Composable
-private fun EmptyMonth() {
+private fun EmptyMonth(state: HomeState) {
     Column(
-        Modifier.fillMaxWidth().padding(top = 80.dp),
+        Modifier.fillMaxWidth().padding(top = 70.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            "Nothing yet this month",
+            "Nothing yet in " + MONTH_NAME.format(state.month),
             style = MaterialTheme.typography.headlineSmall,
             color = TextPrimary,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
+        val last = state.lastEver
         Text(
-            "Transactions appear here as MoMo texts arrive.",
+            if (last == null) {
+                "Anything new lands here the moment the text arrives."
+            } else {
+                "Your last transaction was " + last.amount.asCedis() + " to " +
+                    last.counterparty.ifBlank { "an unnamed party" } + " on " +
+                    DAY_MONTH.format(Instant.ofEpochMilli(last.occurredAt).atZone(ACCRA)) +
+                    ". Anything new lands here the moment the text arrives."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 22.dp),
+        )
+    }
+}
+
+/**
+ * No MoMo messages at all, ever.
+ *
+ * ⚠ **Says what Sika CANNOT do, which is the whole reason this is a separate screen.** It can
+ * only read what is still in the phone's SMS inbox — there is no account, no server, no second
+ * source. If the texts were deleted before Sika was installed, no button in this app brings
+ * them back, and telling someone to wait would be a lie.
+ *
+ * The `*170#` route is offered because it is the one thing that genuinely helps, and it is
+ * stated with its limit attached: MTN emails a PDF, and Sika cannot read a PDF. Mutalib asked
+ * for this on 2026-09-01.
+ */
+@Composable
+private fun NothingEverRead() {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 60.dp, start = 14.dp, end = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "No MoMo messages on this phone",
+            style = MaterialTheme.typography.headlineSmall,
+            color = TextPrimary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Sika read the whole inbox and found nothing from MTN MoMo. If you have used " +
+                "MoMo on this number, those texts may have been deleted — Sika can only read " +
+                "what is still in the inbox.",
             style = MaterialTheme.typography.bodyMedium,
             color = TextMuted,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(18.dp))
+        Text(
+            "MTN can email you a statement going back three years: dial *170#, then My " +
+                "Wallet, then Statements. That one is for your own eyes — Sika cannot read a " +
+                "PDF and will not import it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Pull down to read the inbox again.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted,
+        )
     }
 }
+
+private val MONTH_NAME: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM")
+private val DAY_MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM")
 
 private fun subtitle(state: HomeState): String = when {
     state.gaps > 0 -> "${state.gaps} ${if (state.gaps == 1) "transaction doesn't" else "transactions don't"} add up"

@@ -108,6 +108,26 @@ data class TransactionEntity(
     val note: String? = null,
 
     /**
+     * What the money that never got a message actually was, in Mutalib's own words.
+     *
+     * ⚠ **Only ever set on a row flagged [Reconciled.GAP]**, and it explains the *hole before
+     * this row*, not this row itself. His instruction, 2026-09-01: *"if the user remembers he
+     * can do something about it… I might remember what I did"*. He is right that an app which
+     * says "GHS 20.00 is missing" and offers nothing else is only half useful.
+     *
+     * ⚠ **Writing this does NOT clear the gap, and does not move the money into any total.**
+     * The flag is a fact about messages — MTN sent none — and remains true however well you
+     * remember the purchase. Clearing it on an explanation would mean the reconciliation
+     * check quietly passing on evidence that was typed rather than measured, which is the one
+     * thing this app must never do. What the note buys is that Home stops asking, and that
+     * six months later the amount has a name attached to it.
+     *
+     * Whether an explained gap should ALSO become a spendable amount in the category
+     * breakdown is a separate decision, deliberately not taken here — see PLAN task 16.
+     */
+    val gapNote: String? = null,
+
+    /**
      * The original SMS, kept verbatim — Sacred Rule 6.
      *
      * This is what makes a parser fix retroactive: correct a pattern, re-run it over

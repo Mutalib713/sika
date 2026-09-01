@@ -145,6 +145,16 @@ interface TransactionDao {
     @Query("UPDATE transactions SET note = :note WHERE txId = :txId AND note IS NULL")
     suspend fun restoreNote(txId: String, note: String): Int
 
+    /**
+     * Records what the money before this row actually was.
+     *
+     * ⚠ Sets the note and **nothing else**. It deliberately does not touch `reconciled`: the
+     * gap is a fact about messages MTN did not send, and remembering the purchase does not
+     * make the message exist. A check that can be cleared by typing is not a check.
+     */
+    @Query("UPDATE transactions SET gapNote = :note WHERE id = :id")
+    suspend fun setGapNote(id: Long, note: String?)
+
     @Query("UPDATE transactions SET reconciled = :state WHERE id = :id")
     suspend fun setReconciled(id: Long, state: Reconciled)
 

@@ -8,7 +8,10 @@ import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.toEntity
 import gh.mutalib.sika.ledger.Keywords
+import gh.mutalib.sika.ledger.ReconcilePass
 import gh.mutalib.sika.notify.CashOutPrompt
+import gh.mutalib.sika.notify.GapAlert
+import gh.mutalib.sika.ui.home.ACCRA
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
@@ -70,6 +73,25 @@ object SmsIngest {
             Keywords.categoryFor(row.reference, row.counterparty)?.let { guess ->
                 val filled = dao.setLabelIfUnset(id, guess, LabelSource.AUTO_KEYWORD)
                 if (filled > 0) Log.i(TAG, "$source: guessed '$guess' from the reference")
+            }
+        }
+
+        // ⚠ **The arithmetic check runs on the live route too, and alerts if it fails.**
+        // Mutalib's request, 2026-09-01: "add an alert immediately the balance doesn't tally".
+        // Gated on `promptOnCashOut` — which really means "this message just arrived" — for
+        // the same reason the prompt is: the sweep re-reads everything, so alerting from it
+        // would post one notification per historic gap on first run.
+        if (isNew && promptOnCashOut) {
+            val report = ReconcilePass.run(context)
+            report.gaps.firstOrNull { it.rowId == id && it.explained == null }?.let { gap ->
+                GapAlert.show(
+                    context = context,
+                    rowId = gap.rowId,
+                    difference = kotlin.math.abs(gap.difference),
+                    sinceMillis = gap.sinceMillis,
+                    untilMillis = gap.whenMillis,
+                    zone = ACCRA,
+                )
             }
         }
 
