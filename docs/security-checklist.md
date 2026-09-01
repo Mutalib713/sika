@@ -190,6 +190,28 @@ refuses to put on a network. It would have been giving it away through a side do
 R8 removes the strings from a release build entirely. Debug keeps everything, because reading
 real queued messages out of logcat is how the parser gets fixed.
 
+⚠ **The first pass MISSED one, and the device found it.** `ReconcilePass` was printing a real
+counterparty — a person's full name — with their balance, on every sweep. It did not match the
+grep used to sweep for this, and it was caught on 2026-09-01 by reading the app's own logcat
+while verifying the migration. **A grep is not an audit**; running the thing and watching what
+it says is.
+
+**Proven on the release artifact rather than asserted.** `assembleRelease`, then `strings` over
+the APK:
+
+| Fragment | In release APK |
+|---|---|
+| `guessed '` | 0 |
+| `queued: ` | 0 |
+| `shape x` | 0 |
+| `' amount ` (the gap line with the name) | 0 |
+| ` diff ` | 0 |
+| `gap alert posted for row` (sanitised, kept on purpose) | 1 |
+| `is unaccounted for` (a UI string, as a control) | 1 |
+
+The control line matters: it shows `strings` was genuinely reading the APK, so the zeroes are
+absence rather than a broken search.
+
 ### 3. An import reads the whole file into memory — RECORDED, NOT FIXED
 
 `BackupIo.import` calls `readBytes()` on a user-picked `Uri`. Pointing it at a very large file

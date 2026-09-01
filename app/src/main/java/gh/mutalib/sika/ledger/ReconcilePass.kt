@@ -3,6 +3,7 @@ package gh.mutalib.sika.ledger
 import android.content.Context
 import android.util.Log
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.warnPrivate
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.parser.asCedis
@@ -70,13 +71,16 @@ object ReconcilePass {
         ).also { r ->
             Log.i(TAG, "reconcile: ${r.ok} ok, ${r.gaps.size} gaps, ${r.unchecked} unchecked, of ${r.checked}")
             // Newest first — a gap from last week matters more than one from June.
+            // ⚠ Debug only, and this line was MISSED by the task 17 sweep. It printed a real
+            // counterparty — a person's full name — plus their balance, straight into logcat.
+            // Caught on the device on 2026-09-01 by reading the app's own output while
+            // verifying the migration, which is exactly why a grep is not an audit.
             r.gaps.sortedByDescending { it.whenMillis }.take(12).forEach { g ->
-                Log.w(
-                    TAG,
+                warnPrivate {
                     "gap ${g.date()} ${g.shape} '${g.counterparty}' amount ${g.amount.asCedis()} " +
                         "expected ${g.expected.asCedis()} actual ${g.actual.asCedis()} " +
-                        "diff ${g.difference.asCedis()}",
-                )
+                        "diff ${g.difference.asCedis()}"
+                }
             }
         }
     }

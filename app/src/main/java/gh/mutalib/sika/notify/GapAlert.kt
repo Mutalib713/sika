@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.parser.asCedis
 import java.time.Instant
 import java.time.ZoneId
@@ -120,7 +121,8 @@ object GapAlert {
         // alert about it. The row is already saved by this point either way.
         try {
             NotificationManagerCompat.from(context).notify(notificationId(rowId), notification)
-            Log.i(TAG, "gap alert posted for row $rowId, " + difference.asCedis())
+            logPrivate { "gap alert posted for row $rowId, " + difference.asCedis() }
+            Log.i(TAG, "gap alert posted for row $rowId")
         } catch (e: SecurityException) {
             Log.w(TAG, "gap alert refused by the system for row $rowId", e)
         }
