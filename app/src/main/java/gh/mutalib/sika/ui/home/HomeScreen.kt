@@ -150,22 +150,7 @@ fun HomeScreen(
 
                 item {
                     Spacer(Modifier.height(20.dp))
-                    Rising(entrance, 3) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-                            SectionHeading("This week", Modifier.weight(1f))
-                            // A way through to the report from the section it summarises —
-                            // his request, 2026-09-01.
-                            Text(
-                                "Full report",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Accent,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable(onClick = onOpenReport)
-                                    .padding(horizontal = 8.dp, vertical = 5.dp),
-                            )
-                        }
-                    }
+                    Rising(entrance, 3) { SectionHeading("This week") }
                 }
 
                 item {
@@ -175,6 +160,13 @@ fun HomeScreen(
                         // Categories for the SAME week as the chart above — his instruction.
                         week.slices.take(3).forEach { CategoryRow(it) }
                         if (week.slices.isEmpty()) NothingSpentThisWeek()
+                        // ⚠ A button at the FOOT of the section, not a link beside its
+                        // heading — his correction, 2026-09-01. A link by the title competes
+                        // with the heading for the same glance; down here it sits where you
+                        // arrive having read the section, which is the moment you would want
+                        // more of it.
+                        Spacer(Modifier.height(14.dp))
+                        FullReportButton(onOpenReport)
                     }
                 }
 
@@ -419,6 +411,21 @@ private fun CategoryRow(slice: CategorySlice) {
                     .clip(RoundedCornerShape(2.dp)).background(colour),
             )
         }
+    }
+}
+
+@Composable
+private fun FullReportButton(onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Surface)
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("View full report", style = MaterialTheme.typography.titleMedium, color = Accent)
     }
 }
 

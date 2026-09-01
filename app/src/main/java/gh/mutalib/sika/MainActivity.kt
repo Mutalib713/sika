@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -237,6 +238,13 @@ private fun SikaApp(openRow: MutableState<Long?>) {
             // reached from the other. Reach for Navigation Compose when there are more.
             var showingAll by remember { mutableStateOf(false) }
 
+            // ⚠ Without this, the system back button LEAVES THE APP from the transactions
+            // list, because nothing was ever pushed onto the back stack — `showingAll` is a
+            // flag, and Android has no idea it means "somewhere else". Found by Mutalib on
+            // 2026-09-01. Enabled only while that screen is up, so back keeps its normal
+            // meaning everywhere else.
+            BackHandler(enabled = showingAll) { showingAll = false }
+
             val categories by vm.categories.collectAsStateWithLifecycle()
             val refreshing by vm.refreshing.collectAsStateWithLifecycle()
             var sheetFor by remember { mutableStateOf<Long?>(null) }
@@ -306,7 +314,12 @@ private fun SikaApp(openRow: MutableState<Long?>) {
                 )
                 Dock(
                     selected = tab,
-                    onSelect = { tab = it },
+                    // ⚠ Choosing a tab also leaves the transactions list. Without the reset
+                    // the dock looked dead from that screen: the tab highlight moved, and
+                    // the `when` below still matched `showingAll` first, so the content
+                    // never changed. A control that highlights without navigating is worse
+                    // than one that does nothing at all.
+                    onSelect = { tab = it; showingAll = false },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
