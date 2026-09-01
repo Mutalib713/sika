@@ -168,6 +168,22 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          The monthly summary, and its re-scheduling after a restart.
+
+          exported="false": the alarm's own PendingIntent is the only thing that reaches the
+          fire action. BOOT_COMPLETED still arrives, because a protected system broadcast is
+          delivered to an unexported receiver that filters for it - which is the whole reason
+          this pattern works for DailyNudgeReceiver too.
+        -->
+        <receiver
+            android:name=".notify.MonthlyReportReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

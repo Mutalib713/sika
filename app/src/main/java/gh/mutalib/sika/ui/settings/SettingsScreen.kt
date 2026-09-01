@@ -86,6 +86,7 @@ fun SettingsScreen(
     var cashOut by remember { mutableStateOf(NotificationPrefs.cashOutPrompt(context)) }
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
     var gapAlert by remember { mutableStateOf(NotificationPrefs.gapAlert(context)) }
+    var monthly by remember { mutableStateOf(NotificationPrefs.monthly(context)) }
 
     // Read into state rather than straight from prefs, so editing one updates the row under
     // your thumb instead of on the next visit to this screen.
@@ -224,6 +225,17 @@ fun SettingsScreen(
                         SettingsSwitch(endOfDay) {
                             endOfDay = it
                             NotificationPrefs.setEndOfDay(context, it)
+                        }
+                    }
+                    RowDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_calendar,
+                        title = "Monthly summary",
+                        subtitle = "On the 1st, for the month just gone",
+                    ) {
+                        SettingsSwitch(monthly) {
+                            monthly = it
+                            NotificationPrefs.setMonthly(context, it)
                         }
                     }
                     RowDivider()

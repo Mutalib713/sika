@@ -57,6 +57,7 @@ import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.notify.DailyNudge
+import gh.mutalib.sika.notify.MonthlyReport
 import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.Dock
@@ -210,7 +211,10 @@ private fun SikaApp(openRow: MutableState<Long?>) {
     // Re-booked on every launch rather than once ever. Alarms do not survive a reinstall,
     // a "force stop", or Android reclaiming them, and re-setting one that already exists
     // is free — the PendingIntent matches and simply replaces it.
-    LaunchedEffect(Unit) { DailyNudge.schedule(context, ACCRA) }
+    LaunchedEffect(Unit) {
+        DailyNudge.schedule(context, ACCRA)
+        MonthlyReport.schedule(context, ACCRA)
+    }
 
     // Notifications are asked for SECOND, and only once SMS is granted.
     //

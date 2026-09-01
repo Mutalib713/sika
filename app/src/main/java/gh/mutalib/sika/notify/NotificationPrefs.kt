@@ -23,6 +23,7 @@ object NotificationPrefs {
     private const val CASH_OUT = "notify_cash_out"
     private const val END_OF_DAY = "notify_end_of_day"
     private const val GAP = "notify_gap"
+    private const val MONTHLY = "notify_monthly"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -52,4 +53,16 @@ object NotificationPrefs {
 
     fun setGapAlert(context: Context, on: Boolean) =
         prefs(context).edit { putBoolean(GAP, on) }
+
+    /**
+     * A summary of the month just gone, on the 1st.
+     *
+     * ⚠ **This switch was deliberately absent until the notification behind it existed.** A
+     * control that looks live and changes nothing is worse than no control, so it arrived with
+     * PLAN task 14 rather than ahead of it.
+     */
+    fun monthly(context: Context): Boolean = prefs(context).getBoolean(MONTHLY, true)
+
+    fun setMonthly(context: Context, on: Boolean) =
+        prefs(context).edit { putBoolean(MONTHLY, on) }
 }

@@ -1,8 +1,22 @@
 package gh.mutalib.sika.notify
 
+import android.app.AlarmManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import gh.mutalib.sika.MainActivity
+import gh.mutalib.sika.R
+import gh.mutalib.sika.TAG
 import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.parser.asCedis
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -91,6 +105,110 @@ object MonthlyReport {
         return if (change == null) "$name was your biggest at $spent."
         else "$name was your biggest at $spent, $change on the month before."
     }
+
+    // ------------------------------------------------------------------ the plumbing
+
+    fun ensureChannel(context: Context) {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Monthly summary",
+            // DEFAULT, not HIGH. This is a month that already finished — there is nothing to
+            // answer and nothing to do about it now, so it can wait in the shade. The
+            // cash-out prompt earns HIGH because it asks a question only you can answer
+            // while you still remember; a summary interrupting the morning would not.
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = "A short summary of the month just gone, on the 1st."
+        }
+        ContextCompat.getSystemService(context, NotificationManager::class.java)
+            ?.createNotificationChannel(channel)
+    }
+
+    /**
+     * Books the next 1st at 9am.
+     *
+     * ⚠ **Inexact, and PLAN task 14 originally said exact — that line was wrong.**
+     * `SCHEDULE_EXACT_ALARM` is a restricted permission from Android 12 that the user can
+     * revoke, and a summary of a month that has already ended does not need to-the-second
+     * timing. "Some time on the morning of the 1st" is entirely good enough, and
+     * `setAndAllowWhileIdle` still fires through doze, which is the part that matters on a
+     * phone asleep in a pocket. Same reasoning as [DailyNudge], recorded in PLAN.
+     */
+    fun schedule(context: Context, zone: ZoneId) {
+        val next = nextFire(ZonedDateTime.now(zone))
+        val alarms = ContextCompat.getSystemService(context, AlarmManager::class.java) ?: return
+        alarms.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            next.toInstant().toEpochMilli(),
+            pendingFire(context),
+        )
+        Log.i(TAG, "monthly report scheduled for $next")
+    }
+
+    fun cancel(context: Context) {
+        ContextCompat.getSystemService(context, AlarmManager::class.java)
+            ?.cancel(pendingFire(context))
+    }
+
+    /**
+     * Posts the summary, or stays quiet.
+     *
+     * ⚠ **A month with nothing in it produces no notification at all.** [detail] already
+     * returns null when there is nothing honest to say; posting "August: GHS 0.00 out,
+     * GHS 0.00 in" would be a monthly reminder that the app has nothing to tell you, which is
+     * how a notification channel gets switched off for good.
+     */
+    fun show(context: Context, summary: PeriodSummary) {
+        if (summary.isEmpty) {
+            Log.i(TAG, "monthly report: the month was empty, staying quiet")
+            return
+        }
+        if (!NotificationPrefs.monthly(context)) {
+            Log.i(TAG, "monthly report: switched off in Settings")
+            return
+        }
+        if (!CashOutPrompt.canPost(context)) {
+            Log.w(TAG, "monthly report suppressed: notifications not permitted")
+            return
+        }
+        ensureChannel(context)
+
+        val body = detail(summary)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title(summary))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+        if (body != null) {
+            builder.setContentText(body).setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        }
+
+        // Same guard as every other notification here: the permission can be revoked between
+        // the check above and this call, and an uncaught SecurityException inside a
+        // BroadcastReceiver would take the reschedule down with it.
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+            Log.i(TAG, "monthly report posted: " + title(summary))
+        } catch (e: SecurityException) {
+            Log.w(TAG, "monthly report refused by the system", e)
+        }
+    }
+
+    private fun pendingFire(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context,
+        NOTIFICATION_ID,
+        Intent(context, MonthlyReportReceiver::class.java).setAction(ACTION_FIRE),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
+
+    private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
+        context,
+        NOTIFICATION_ID,
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
     /** "August", from the period being reported on. */
     private val MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM")
