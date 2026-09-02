@@ -1,5 +1,6 @@
 package gh.mutalib.sika.ui.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,29 +84,40 @@ fun TourIntro(onNext: () -> Unit, onSkip: () -> Unit) {
 }
 
 /**
- * ⚠ **A placeholder, and the gap behind it is real.** Sika has no launcher icon: no `mipmap`
- * folder and no `android:icon` in the manifest, so on the home screen it is Android's blank
- * default. Drawing a proper mark is identity work with its own variants to choose from, and
- * doing it inside an onboarding build would be deciding it by accident. The cedi sign holds
- * the space and the layout until then.
+ * The real mark, at last.
+ *
+ * ⚠ **This was a cedi glyph in a coloured square until 2026-09-02**, and the comment here said
+ * so: Sika had no launcher icon, drawing one was identity work with its own choices to make,
+ * and settling it inside an onboarding build would have been deciding it by accident. Mutalib
+ * has since chosen the mark, so the placeholder has nothing left to hold the space for.
+ *
+ * ⚠ **Same disc, same drawable, same treatment as the splash** — `ic_launcher_foreground` on
+ * the icon's own pale field. The first screen of the tour and the first screen of every launch
+ * are two of the three places a person meets Sika's face, and the third is the home screen. If
+ * they disagree it reads as three different apps.
+ *
+ * ⚠ **The disc is not decoration.** The mark's bubble is near-black, so on the dark theme's
+ * ground it would vanish without its own pale field behind it — the same reason the system
+ * splash needs `windowSplashScreenIconBackgroundColor`.
  */
 @Composable
 private fun AppMark() {
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Box(
             Modifier
-                .size(78.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Accent),
+                .size(96.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFE8F6FA)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                "₵",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontSize = androidx.compose.ui.unit.TextUnit(38f, androidx.compose.ui.unit.TextUnitType.Sp),
-                    fontWeight = FontWeight.W600,
-                ),
-                color = AccentContrast,
+            // ⚠ Sized to the disc, not inset. The vector's art already occupies only the
+            // middle ~58% of its own 108 canvas — that is the adaptive-icon safe zone — so
+            // padding it here would shrink it twice.
+            Image(
+                painter = painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = null, // "Sika" is spelled out directly beneath it
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(96.dp),
             )
         }
     }

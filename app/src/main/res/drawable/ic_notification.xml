@@ -1,19 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Lucide "wallet" — the project's only icon set. See docs/ui-guidelines.md.
+  Sika's mark, reduced until it survives 24dp.
 
-  ⚠ This one is a NOTIFICATION small icon, which has a rule the in-app icons do not:
-  Android throws away every colour in it and draws the shape as a white silhouette on the
-  status bar. So it must read at 24dp with no fill and no detail — anything finer than a
-  2px stroke turns to mush up there.
+  ⚠ **A notification icon is not a small logo, and the launcher mark cannot just be shrunk.**
+  Android throws away every colour and draws the shape as a flat white silhouette in the
+  status bar. The launcher mark relies on colour for everything — a dark bubble against a pale
+  disc, teal coins against both — so flattened it becomes one blob. This is the same idea
+  redrawn with about a fifth of the strokes: a message, with money in it.
+
+  ⚠ **2px stroke, round caps, 24 viewport** — Lucide's language, because every other icon in
+  the app is Lucide and a notification icon that does not match them looks like a mistake.
+  Anything finer than 2px turns to mush at this size (docs/ui-guidelines.md).
+
+  Chosen 2026-09-02 from four candidates rendered at 24 / 32 / 48 / 96px, which is the only
+  way to judge this: at 96px all four looked fine and three of them fell apart at 24. The
+  runner-up put the coin *outside* the bubble, matching the launcher mark's composition more
+  closely — and at 24dp it read as an unread badge rather than as money.
+
+  It replaces Lucide's wallet, which was correct and legible and, once Sika had a real mark,
+  the only thing in the app that did not look like it.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+
+    <!-- The bubble. The tail is load-bearing: without it this is a rounded rectangle. -->
     <path
-        android:pathData="M19,7V4a1,1 0 0 0 -1,-1H5a2,2 0 0 0 0,4h15a1,1 0 0 1 1,1v4h-3a2,2 0 0 0 0,4h3a1,1 0 0 0 1,-1v-2a1,1 0 0 0 -1,-1M3,5v14a2,2 0 0 0 2,2h15a1,1 0 0 0 1,-1v-4"
+        android:pathData="M4,4h16a1,1 0 0 1 1,1v9a1,1 0 0 1 -1,1H9l-4,4v-4h-1a1,1 0 0 1 -1,-1V5a1,1 0 0 1 1,-1z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- The coin, solid. A stroked circle this small closes up into a dot anyway, so filling
+         it is honest about what will actually be drawn. -->
+    <path
+        android:pathData="M6.6,9.5a2.4,2.4 0 1 0 4.8,0a2.4,2.4 0 1 0 -4.8,0z"
+        android:fillColor="#FFFFFF" />
+
+    <!-- One line of "text". Two lines were tried and merged into a block at 24dp. -->
+    <path
+        android:pathData="M14,9.5h4"
         android:strokeColor="#FFFFFF"
         android:strokeWidth="2"
         android:strokeLineCap="round"
