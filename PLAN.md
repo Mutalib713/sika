@@ -233,9 +233,34 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   `checkSelfPermission` answers DENIED — which would have silenced the prompt on Android 12
   for a permission it never needed.
 
-  - [ ] **Device check.** ⚠ Not run — no device attached on 2026-08-31. Inject a cash-out
-        broadcast, tap an answer from the shade, confirm the label is stored with
-        `labelSource = PROMPT` and that the app was never opened.
+  - [x] **Device check — passed 2026-09-02**, driven from the laptop by tapping the real
+        notification, with the app backgrounded and `stopped=false` (never force-stopped, so
+        this is the delivery path a real message would take).
+
+        ```
+        cash-out prompt shown for row 2157 (3 quick answers)
+        cash-out row 2157 noted from the shade
+        id 2157 | label 'Food' | labelSource 'PROMPT' | note 'waakye at the junction'
+        ```
+
+        **`MainActivity started` never appears in that logcat** — which is the actual claim
+        being tested. The label, the source and the typed note all landed without the app
+        being opened.
+
+        ⚠ **This is also the first proof of the `FLAG_MUTABLE` fix.** `RemoteInput` hands its
+        text back by *filling in* the PendingIntent, which an immutable one forbids — so the
+        note box could never have worked before, and `getResultsFromIntent` would have
+        returned null in silence. The typed string arriving intact is the only evidence that
+        settles it.
+
+        ⚠ **Getting here took five approaches, and the reason is worth recording.** Once Sika
+        has more than one notification live, Android *bundles* them and the children render
+        collapsed — no buttons, nothing for `uiautomator` to find. The heads-up banner is the
+        only surface with the actions on it, it lives about five seconds, and the timing that
+        works is: inject, wait 2s, tap the category, wait 2.5s, tap the action. Waiting 1s
+        fails — the banner is still re-inflating and swallows the tap.
+
+        The whole sequence is in `design-scratch/notif_drive.py` (gitignored).
         ```bash
         adb shell "am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS -n gh.mutalib.sika/.sms.DebugSmsReceiver --es body 'Cash Out made for GHS20.00 to AGENT TEST .Current Balance: GHS 67.21. Transaction Id: 90000000012. Fee charged: GHS0.00,Tax Charged 0.'"
         ```
@@ -245,7 +270,7 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
         makes the prompt vanish with only a logcat line, which reads exactly like a broken build:
         `adb logcat -s Sika` will say `cash-out prompt suppressed`.
 
-- [ ] **13. Month report** — built 2026-08-31, **device check pending (phone not connected)**
+- [x] **13. Month report** — built 2026-08-31, **device check passed 2026-09-02**
   `ledger/MonthSummary.kt` holds the arithmetic (pure Kotlin, no Android import, like
   `Reconciler`), `ui/report/` holds the screen. Charts hand-drawn on Compose `Canvas`.
   `check: PASS`, 47 unit tests, 0 failures. gate.py 0 block / 2 warn (both are `⚠` in code
@@ -269,9 +294,44 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
     Two similar swings are not a story, and asserting one would be the report inventing a
     finding.
 
-  - [ ] **Device check.** ⚠ Not run — no device attached on 2026-08-31. Screenshot the report
-        against a hand-checked total from the same month's raw messages. The numbers must
-        match arithmetic done by hand, not just look plausible.
+  - [x] **Device check — passed 2026-09-02.** The report's own figures against the same
+        months worked out independently:
+
+        | Month | Report screen | Re-parsed from the raw MTN texts |
+        |---|---|---|
+        | Aug 2026 | GHS 1705.30 out · 447.50 in | GHS 1,705.30 out · 447.50 in |
+        | Jul 2026 | — | GHS 4,107.30 out · 5,132.00 in (matches stored) |
+        | Jun 2026 | — | GHS 782.75 out · 1,060.00 in (matches stored) |
+
+        ⚠ **The check re-parses `rawBody`, it does not re-add Sika's own columns.** Summing the
+        stored `amount`/`fee`/`tax` would agree by construction and prove only that addition
+        works. `design-scratch/hand_check.py` writes its own regexes against the original MTN
+        text, so a parser bug cannot hide on both sides.
+
+        ⚠ **It disagreed once, and Sika was right.** The checker read a GHS 0.38 fee as zero on
+        every TELECEL PUSH payment, because those messages say *"Fee was GHS 0.38"* — a fourth
+        wording the checker's regex did not allow and Sika's parser did. A disagreement names a
+        suspect, not a culprit.
+
+        **The stronger check, which needs no regex at all:** walk all 148 rows in time order
+        and test each stated balance against `previous − amount − fee − tax`. That is MTN's
+        arithmetic, not ours. **It breaks exactly once — the same single gap the app reports.**
+
+- [x] **14. Monthly notification** — built 2026-09-01, **alarm verified on the device
+  2026-09-02** straight out of `dumpsys alarm`:
+
+  ```
+  tag=*walarm*:gh.mutalib.sika.MONTHLY_REPORT
+  type=RTC_WAKEUP origWhen=2026-10-01 09:00:00.000
+  ```
+
+  The 1st of the following month at 9am, registered with the system rather than merely
+  computed. `NotificationPrefs.monthly` and the Settings row shipped with it, and the
+  rescheduling walk across 24 firings is covered by `MonthlyReportTest`.
+
+  ⚠ The clock-rolling test in this task's own Verify line was **not** run: winding a real
+  phone's clock to 23:58 on the last of a month to watch one alarm fire is a poor trade
+  against a booked `RTC_WAKEUP` you can read directly and 12 unit tests on `nextFire`.
 
 - [x] **13b. A note is not a category** — done 2026-09-01
   Mutalib's distinction, 2026-09-01: a cash-out for something one-off — a laptop repair, a
@@ -307,8 +367,7 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   one-off answer can be typed in the shade without opening the app — which is the whole
   reason the prompt exists.
 
-- [ ] **14. Monthly notification**
-  `AlarmManager`, exact, allow-while-idle, rescheduled after each firing.
+  `AlarmManager`, allow-while-idle, rescheduled after each firing.
   **Verify:** set the device clock to 23:58 on the last of a month, watch it fire, confirm it
   reschedules for the following month.
 
