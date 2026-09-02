@@ -12,6 +12,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
 
 /**
@@ -91,9 +92,28 @@ object ThemePreference {
 /**
  * The current mode and the way to change it, so the corner control can live on any screen
  * without every screen's signature growing two parameters for it.
+ *
+ * ⚠ **The setter takes an origin, and it is not decoration.** Mutalib asked for Telegram's
+ * theme switch, where the new theme spreads out of the control you touched rather than
+ * replacing the screen all at once (2026-09-02). That effect only reads as *caused by the
+ * button* if it starts at the button, so the position has to travel with the request — a
+ * control that fires a ripple from the middle of the screen looks like a glitch, not an
+ * answer. `null` means "no particular place": switch from the centre, or instantly.
+ *
+ * See [gh.mutalib.sika.ui.theme.ThemeRevealHost] for what receives it.
  */
 val LocalThemeMode = staticCompositionLocalOf { ThemeMode.SYSTEM }
-val LocalSetThemeMode = staticCompositionLocalOf<(ThemeMode) -> Unit> { {} }
+val LocalSetThemeMode = staticCompositionLocalOf<(ThemeMode, Offset?) -> Unit> { { _, _ -> } }
+
+/**
+ * True while the ripple is mid-flight.
+ *
+ * ⚠ **Read by MainActivity to hold the status-bar icons still.** Android draws the status bar
+ * glyphs itself, above everything Sika draws, so flipping them the instant the mode changes
+ * turns them dark while three-quarters of the screen is still light. They wait for the circle
+ * to finish instead.
+ */
+val LocalThemeRevealing = staticCompositionLocalOf { false }
 
 /**
  * What the phone itself is asking for, **and light when it is not asking for anything.**
@@ -124,7 +144,7 @@ fun systemPrefersDark(): Boolean {
 @Composable
 fun SikaTheme(
     mode: ThemeMode = ThemeMode.SYSTEM,
-    onModeChange: (ThemeMode) -> Unit = {},
+    onModeChange: (ThemeMode, Offset?) -> Unit = { _, _ -> },
     content: @Composable () -> Unit,
 ) {
     val dark = when (mode) {

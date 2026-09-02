@@ -48,6 +48,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -82,11 +83,14 @@ import gh.mutalib.sika.ui.settings.SettingsRoute
 import gh.mutalib.sika.ui.settings.SettingsScreen
 import gh.mutalib.sika.ui.settings.SettingsToast
 import gh.mutalib.sika.ui.settings.SettingsViewModel
+import gh.mutalib.sika.ui.splash.SplashScreen
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Bg
 import gh.mutalib.sika.ui.theme.LocalSikaColors
+import gh.mutalib.sika.ui.theme.LocalThemeRevealing
 import gh.mutalib.sika.ui.theme.SikaTheme
+import gh.mutalib.sika.ui.theme.ThemeRevealHost
 import gh.mutalib.sika.ui.theme.ThemePreference
 import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextMuted
@@ -108,33 +112,79 @@ class MainActivity : ComponentActivity() {
     private val openRow = mutableStateOf<Long?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // ⚠ **Before super.onCreate, always.** installSplashScreen() swaps the activity's
+        // theme from Theme.Sika.Splash to Theme.Sika, and it has to do that before the window
+        // is created or the app spends its whole life in the splash theme.
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         Log.i(TAG, "MainActivity started")
         openRow.value = rowIdFrom(intent)
         enableEdgeToEdge()
+
+        // Holds Android's splash on screen until Compose has drawn its first frame, so the
+        // handover lands on a picture rather than on an empty window.
+        var composeDrawn = false
+        splash.setKeepOnScreenCondition { !composeDrawn }
+
+        // ⚠ **The seam is here, and this is what hides it.** Android's splash and Sika's
+        // splash draw the same mark on the same disc on the same ground, so a short cross-fade
+        // between them reads as one screen that simply starts moving. Without the fade the
+        // system splash vanishes in a single frame, which is visible as a blink even when both
+        // pictures are identical.
+        splash.setOnExitAnimationListener { provider ->
+            provider.view.animate()
+                .alpha(0f)
+                .setDuration(180L)
+                .withEndAction { provider.remove() }
+                .start()
+        }
+
         setContent {
             // Loaded once, then held in composition. Saved on every change so the choice
             // survives a relaunch.
             var mode by rememberSaveable { mutableStateOf(ThemePreference.load(this)) }
-            SikaTheme(
+
+            // ⚠ rememberSaveable, so a rotation does not replay the opening. The splash is for
+            // arriving at Sika, not for every time the activity is rebuilt.
+            var splashDone by rememberSaveable { mutableStateOf(false) }
+            var swept by rememberSaveable { mutableStateOf(false) }
+
+            ThemeRevealHost(
                 mode = mode,
                 onModeChange = { mode = it; ThemePreference.save(this, it) },
-            ) {
-                // ⚠ The status bar is drawn by Android, not by Sika, so the theme does not
-                // reach it on its own. Caught on the device 2026-09-01: in light mode the
-                // clock and the notification icons stayed white on a near-white page and
-                // were all but invisible. `isAppearanceLightStatusBars` asks the system for
-                // DARK glyphs — the flag is named for the background, not the icons, which
-                // is the easiest thing in this API to get backwards.
-                val darkTheme = !LocalSikaColors.current.isDark
-                val view = LocalView.current
-                LaunchedEffect(darkTheme) {
-                    WindowCompat.getInsetsController(window, view).apply {
-                        isAppearanceLightStatusBars = darkTheme
-                        isAppearanceLightNavigationBars = darkTheme
+            ) { setMode ->
+                SikaTheme(mode = mode, onModeChange = setMode) {
+                    // ⚠ The status bar is drawn by Android, not by Sika, so the theme does not
+                    // reach it on its own. Caught on the device 2026-09-01: in light mode the
+                    // clock and the notification icons stayed white on a near-white page and
+                    // were all but invisible. `isAppearanceLightStatusBars` asks the system for
+                    // DARK glyphs — the flag is named for the background, not the icons, which
+                    // is the easiest thing in this API to get backwards.
+                    val darkTheme = !LocalSikaColors.current.isDark
+                    val revealing = LocalThemeRevealing.current
+                    val view = LocalView.current
+                    // ⚠ Held still while the ripple runs. Flipping the glyphs the instant the
+                    // mode changes turns them dark over a screen that is still three-quarters
+                    // light, which reads as a glitch in the middle of the effect.
+                    LaunchedEffect(darkTheme, revealing) {
+                        if (revealing) return@LaunchedEffect
+                        WindowCompat.getInsetsController(window, view).apply {
+                            isAppearanceLightStatusBars = darkTheme
+                            isAppearanceLightNavigationBars = darkTheme
+                        }
+                    }
+                    LaunchedEffect(Unit) { composeDrawn = true }
+
+                    Box(Modifier.fillMaxSize()) {
+                        SikaApp(openRow, onSwept = { swept = true })
+                        if (!splashDone) {
+                            SplashScreen(
+                                appReady = swept,
+                                onFinished = { splashDone = true },
+                            )
+                        }
                     }
                 }
-                SikaApp(openRow)
             }
         }
     }
@@ -162,7 +212,7 @@ private sealed interface Gate {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SikaApp(openRow: MutableState<Long?>) {
+private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
     val context = LocalContext.current
     val animated = remember { animationsEnabled(context) }
 
@@ -207,6 +257,12 @@ private fun SikaApp(openRow: MutableState<Long?>) {
             gate = Gate.Ready
         }
     }
+
+    // ⚠ **Tells the splash the screen behind it is worth showing.** Anything that is not
+    // Sweeping is a finished destination — the tour, a permission request, the ledger — so
+    // the splash can lift. Reading the inbox is the only thing worth covering, and covering
+    // it is the reason the splash costs almost nothing on a full inbox.
+    LaunchedEffect(gate) { if (gate !is Gate.Sweeping) onSwept() }
 
     // Re-booked on every launch rather than once ever. Alarms do not survive a reinstall,
     // a "force stop", or Android reclaiming them, and re-setting one that already exists

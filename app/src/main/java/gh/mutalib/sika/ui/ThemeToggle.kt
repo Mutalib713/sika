@@ -6,9 +6,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
@@ -36,6 +43,9 @@ fun ThemeToggle(modifier: Modifier = Modifier) {
     val mode = LocalThemeMode.current
     val onChange = LocalSetThemeMode.current
     val showingDark = LocalSikaColors.current.isDark
+    // Where the ripple starts. Recorded in window coordinates because that is the space the
+    // snapshot is drawn in — see ThemeRevealHost.
+    var centre by remember { mutableStateOf<Offset?>(null) }
     // ⚠ The icon shows what a TAP WILL DO, not what the setting currently is. On a dark
     // screen it is a sun, because tapping brings the light one. An icon naming the present
     // state leaves you working out the consequence yourself, on a control whose whole job is
@@ -46,7 +56,8 @@ fun ThemeToggle(modifier: Modifier = Modifier) {
         modifier
             .size(44.dp) // ≥44dp touch target, docs/screens.md
             .clip(RoundedCornerShape(22.dp))
-            .clickable { onChange(mode.next(showingDark)) },
+            .onGloballyPositioned { centre = it.boundsInWindow().center }
+            .clickable { onChange(mode.next(showingDark), centre) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

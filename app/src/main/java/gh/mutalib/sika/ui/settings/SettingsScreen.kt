@@ -39,6 +39,9 @@ import java.time.format.DateTimeFormatter
 import gh.mutalib.sika.BuildConfig
 import gh.mutalib.sika.R
 import gh.mutalib.sika.notify.NotificationPrefs
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.agree
 import gh.mutalib.sika.ui.count
@@ -84,6 +87,7 @@ fun SettingsScreen(
     val mode = LocalThemeMode.current
     val setMode = LocalSetThemeMode.current
     var choosingTheme by remember { mutableStateOf(false) }
+    var themeRowCentre by remember { mutableStateOf<Offset?>(null) }
 
     var cashOut by remember { mutableStateOf(NotificationPrefs.cashOutPrompt(context)) }
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
@@ -119,6 +123,13 @@ fun SettingsScreen(
                     SettingsRow(
                         icon = themeIcon(mode),
                         title = "Appearance",
+                        // ⚠ The ripple starts at this ROW, not at the dialog that opens from
+                        // it. A dialog is a separate window, so it is not in the snapshot the
+                        // effect is drawn from — and by the time the animation runs the dialog
+                        // has already closed. The row is where the eye was before and after.
+                        modifier = Modifier.onGloballyPositioned {
+                            themeRowCentre = it.boundsInWindow().center
+                        },
                         onClick = { choosingTheme = true },
                     ) { ValueAndChevron(mode.label) }
                 }
@@ -339,7 +350,7 @@ fun SettingsScreen(
     if (choosingTheme) {
         AppearanceDialog(
             current = mode,
-            onPick = { setMode(it); choosingTheme = false },
+            onPick = { setMode(it, themeRowCentre); choosingTheme = false },
             onDismiss = { choosingTheme = false },
         )
     }

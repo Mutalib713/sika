@@ -562,6 +562,41 @@ the binary-safe form, and the header was checked before anything was installed.
 
   ⚠ **Date tests pass on Africa/Accra, which is UTC+0 with no DST** — the one zone where a
   timezone bug is invisible. They prove correctness here, not portability.
+- [x] **18b. An opening, and a theme switch that travels** — built 2026-09-02, verified on the
+  Pixel by screen recording.
+
+  Mutalib's two requests, same day: *"a splash screen animation with the app logo and name when
+  u first open the app"*, and Telegram's theme switch — *"it starts like an oval shape and
+  spreads the screen and when u switch back to light mode it does the opposite"*.
+
+  ⚠ **The splash was not added. It was taken over.** On API 31+ Android shows a splash for
+  every app whether it asks or not, and Sika's was the default: the launcher icon on the window
+  background. Building a custom splash Activity would have shown *both*. `Theme.Sika.Splash`
+  styles the system one; `ui/splash/SplashScreen.kt` is what it hands over to.
+
+  ⚠ **The hold is a floor, not a wait.** The splash covers the inbox sweep, which has always
+  happened behind a skeleton — so on a full inbox it costs close to nothing.
+
+  ⚠ **The ripple cannot draw the new theme; it freezes the old one.** Compose holds one theme at
+  a time, so the effect photographs the screen with `PixelCopy`, switches the theme behind the
+  photograph, then grows a hole in it. Going back to light is the same photograph clipped to a
+  *shrinking* circle instead — which is exactly what "does the opposite" means.
+
+  **Three faults the recording caught that the build could not:**
+  - The system splash came up **dark while the app was light** — Android picks that colour from
+    the phone's night setting before any Sika code runs, and cannot know the theme was
+    overridden in-app. Now washed across over 420ms instead of flashing.
+  - `windowSplashScreenIconBackgroundColor` **was being ignored**: on API 31+ the platform reads
+    the `android:`-prefixed attributes, and core-splashscreen's un-prefixed ones are for its
+    API 21–30 backport only. It compiled, ran, and did nothing.
+  - The mark **jumped 13% smaller** at the handover. Measured off two frames of the same video —
+    62px system vs 70px Compose — and corrected to 117dp.
+
+  ⚠ **Also fixed on the way, and it was a real bug:** `themes.xml` set a dark window background
+  for everyone, with a comment saying "dark only, deliberately". True when written, wrong from
+  the day light mode became the default. Every light-mode cold start began with a flash of
+  #101422. Now split across `values/` and `values-night/`.
+
 - [ ] **19. Tag `v1.0.0`.** Then leave it alone and use it for a month.
 
 ---

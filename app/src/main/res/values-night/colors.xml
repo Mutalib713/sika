@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark ground. Matches `SikaDark.bg` in ui/theme/Color.kt — if one changes, change
+         both, or a cold start flashes the old colour before Compose draws. -->
+    <color name="bg">#FF101422</color>
+
+    <!-- Unchanged between themes on purpose: the mark's disc belongs to the mark, not to the
+         page it happens to be sitting on. It is the same pale field in the launcher icon. -->
+    <color name="splash_icon_bg">#FFE8F6FA</color>
+</resources>

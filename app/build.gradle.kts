@@ -124,6 +124,13 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
+
+    // ⚠ **Not "adds a splash screen" — takes control of the one Android already shows.** On
+    // API 31+ every app gets a system splash whether it asks or not, and Sika's was the
+    // default: the launcher icon on the window background. This library is how an app styles
+    // it and, more importantly, how it holds it on screen and hands it over without a seam.
+    // res/values/themes.xml has the style; MainActivity has the handover.
+    implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.compose.ui:ui:1.9.0")
     implementation("androidx.compose.foundation:foundation:1.9.0")
     implementation("androidx.compose.material3:material3:1.4.0")

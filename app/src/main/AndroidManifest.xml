@@ -101,9 +101,15 @@
           and hand it the row id, not stack a second copy of Sika on top of the first.
           onNewIntent is what receives it in that case.
         -->
+        <!--
+          ⚠ The SPLASH theme goes on the activity, not the application. `postSplashScreenTheme`
+          inside it swaps back to Theme.Sika the moment installSplashScreen() runs, so the app
+          never actually lives in this theme — it only starts in it.
+        -->
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"
+            android:theme="@style/Theme.Sika.Splash"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

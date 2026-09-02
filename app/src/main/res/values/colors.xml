@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Only the window background needs to exist as an Android resource. Everything
-         else is a Compose token in ui/theme/Color.kt. Keep this in step with `Bg` there. -->
-    <color name="bg">#FF101422</color>
+         else is a Compose token in ui/theme/Color.kt. Keep this in step with `Bg` there.
+
+         This is the LIGHT ground; values-night/colors.xml holds the dark one. -->
+    <color name="bg">#FFF7F8FA</color>
+
+    <!-- The disc the mark sits on during the system splash. It is the icon's own field
+         colour, so the splash and the launcher icon are the same object. -->
+    <color name="splash_icon_bg">#FFE8F6FA</color>
 </resources>

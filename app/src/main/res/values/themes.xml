@@ -1,16 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Dark only, deliberately. docs/ui-guidelines.md: #101422 is the ground, and
-      inverting to a light theme needs a second set of decisions Mutalib has not made.
-      Half-supporting light mode is worse than not supporting it.
+      This is only the window background Android paints before Compose draws anything. The
+      real palette lives in ui/theme/Color.kt; this file exists to stop a flash of the wrong
+      colour on cold start.
 
-      This is only the window background before Compose draws — the real palette lives
-      in ui/theme/Color.kt. Matching them stops the white flash on cold start.
+      ⚠ **This used to be dark for everyone, and that was a real bug by 2026-09-01.** The
+      comment here said "dark only, deliberately" — true when it was written, wrong the day
+      light mode shipped and became the default for a phone that states no preference. Every
+      cold start in light mode began with a flash of #101422. Split into values/ and
+      values-night/ on 2026-09-02, so Android picks the ground before Sika is running.
+
+      ⚠ **The one case this cannot cover:** someone who overrides the theme *inside* Sika to
+      something their phone disagrees with. Android chooses this background from the phone's
+      setting, before any of Sika's code runs, so it cannot know. The splash cross-fades to
+      the real theme instead of snapping — see ui/splash/SplashScreen.kt.
     -->
     <style name="Theme.Sika" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@color/bg</item>
         <item name="android:navigationBarColor">@color/bg</item>
+    </style>
+
+    <!--
+      The system splash screen, Android 12+.
+
+      ⚠ **Not optional, and that is the reason this style exists.** On API 31 and above
+      Android shows a splash screen for every app whether it asks for one or not — Sika's was
+      the default: the launcher icon on the window background. So this is not "adding a splash
+      screen", it is taking control of one that was already there. Trying to replace it with
+      a custom Activity instead would show BOTH, one after the other.
+
+      ⚠ **`windowSplashScreenIconBackgroundColor` is doing real work.** Without it the mark is
+      drawn straight onto the window background, and Sika's mark is a dark bubble — invisible
+      on the dark ground in night mode. The icon background gives it its own pale disc on any
+      theme, which is exactly what the attribute is for.
+
+      No animated icon here on purpose. The system caps that animation at a second and gives
+      almost no control over it; the animation Mutalib asked for runs in Compose, and this
+      screen's job is only to hand over to it without a seam.
+    -->
+    <style name="Theme.Sika.Splash" parent="Theme.SplashScreen">
+        <!--
+          ⚠ **`android:`-prefixed, and the prefix is the whole point.** core-splashscreen has
+          its own un-prefixed copies of these attributes for its API 21–30 backport. On API 31
+          and up the *platform* draws the splash and reads the `android:` ones — so the
+          un-prefixed spelling compiles, runs, and is quietly ignored. Measured on the Pixel,
+          2026-09-02: the icon appeared but its background disc did not, because
+          `windowSplashScreenIconBackgroundColor` was never being read.
+
+          minSdk is 31, so the un-prefixed forms have nothing left to do here at all.
+        -->
+        <item name="android:windowSplashScreenBackground">@color/bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_icon_bg</item>
+        <!-- This one IS the library's own, and has no platform equivalent. -->
+        <item name="postSplashScreenTheme">@style/Theme.Sika</item>
     </style>
 </resources>

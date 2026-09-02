@@ -96,13 +96,18 @@ fun RowDivider() {
 fun SettingsRow(
     icon: Int,
     title: String,
+    // ⚠ First optional parameter, and lint enforces it (`ModifierParameter`). The convention
+    // is not fussiness: it is what lets every call site pass a modifier in the same position
+    // without reading the signature. All 14 callers name their arguments, so moving it here
+    // changed nothing at any of them.
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     tint: Color? = null,
     onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .defaultMinSize(minHeight = 56.dp)
