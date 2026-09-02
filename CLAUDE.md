@@ -50,6 +50,22 @@ python tools/icon/check_icon.py            # prove the art fits the safe circle 
 and once by hand as vector XML — and the two silently disagreed, so the sketch that was measured
 was not the drawing that shipped. Edit the geometry, regenerate, re-run the check.
 
+The rest of `tools/` needs a device. **`tools/README.md` is the guide**; the short version:
+
+```bash
+python tools/hand_check.py 2026-08   # are the totals right? re-reads the raw MTN texts
+python tools/seed_month.py 2026-09   # give an emulator a month (refuses a real phone)
+python tools/notif_drive.py cashout  # answer a cash-out from the shade, without opening the app
+```
+
+⚠ **`hand_check.py` is the one to reach for when a figure looks wrong**, because it is the only
+thing here that does not share Sika's parser. It re-reads `rawBody` with its own regexes, and
+its `--chain` pass tests every row against the balances **MTN itself printed** — arithmetic
+nothing in this repo had a hand in.
+
+⚠ **They refuse to guess when a phone and an emulator are both attached.** Pass `--device`.
+Writing test rows into the real ledger is the mistake worth making impossible.
+
 
 ## Deploy
 

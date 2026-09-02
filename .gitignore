@@ -41,3 +41,14 @@ desktop.ini
 
 # Design exploration sketches — not part of the app
 /design-scratch/
+
+# ⚠ **The real ledger, and it must never be committed.** `tools/hand_check.py` copies the
+# live database off the phone to check the report's totals against the raw MTN messages. That
+# copy is Mutalib's actual financial history: every counterparty, every balance, every
+# transaction id. The tool that makes this folder is now in the repo, so the folder it writes
+# to has to be ignored here rather than remembered by whoever runs it.
+/tools/.pulled/
+
+# Python bytecode from tools/
+__pycache__/
+*.pyc

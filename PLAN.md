@@ -688,10 +688,15 @@ the binary-safe form, and the header was checked before anything was installed.
 
 - [x] **19. Tagged `v1.0.0`** on 2026-09-02, at `575d4d8`, with `versionName` bumped to match.
 
-  ⚠ **The tag is already behind, and that is worth stating rather than hiding.** Two commits
-  landed after it — the emulator verification, and the notification icon and tour mark. So the
-  build on the phone is *not* what `v1.0.0` points at. Cut a `v1.0.1` when the next thing
-  ships, or move the tag; do not let the gap widen quietly.
+  ⚠ **The tag went stale within hours, and the fix was a second tag rather than moving the
+  first.** Three commits landed after `v1.0.0` — the emulator verification, the notification
+  icon and tour mark, and the tools move — so the build on the phone was not what the tag
+  pointed at. `v1.0.1` was cut at `versionCode 2 / versionName 1.0.1`.
+
+  Moving `v1.0.0` would have been tidier to look at and worse to trust: a tag that changes what
+  it points at is a tag that cannot be used to answer "what was on the phone that day". Leave
+  old tags where they are, even in a one-person repo — especially in one, since there is nobody
+  else to notice.
 
   Now the part that is not a task: **leave it alone and use it for a month.**
 
