@@ -36,6 +36,20 @@ must work with no device attached:
 ./gradlew connectedDebugAndroidTest   # needs the Pixel plugged in
 ```
 
+The launcher icon has its own check, because nothing in the Android toolchain has an opinion
+about artwork that runs off the edge of its own canvas — the build succeeds, lint passes, and
+the damage only appears once it is on a phone:
+
+```bash
+python tools/icon/build_launcher_icon.py   # regenerate the drawables from tools/icon/icon_p2.py
+python tools/icon/check_icon.py            # prove the art fits the safe circle and is centred
+```
+
+⚠ **`tools/icon/icon_p2.py` is the only description of the icon. Never hand-edit the generated
+`ic_launcher_*.xml`.** The first version of this icon was drawn twice — once as an SVG sketch
+and once by hand as vector XML — and the two silently disagreed, so the sketch that was measured
+was not the drawing that shipped. Edit the geometry, regenerate, re-run the check.
+
 
 ## Deploy
 

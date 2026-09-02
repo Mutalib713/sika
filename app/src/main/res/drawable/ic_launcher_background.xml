@@ -19,7 +19,7 @@
     </path>
     <path
         android:pathData="M108,20 C70,44 52,80 46,108 L20,108 C26,66 56,30 108,8 Z"
-        android:fillAlpha="0.20"
+        android:fillAlpha="0.2"
         >
         <aapt:attr name="android:fillColor">
             <gradient android:type="linear"

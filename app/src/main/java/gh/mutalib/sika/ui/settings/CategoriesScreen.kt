@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import gh.mutalib.sika.R
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.agree
+import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Border
@@ -236,10 +238,9 @@ private fun CategoryListRow(
 
 private fun usageLine(row: CategoryRow, putAway: Boolean): String = when {
     row.uses == 0 -> "Never used"
-    putAway && row.uses == 1 -> "1 transaction keeps this label"
-    putAway -> "${row.uses} transactions keep this label"
-    row.uses == 1 -> "1 transaction"
-    else -> "${row.uses} transactions"
+    putAway -> count(row.uses, "transaction") + " " +
+        agree(row.uses, "keeps", "keep") + " this label"
+    else -> count(row.uses, "transaction")
 }
 
 /**
@@ -269,9 +270,11 @@ private fun PutAwayDialog(row: CategoryRow, onConfirm: () -> Unit, onDismiss: ()
                 if (row.uses == 0) {
                     "It stops appearing when you label something. You can bring it back any time."
                 } else {
-                    "It stops appearing when you label something. Its ${row.uses} transactions " +
-                        "keep the label they already have, and the report still counts the " +
-                        "money. You can bring it back any time."
+                    "It stops appearing when you label something. Its " +
+                        count(row.uses, "transaction") + " " +
+                        agree(row.uses, "keeps the label it already has", "keep the label they " +
+                            "already have") + ", and the report still counts the money. " +
+                        "You can bring it back any time."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextMuted,

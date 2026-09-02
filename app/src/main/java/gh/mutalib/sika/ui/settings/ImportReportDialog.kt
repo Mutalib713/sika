@@ -22,6 +22,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import gh.mutalib.sika.data.BackupIo
+import gh.mutalib.sika.ui.agree
+import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.theme.Accent
 import gh.mutalib.sika.ui.theme.AccentContrast
 import gh.mutalib.sika.ui.theme.Border
@@ -99,18 +101,25 @@ fun ImportReportDialog(report: BackupIo.Import, onDismiss: () -> Unit) {
     }
 }
 
-private fun headline(r: BackupIo.Import): String {
+/**
+ * What a restore put back, zeroes left out.
+ *
+ * ⚠ **Internal, not private, because the toast says the same thing.** A restore that goes
+ * cleanly is reported in a toast by `SettingsViewModel`; one that skipped rows gets this
+ * dialog. Those were two copies of this sentence until 2026-09-02, and the copies had already
+ * drifted — the dialog guarded "1 row", the toast did not. One function, both callers.
+ */
+internal fun headline(r: BackupIo.Import): String {
     val parts = buildList {
-        if (r.added > 0) add("${r.added} transactions")
-        if (r.labels > 0) add("${r.labels} labels")
-        if (r.notes > 0) add("${r.notes} notes")
-        if (r.categories > 0) add("${r.categories} categories")
-        if (r.rules > 0) add("${r.rules} rules")
+        if (r.added > 0) add(count(r.added, "transaction"))
+        if (r.labels > 0) add(count(r.labels, "label"))
+        if (r.notes > 0) add(count(r.notes, "note"))
+        if (r.categories > 0) add(count(r.categories, "category", "categories"))
+        if (r.rules > 0) add(count(r.rules, "rule"))
     }
     return if (parts.isEmpty()) "Nothing new was restored."
     else "Restored " + parts.joinToString(", ") + "."
 }
 
-private fun skipped(n: Int): String =
-    if (n == 1) "1 row could not be read and was left out."
-    else "$n rows could not be read and were left out."
+internal fun skipped(n: Int): String =
+    count(n, "row") + " could not be read and " + agree(n, "was", "were") + " left out."

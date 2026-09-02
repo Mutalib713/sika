@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   The adaptive icon. The launcher supplies the mask, which is why there is no shape here:
-  a Pixel crops this to a circle, Samsung to a squircle, other skins to a rounded square.
-  One file, every shape.
+  a Pixel crops this to a circle, Samsung to a squircle, other skins to a rounded square or a
+  teardrop. One file, every shape — and nothing to choose, because the choice is not ours.
 
-  monochrome is Android 13+ themed icons. Without it the launcher falls back to shrinking
-  the colour icon into a grey blob, which looks broken next to apps that provide one.
+  monochrome is Android 13+ themed icons. Without it the launcher falls back to shrinking the
+  colour icon into a grey blob, which looks broken beside apps that provide one.
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background"/>

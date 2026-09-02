@@ -10,6 +10,7 @@ import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ui.count
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -178,7 +179,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
             val result = BackupIo.export(getApplication(), uri)
             _busy.value = false
             _toast.value = result.error?.let { Toast(it, bad = true) }
-                ?: Toast("Saved ${result.rows} transactions, with every label.")
+                ?: Toast("Saved " + count(result.rows, "transaction") + ", with every label.")
         }
     }
 
@@ -198,17 +199,14 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Says what changed, in the order that matters, and leaves out the zeroes. */
+    /**
+     * Says what changed, in the order that matters, and leaves out the zeroes.
+     *
+     * Both sentences come from [headline] and [skipped], which the report dialog also uses, so
+     * the toast and the dialog cannot describe the same restore differently.
+     */
     private fun summarise(r: BackupIo.Import): String {
-        val parts = buildList {
-            if (r.added > 0) add("${r.added} transactions")
-            if (r.labels > 0) add("${r.labels} labels")
-            if (r.notes > 0) add("${r.notes} notes")
-            if (r.categories > 0) add("${r.categories} categories")
-            if (r.rules > 0) add("${r.rules} rules")
-        }
-        val head = "Restored " + parts.joinToString(", ") + "."
-        return if (r.problems.isEmpty()) head
-        else head + " " + r.problems.size + " rows could not be read and were left out."
+        val head = headline(r)
+        return if (r.problems.isEmpty()) head else head + " " + skipped(r.problems.size)
     }
 }

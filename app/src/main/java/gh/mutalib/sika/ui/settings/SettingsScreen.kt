@@ -40,6 +40,8 @@ import gh.mutalib.sika.BuildConfig
 import gh.mutalib.sika.R
 import gh.mutalib.sika.notify.NotificationPrefs
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.agree
+import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.home.ACCRA
 import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.theme.Accent
@@ -287,7 +289,7 @@ fun SettingsScreen(
                         subtitle = if (busy) {
                             "Working…"
                         } else {
-                            "${state.transactions} transactions and every label, as CSV"
+                            count(state.transactions, "transaction") + " and every label, as CSV"
                         },
                         onClick = if (busy) null else onExport,
                     ) { Chevron() }
@@ -405,7 +407,8 @@ private fun StateLine(state: SettingsState, smsGranted: Boolean) {
         bad -> "SMS access is off"
         state.transactions == 0 -> "No MoMo messages found yet"
         state.allBalancing -> "Reading your messages"
-        else -> "${state.gaps} transactions do not add up"
+        else -> count(state.gaps, "transaction") + " " +
+            agree(state.gaps, "does", "do") + " not add up"
     }
     val tail = when {
         bad -> " · Sika sees nothing"

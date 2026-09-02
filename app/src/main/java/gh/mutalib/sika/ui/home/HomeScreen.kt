@@ -46,6 +46,8 @@ import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
 import androidx.compose.ui.platform.LocalContext
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.agree
+import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.onboarding.OnboardingPrefs
 import gh.mutalib.sika.ui.ThemeToggle
 import gh.mutalib.sika.ui.report.BucketBars
@@ -641,10 +643,11 @@ private val MONTH_NAME: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM")
 private val DAY_MONTH: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMMM")
 
 private fun subtitle(state: HomeState): String = when {
-    state.gaps > 0 -> "${state.gaps} ${if (state.gaps == 1) "transaction doesn't" else "transactions don't"} add up"
-    state.unlabelled > 0 -> "${state.unlabelled} still need a category"
-    state.total == 1 -> "1 transaction, all accounted for"
-    state.total > 0 -> "${state.total} transactions, all accounted for"
+    state.gaps > 0 -> count(state.gaps, "transaction") + " " +
+        agree(state.gaps, "doesn't", "don't") + " add up"
+    state.unlabelled > 0 -> "${state.unlabelled} still " +
+        agree(state.unlabelled, "needs", "need") + " a category"
+    state.total > 0 -> count(state.total, "transaction") + ", all accounted for"
     else -> "Nothing recorded this month yet"
 }
 
