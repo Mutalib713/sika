@@ -20,8 +20,11 @@ import kotlinx.coroutines.launch
  *     SecurityException: Permission Denial: not allowed to send broadcast
  *     android.provider.Telephony.SMS_RECEIVED from pid=…, uid=2000
  *
- * There is no emulator on this machine either (PROFILE.md § 10), so `adb emu sms send` is
- * not available.
+ * ⚠ **"There is no emulator on this machine" was true when this was written and is not any
+ * more** — an `android-34 google_apis` AVD exists, created for another project, and it is
+ * what PLAN task 14's clock-rolling check finally ran on (2026-09-02). It still does not help
+ * with SMS: an emulator can fake a message, but not doze, not battery optimisation, and not
+ * MTN's real wording. Use it for clocks and alarms, not for the ledger.
  *
  * This receiver takes a message body on its own private action and pushes it through
  * [SmsIngest] — **the identical code path a real SMS takes**, minus the PDU decoding that
@@ -83,6 +86,45 @@ class DebugSmsReceiver : BroadcastReceiver() {
                     gh.mutalib.sika.notify.DailyNudge.show(context.applicationContext, n)
                 } finally {
                     pendingNudge.finish()
+                }
+            }
+            return
+        }
+
+        // Shows the monthly summary now, for a month you name, instead of waiting for 9am on
+        // the 1st.
+        //
+        //   adb shell am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS \
+        //     -n gh.mutalib.sika/.sms.DebugSmsReceiver --es monthly 2026-08
+        //     ( --es monthly last  for the month just gone )
+        //
+        // ⚠ **This does NOT test the alarm, and must not be mistaken for doing so.** It calls
+        // the same code the alarm's receiver calls, so it proves the summary is built and the
+        // notification renders — the parts you can look at. Whether `AlarmManager` actually
+        // wakes the app at 9am on the 1st is a different claim, and the only honest ways to
+        // check it are `dumpsys alarm` (that the alarm is booked) and rolling a clock forward
+        // on an emulator (that it fires and rebooks).
+        val monthly = intent.getStringExtra("monthly")
+        if (!monthly.isNullOrBlank()) {
+            val pendingMonthly = goAsync()
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    val zone = gh.mutalib.sika.ui.home.ACCRA
+                    val anyDay = if (monthly.equals("last", true)) {
+                        java.time.LocalDate.now(zone).minusMonths(1)
+                    } else {
+                        java.time.LocalDate.parse("$monthly-01")
+                    }
+                    val period = gh.mutalib.sika.ledger.Period.monthOf(anyDay)
+                    val rows = gh.mutalib.sika.data.SikaDatabase.get(context.applicationContext)
+                        .transactions().allChronological()
+                    val summary = gh.mutalib.sika.ledger.summarise(rows, period, zone)
+                    Log.i(TAG, "debug-inject: monthly report for $anyDay")
+                    gh.mutalib.sika.notify.MonthlyReport.show(context.applicationContext, summary)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "debug-inject: monthly report failed", t)
+                } finally {
+                    pendingMonthly.finish()
                 }
             }
             return

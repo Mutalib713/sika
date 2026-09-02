@@ -88,7 +88,26 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   **no** `--max-workers=1`.
 - The signing key came from the previous laptop: the first reinstall after any signing change
   needs a manual uninstall on the phone first.
-- **No emulator.** SMS behaviour must be verified on the real Pixel with real messages. An emulator
+- **There IS an emulator, and it is for clocks, not for SMS.** An `android-34 google_apis` AVD
+  called `wird_pixel6pro` exists (made for another project). Use it for anything that needs the
+  date moved — alarms, the monthly summary — because winding Mutalib's real phone forward breaks
+  his messages, his alarms and his 2FA for the rest of the day.
+  ```bash
+  ~/AppData/Local/Android/Sdk/emulator/emulator.exe -avd wird_pixel6pro -no-snapshot-load
+  adb -s emulator-5554 root && adb -s emulator-5554 shell settings put global auto_time 0
+  adb -s emulator-5554 shell "date 100108592026.30"   # MMDDhhmmCCYY.ss
+  # ...and put it back afterwards:
+  adb -s emulator-5554 shell settings put global auto_time 1
+  ```
+  ⚠ **`google_apis`, not `google_apis_playstore`** — only the former allows `adb root`, without
+  which the clock cannot be set.
+  ⚠ **Two devices means every adb command needs `-s`.** `installDebug` will not choose for you;
+  build with `assembleDebug` and `adb -s <serial> install -r` instead.
+  ⚠ **Moving the wall clock does not move `elapsedRealtime`.** `setAndAllowWhileIdle` has an
+  hour-wide window measured in *real* seconds, so a jumped-forward alarm goes overdue
+  (`whenElapsed` negative in `dumpsys alarm`) and then fires seconds-to-minutes later in real
+  time. It is not broken; it is batched. Measured 2026-09-02: it fired ~30s after the jump.
+- ⚠ **SMS behaviour still must be verified on the real Pixel with real messages.** An emulator
   can fake an SMS, but it cannot reproduce doze, battery optimisation, or MTN's real wording.
 - ⚠ **`adb shell am broadcast` CANNOT inject a real SMS.** `SMS_RECEIVED` is a protected
   broadcast — `SecurityException: not allowed to send broadcast … from uid=2000`. There is no

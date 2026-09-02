@@ -329,9 +329,39 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   computed. `NotificationPrefs.monthly` and the Settings row shipped with it, and the
   rescheduling walk across 24 firings is covered by `MonthlyReportTest`.
 
-  ⚠ The clock-rolling test in this task's own Verify line was **not** run: winding a real
-  phone's clock to 23:58 on the last of a month to watch one alarm fire is a poor trade
-  against a booked `RTC_WAKEUP` you can read directly and 12 unit tests on `nextFire`.
+  **The clock-rolling test then ran too — Mutalib's idea, 2026-09-02: *"for the month report
+  and notification we can use android studio so we can view how it works"*.** He was right, and
+  it is the one check a real phone genuinely cannot give you: winding *his* clock forward to
+  watch an alarm would derail his messages, his alarms and his 2FA for the rest of the day.
+
+  ⚠ **"There is no emulator on this machine" was stale.** An `android-34 google_apis` AVD
+  already existed, made for another project. `google_apis` rather than `google_apis_playstore`
+  matters: it allows `adb root`, which is what lets the clock be set at all.
+
+  Seeded with an invented September (`design-scratch/seed_emulator.py`, balances forming a real
+  chain so reconciliation is not pre-broken), clock rolled to 2026-10-01 08:59:30, and left
+  alone:
+
+  ```
+  10-01 09:31:02  monthly report posted: September: GHS 671.75 out, GHS 650.00 in
+  10-01 09:31:03  monthly report scheduled for 2026-11-01T09:00Z[Africa/Accra]
+  ```
+
+  Three separate things proved in two lines: it **fired**; it reported **September**, the month
+  that ended, not the one it woke up in; and it rebooked for **1 November**, which is
+  `plusMonths` working rather than "+30 days" drifting. The figures match the seed exactly, and
+  the Report screen for the same month shows `GHS 671.75` out, `GHS 650.00` in, `GHS 878.25`
+  left.
+
+  ⚠ **The wall clock and `elapsedRealtime` are different clocks, and that is why this looks
+  broken at first.** `setAndAllowWhileIdle` gives Android an hour-wide window, measured in
+  *real* seconds — jumping the date forward makes the alarm overdue (`whenElapsed` goes
+  negative) without advancing the window. So it fired about half a minute of real time later,
+  not instantly. Expect that, and do not conclude the alarm is broken at the 10-second mark.
+
+  Also added: `--es monthly 2026-09` on the debug injector, to post the summary for any month
+  on demand. ⚠ It proves the notification renders; it does **not** prove the alarm, and the
+  comment in `DebugSmsReceiver` says so.
 
 - [x] **13b. A note is not a category** — done 2026-09-01
   Mutalib's distinction, 2026-09-01: a cash-out for something one-off — a laptop repair, a
