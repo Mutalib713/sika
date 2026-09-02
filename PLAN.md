@@ -686,7 +686,14 @@ the binary-safe form, and the header was checked before anything was installed.
   the day light mode became the default. Every light-mode cold start began with a flash of
   #101422. Now split across `values/` and `values-night/`.
 
-- [ ] **19. Tag `v1.0.0`.** Then leave it alone and use it for a month.
+- [x] **19. Tagged `v1.0.0`** on 2026-09-02, at `575d4d8`, with `versionName` bumped to match.
+
+  ⚠ **The tag is already behind, and that is worth stating rather than hiding.** Two commits
+  landed after it — the emulator verification, and the notification icon and tour mark. So the
+  build on the phone is *not* what `v1.0.0` points at. Cut a `v1.0.1` when the next thing
+  ships, or move the tag; do not let the gap widen quietly.
+
+  Now the part that is not a task: **leave it alone and use it for a month.**
 
 ---
 
