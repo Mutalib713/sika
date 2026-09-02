@@ -64,6 +64,7 @@ import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
 import gh.mutalib.sika.ui.theme.categoryColor
 import gh.mutalib.sika.ui.theme.categoryIcon
+import gh.mutalib.sika.ui.theme.incomingIcon
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -498,8 +499,10 @@ private fun SectionHeading(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
-    val colour = categoryColor(row.label)
     val incoming = row.direction == Direction.IN
+    // ⚠ Incoming borrows the accent rather than the "no category" grey, because grey here
+    // means "unfinished" and money arriving is not unfinished.
+    val colour = if (incoming && row.label == null) Accent else categoryColor(row.label)
     Row(
         Modifier
             .fillMaxWidth()
@@ -516,7 +519,9 @@ internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                painterResource(categoryIcon(row.label)),
+                painterResource(
+                    if (incoming && row.label == null) incomingIcon() else categoryIcon(row.label),
+                ),
                 contentDescription = null,
                 tint = colour,
                 modifier = Modifier.size(15.dp),
@@ -536,11 +541,18 @@ internal fun TransactionRow(row: TransactionEntity, onClick: () -> Unit) {
             // ones", so it says nothing, and spending half the line on it pushes out the half
             // that says everything. The icon and the colour still mark the row as Other, so
             // nothing is lost by letting the words be the useful ones.
+            // ⚠ **Incoming money is never asked to add a category**, or the list contradicts
+            // the sheet: tapping a payment received now says "not spending, so it needs no
+            // category", and a row still reading "Add category" underneath it would be the app
+            // arguing with itself. Caught on the device 2026-09-02, one screen after the sheet
+            // was fixed — the same rule, missed in the second place it applies.
             Text(
-                (row.note?.takeIf { it.isNotBlank() } ?: row.label ?: "Add category") + " · " +
+                (row.note?.takeIf { it.isNotBlank() }
+                    ?: row.label
+                    ?: if (incoming) "Money in" else "Add category") + " · " +
                     TIME.format(Instant.ofEpochMilli(row.occurredAt).atZone(ACCRA)),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (row.label == null) TextMuted else colour,
+                color = if (row.label == null && !incoming) TextMuted else colour,
             )
         }
         Text(

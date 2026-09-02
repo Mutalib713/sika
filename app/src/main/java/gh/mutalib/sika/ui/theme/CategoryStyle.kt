@@ -66,6 +66,15 @@ fun categoryColor(name: String?): Color {
  *
  * Never falls back to nothing: a row with no icon reads as a rendering failure.
  */
+/**
+ * The mark for money arriving.
+ *
+ * ⚠ **Kept as its own function rather than a `"Money in"` entry in [categoryIcon].** Incoming
+ * money carries no label at all — nothing is written to the database for it — so there is no
+ * name to match on. Direction is the fact, and the caller is the only place that knows it.
+ */
+fun incomingIcon(): Int = R.drawable.ic_cat_money_in
+
 fun categoryIcon(name: String?): Int = when (name) {
     "Food" -> R.drawable.ic_cat_food
     "Transport" -> R.drawable.ic_cat_transport

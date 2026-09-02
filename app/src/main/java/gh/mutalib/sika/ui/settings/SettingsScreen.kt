@@ -80,7 +80,9 @@ fun SettingsScreen(
     onRoute: (SettingsRoute) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
-    onRunSetupAgain: () -> Unit,
+    // ⚠ `onRunSetupAgain` was removed on 2026-09-02 with the "Show the tour again" row. The
+    // machinery it drove is intact — `OnboardingPrefs.setTourSeen(false)` plus `setDone(false)`
+    // sends someone back through the flow — so restoring the row is a few lines, not a rebuild.
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -152,14 +154,13 @@ fun SettingsScreen(
                         tint = if (termOver) Warn else TextMuted,
                         onClick = { editing = Personal.SEMESTER },
                     ) { Chevron() }
-                    RowDivider()
-                    SettingsRow(
-                        icon = R.drawable.ic_sparkles,
-                        title = "Show the tour again",
-                        subtitle = "The four screens from first run",
-                        onClick = onRunSetupAgain,
-                    ) { Chevron() }
                 }
+                // ⚠ **"Show the tour again" was removed here on 2026-09-02, at Mutalib's
+                // call: "i don't think it's relevant".** He is right, and the reason is worth
+                // keeping: it was a first-run thing given a permanent home. Nobody watches an
+                // onboarding tour twice, and every row in Settings costs attention from the
+                // rows that do get used. The flow itself is untouched — `OnboardingPrefs`
+                // still has `setTourSeen`, so a way back can be added if one is ever wanted.
                 // ⚠ A term that has finished keeps reporting on itself. Every figure in the
                 // semester view stays correct about the wrong stretch of time, which is the
                 // kind of wrong nobody spots.
@@ -200,25 +201,6 @@ fun SettingsScreen(
             item {
                 SectionLabel("READING YOUR MESSAGES")
                 SettingsCard {
-                    SettingsRow(
-                        icon = R.drawable.ic_message,
-                        title = "SMS access",
-                        subtitle = if (smsGranted) {
-                            "Sika reads MoMo messages and nothing else"
-                        } else {
-                            "Without it there is nothing to track"
-                        },
-                        tint = if (smsGranted) TextMuted else Danger,
-                        onClick = if (smsGranted) null else ({ openAppSettings(context) }),
-                    ) {
-                        Text(
-                            if (smsGranted) "On" else "Turn on",
-                            style = MaterialTheme.typography.bodyMedium
-                                .copy(fontWeight = FontWeight.W600),
-                            color = if (smsGranted) Accent else Danger,
-                        )
-                    }
-                    RowDivider()
                     SettingsRow(
                         icon = R.drawable.ic_notification,
                         title = "Ask what a cash-out was for",
@@ -262,6 +244,44 @@ fun SettingsScreen(
                             NotificationPrefs.setGapAlert(context, it)
                         }
                     }
+                    RowDivider()
+                    // ⚠ **Two things fixed here on 2026-09-02, both found by Mutalib using
+                    // his own app.**
+                    //
+                    // It was a DEAD CONTROL. `onClick` was null whenever access was granted,
+                    // so once everything was working the row did nothing when tapped — while
+                    // sitting in a card looking exactly like every tappable row around it. He
+                    // tapped it and reported "SMS access is not working", which is the only
+                    // conclusion available. It is now always tappable and always goes
+                    // somewhere: Android's own permission page.
+                    //
+                    // And it was FIRST, above the four switches. "Put it down the settings
+                    // rather than the top" — right, because it is status, not a setting. The
+                    // switches are what someone opens this screen to change; this is what
+                    // they check once and then trust.
+                    //
+                    // ⚠ **No in-app switch, and there cannot be one.** Android permissions
+                    // belong to the person, not the app: nothing here can grant or revoke
+                    // READ_SMS, only link to the page that can. Revoking also kills the
+                    // process — the ledger survives untouched, and only new messages stop.
+                    SettingsRow(
+                        icon = R.drawable.ic_message,
+                        title = "SMS access",
+                        subtitle = if (smsGranted) {
+                            "Sika reads MoMo messages and nothing else · tap to check"
+                        } else {
+                            "Without it there is nothing to track"
+                        },
+                        tint = if (smsGranted) TextMuted else Danger,
+                        onClick = { openAppSettings(context) },
+                    ) {
+                        Text(
+                            if (smsGranted) "On" else "Turn on",
+                            style = MaterialTheme.typography.bodyMedium
+                                .copy(fontWeight = FontWeight.W600),
+                            color = if (smsGranted) Accent else Danger,
+                        )
+                    }
                 }
             }
 
@@ -275,9 +295,14 @@ fun SettingsScreen(
                         onClick = { onRoute(SettingsRoute.CATEGORIES) },
                     ) { Chevron() }
                     RowDivider()
+                    // ⚠ **"Learned rules" until 2026-09-02, and it was named for the code.**
+                    // Mutalib: *"the user won't know what it means"*. A "rule" is what the
+                    // table is called; what it IS, to the person reading, is a shop that
+                    // fills its own label in. The subtitle now says what the screen does
+                    // rather than only counting what is in it.
                     SettingsRow(
                         icon = R.drawable.ic_sparkles,
-                        title = "Learned rules",
+                        title = "Automatic labels",
                         subtitle = rulesSubtitle(state.rulesCount),
                         onClick = { onRoute(SettingsRoute.RULES) },
                     ) { Chevron() }
@@ -288,7 +313,7 @@ fun SettingsScreen(
                     // good news, so hiding the row would hide the reassurance too.
                     SettingsRow(
                         icon = R.drawable.ic_inbox,
-                        title = "Needs a look",
+                        title = "Messages Sika couldn't read",
                         subtitle = reviewSubtitle(state.needsReview),
                         tint = if (state.needsReview > 0) Warn else TextMuted,
                         onClick = { onRoute(SettingsRoute.REVIEW) },
@@ -445,10 +470,17 @@ private fun categoriesSubtitle(state: SettingsState): String {
     return if (away == 0) "$inUse in use" else "$inUse in use, $away put away"
 }
 
+/**
+ * ⚠ **Says what the screen DOES, not only how many rows are in it.** Mutalib's instruction
+ * with the rename, 2026-09-02: describe it underneath. The old subtitle counted a thing whose
+ * name did not explain itself, which left both lines relying on the reader already knowing.
+ *
+ * "Places" rather than "shops", because several of his are people.
+ */
 private fun rulesSubtitle(count: Int): String = when (count) {
-    0 -> "Nothing learned yet"
-    1 -> "One shop labels itself now"
-    else -> "$count shops label themselves now"
+    0 -> "Tick \"always label this way\" on a transaction and it lands here"
+    1 -> "1 place Sika now labels on its own"
+    else -> "$count places Sika now labels on its own"
 }
 
 /** Which of the two first-run answers is being edited. */
@@ -462,10 +494,16 @@ private fun termSubtitle(student: Boolean, start: LocalDate?, end: LocalDate?): 
     else -> start.format(SHORT_DATE) + " – " + end.format(SHORT_DATE) + " " + end.year
 }
 
+/**
+ * ⚠ **Rewritten because the title took its words.** The row is now called "Messages Sika
+ * couldn't read", so a subtitle reading "3 messages Sika could not read" said the same thing
+ * twice and told you nothing new. It now says what happens to them — which is the reassuring
+ * part, and the one Sacred Rule 7 is about: unparsed is kept, never guessed at.
+ */
 private fun reviewSubtitle(count: Int): String = when (count) {
-    0 -> "Every message was readable"
-    1 -> "1 message Sika could not read"
-    else -> "$count messages Sika could not read"
+    0 -> "None — every message was readable"
+    1 -> "1, kept in case Sika learns to read it"
+    else -> "$count, kept in case Sika learns to read them"
 }
 
 private fun themeIcon(mode: ThemeMode): Int = when (mode) {

@@ -17,6 +17,7 @@ import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ledger.Period
 import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.ledger.Reconciler
+import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.ledger.summarise
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.sms.Sweeper
@@ -294,7 +295,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             gaps = inMonth.count { it.reconciled == Reconciled.GAP },
             gap = newestGap,
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },
-            unlabelled = inMonth.count { it.label == null },
+            // ⚠ **Outgoing only.** Mutalib, 2026-09-02: money arriving is *"just money to use
+            // for my expenses on campus"* — it has not been spent on anything yet, so asking
+            // which category it belongs to is a question with no answer. Counting it here made
+            // Home report a backlog of work that could not be done: every payment received
+            // added one to "still need a category" and stayed there forever.
+            unlabelled = inMonth.count { it.label == null && it.direction == Direction.OUT },
             days = days,
             allDays = byDay(all),
             total = inMonth.size,

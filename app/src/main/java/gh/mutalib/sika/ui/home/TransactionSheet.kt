@@ -156,6 +156,37 @@ fun TransactionSheet(
 
         Spacer(Modifier.height(22.dp))
 
+        // ---- money coming in is not spending, and is not asked to be ----
+        //
+        // ⚠ **Mutalib, 2026-09-02: incoming money is "just money to use for my expenses on
+        // campus".** Until today this sheet offered it the same chips as a payment — Food,
+        // Transport, Data — which is a question with no answer, because nothing has been
+        // spent yet. Worse, it made every payment received sit in Home's "still need a
+        // category" count forever.
+        //
+        // ⚠ **One fixed label for now, on purpose — his call, option C.** Sorting income by
+        // where it came from (allowance, family, a refund, a sale) is the better answer and is
+        // coming next, with its own icons. Shipping the simple version first means nothing has
+        // to be un-picked later: every row already carries a sensible label to migrate from.
+        //
+        // ⚠ Nothing is written to the database here. `PeriodSummary` already filters the
+        // breakdown to `Direction.OUT`, so income has never been part of the spend figures and
+        // does not need a category row to stay out of them. This is a label on a screen, not a
+        // change to the ledger.
+        if (incoming) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Chip(label = "Money in", selected = true, onClick = {})
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Not spending, so it needs no category",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            return@Column
+        }
+
         // ---- categories: the reason this sheet exists ----
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

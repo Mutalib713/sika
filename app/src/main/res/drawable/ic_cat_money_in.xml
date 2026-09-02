@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "arrow-down-to-line" - the project's only icon set. See docs/ui-guidelines.md.
+     Stroke is white; every use tints it via Icon(tint = ...).
+
+     ⚠ **Not a category icon, despite living among them.** Every other ic_cat_* answers "what
+     was this spent on"; money arriving has not been spent on anything, so it gets the one
+     mark that says arriving rather than a guess at a purpose. It replaces ic_cat_none, whose
+     question mark read as "unknown, needs your attention" on rows that need nothing.
+
+     ⚠ **Deliberately the only incoming icon there is.** Sorting income by where it came from
+     - allowance, family, a refund - is Mutalib's next step and brings its own set. One mark
+     now, several later; nothing here has to be undone for that. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,17V3M6,11l6,6l6,-6M19,21H5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

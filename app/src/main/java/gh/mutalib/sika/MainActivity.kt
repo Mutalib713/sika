@@ -491,17 +491,6 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                             // `sika.csv` tells you nothing about which one to restore.
                             onExport = { exportTo.launch(Backup.fileName(today(ACCRA))) },
                             onImport = { importFrom.launch(BACKUP_TYPES) },
-                            // ⚠ Clears the "done" flag and drops back into the flow. It does
-                            // NOT clear the answers: someone re-watching the tour should find
-                            // their own name already in the field, not a blank one.
-                            onRunSetupAgain = {
-                                // ⚠ Clears the tour flag too, or "show the tour again" shows
-                                // everything except the tour.
-                                OnboardingPrefs.setTourSeen(context, false)
-                                OnboardingPrefs.setDone(context, false)
-                                settingsRoute = SettingsRoute.ROOT
-                                gate = Gate.Onboarding
-                            },
                         )
                     }
 
