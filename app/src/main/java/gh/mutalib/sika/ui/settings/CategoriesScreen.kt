@@ -1,8 +1,10 @@
 package gh.mutalib.sika.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,8 +28,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,9 +68,17 @@ import gh.mutalib.sika.ui.theme.categoryIcon
  * looked: it would have moved every affected transaction to `Other`, which keeps the money and
  * throws away the only record of what the money was for.
  *
- * So there are two operations with two different weights:
- *   * **put away** — reversible, changes nothing but what the picker offers;
- *   * **delete** — only offered for a category nothing points at, where there is nothing to lose.
+ * ⚠ **Every row gets the minus — the bin is not an alternative to it. Corrected 2026-09-03.**
+ * The first build chose *one* button per row: a bin if the category was unused, the minus if it
+ * was not. On Mutalib's phone only Food had ever been used, so the screen showed a single minus
+ * and six bins, and he read it exactly right — *"the minus side should be for everything"*.
+ * The two operations are not two grades of the same action and must not compete for the same
+ * slot:
+ *   * **put away** — reversible, offered on every row, changes nothing but what the picker
+ *     offers. This is the everyday one, so it is the one that is always there.
+ *   * **delete** — permanent, and now reached only by long-pressing a row that is *already*
+ *     put away. Two deliberate steps stand between a category and being gone, and the second
+ *     one happens on a list you had to go and put things into first.
  */
 @Composable
 fun CategoriesScreen(
@@ -73,12 +86,36 @@ fun CategoriesScreen(
     animated: Boolean,
     onBack: () -> Unit,
     onHide: (CategoryRow, Boolean) -> Unit,
-    onDelete: (CategoryRow) -> Unit,
+    onDelete: (List<CategoryRow>) -> Unit,
     onAdd: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var adding by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf<CategoryRow?>(null) }
+
+    // ⚠ Held as ids rather than rows. `state` is rebuilt from the database on every change, so
+    // a stored `CategoryRow` is a snapshot that stops matching the list the moment anything
+    // else edits a category. Ids survive that.
+    val selected = remember { mutableStateSetOf<Long>() }
+    var selecting by remember { mutableStateOf(false) }
+    var confirmingDelete by remember { mutableStateOf(false) }
+
+    val putAway = state.putAway
+    val chosen = putAway.filter { it.category.id in selected }
+
+    // Leaving selection mode when the last selectable row goes away — deleted, or brought
+    // back — stops an empty "0 selected" bar hanging over a list with nothing in it.
+    fun stopSelecting() {
+        selecting = false
+        selected.clear()
+    }
+    // ⚠ In an effect, not inline. Writing `selecting` straight from the composition body is
+    // a write during composition, which Compose is entitled to re-run — and a state write in
+    // a body that re-runs on that same state is how a recomposition loop starts.
+    val deletable = putAway.count { it.canDelete }
+    LaunchedEffect(deletable) { if (deletable == 0) stopSelecting() }
+
+    BackHandler(enabled = selecting) { stopSelecting() }
 
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
@@ -115,24 +152,42 @@ fun CategoriesScreen(
                             putAway = false,
                             onHide = { confirming = row },
                             onBringBack = {},
-                            onDelete = { onDelete(row) },
                         )
                     }
                 }
             }
 
-            if (state.putAway.isNotEmpty()) {
+            if (putAway.isNotEmpty()) {
                 item {
-                    SectionLabel("PUT AWAY")
+                    if (selecting) {
+                        SelectionBar(
+                            count = chosen.size,
+                            onDelete = { if (chosen.isNotEmpty()) confirmingDelete = true },
+                            onCancel = { stopSelecting() },
+                        )
+                    } else {
+                        SectionLabel("PUT AWAY · LONG PRESS TO DELETE")
+                    }
                     SettingsCard {
-                        state.putAway.forEachIndexed { i, row ->
+                        putAway.forEachIndexed { i, row ->
                             if (i > 0) RowDivider()
                             CategoryListRow(
                                 row = row,
                                 putAway = true,
+                                selecting = selecting,
+                                isSelected = row.category.id in selected,
                                 onHide = {},
                                 onBringBack = { onHide(row, false) },
-                                onDelete = { onDelete(row) },
+                                onToggle = {
+                                    if (row.category.id in selected) selected -= row.category.id
+                                    else selected += row.category.id
+                                },
+                                onLongPress = {
+                                    if (row.canDelete) {
+                                        selecting = true
+                                        selected += row.category.id
+                                    }
+                                },
                             )
                         }
                     }
@@ -143,7 +198,7 @@ fun CategoriesScreen(
                 Footnote(
                     "Putting one away only stops it being offered. Old transactions keep their " +
                         "label and the report still counts the money.",
-                    "A category that was never used can be deleted instead.",
+                    "To delete for good: put it away first, then long press it in the list below.",
                 )
             }
         }
@@ -157,10 +212,61 @@ fun CategoriesScreen(
         )
     }
 
+    if (confirmingDelete) {
+        DeleteDialog(
+            rows = chosen,
+            onConfirm = { onDelete(chosen); confirmingDelete = false; stopSelecting() },
+            onDismiss = { confirmingDelete = false },
+        )
+    }
+
     if (adding) {
         AddCategoryDialog(
             onAdd = { onAdd(it); adding = false },
             onDismiss = { adding = false },
+        )
+    }
+}
+
+/**
+ * Replaces the PUT AWAY label while a selection is running.
+ *
+ * ⚠ **Takes the label's place rather than sitting above it**, so nothing below moves when
+ * selection starts. A list that jumps under your finger the instant you long-press is how you
+ * end up selecting the row you did not mean to.
+ */
+@Composable
+private fun SelectionBar(count: Int, onDelete: () -> Unit, onCancel: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 24.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (count == 0) "Choose what to delete" else "$count selected",
+            style = MaterialTheme.typography.titleMedium,
+            color = TextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Cancel",
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextMuted,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onCancel)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+        Spacer(Modifier.width(2.dp))
+        Text(
+            "Delete",
+            style = MaterialTheme.typography.titleMedium,
+            // ⚠ Greyed at zero rather than hidden. A button that vanishes and reappears as you
+            // tick rows reads as a glitch; one that is plainly not ready reads as an instruction.
+            color = if (count == 0) TextMuted else Danger,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onDelete)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
 }
@@ -171,13 +277,32 @@ private fun CategoryListRow(
     putAway: Boolean,
     onHide: () -> Unit,
     onBringBack: () -> Unit,
-    onDelete: () -> Unit,
+    selecting: Boolean = false,
+    isSelected: Boolean = false,
+    onToggle: () -> Unit = {},
+    onLongPress: () -> Unit = {},
 ) {
     val name = row.category.name
     Row(
         // ⚠ Dimmed, not greyed out. A put-away category is still a real thing you can bring
         // back in one tap; drawing it in the disabled colour would say it is broken.
-        Modifier.fillMaxWidth().graphicsLayer { alpha = if (putAway) 0.55f else 1f },
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = if (putAway && !isSelected) 0.55f else 1f }
+            .then(
+                if (putAway) {
+                    Modifier.combinedClickable(
+                        // ⚠ A plain tap does nothing outside selection mode. The row is not a
+                        // link to anywhere, and a tap target that sometimes acts and sometimes
+                        // does not is worse than one that never does.
+                        enabled = selecting || row.canDelete,
+                        onClick = { if (selecting && row.canDelete) onToggle() },
+                        onLongClick = onLongPress,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
@@ -190,13 +315,17 @@ private fun CategoryListRow(
                 Text(name, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    usageLine(row, putAway),
+                    usageLine(row, putAway, selecting),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted,
                 )
             }
         }
         when {
+            // Selection replaces the row's own button, so there is never a tick box next to a
+            // button that does something else.
+            selecting -> SelectionMark(selected = isSelected, selectable = row.canDelete)
+
             // `Other` is where anything that fits nothing else goes. Hide it and a transaction
             // can end up with no honest answer available at all.
             row.category.isProtected -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -209,14 +338,6 @@ private fun CategoryListRow(
                 Spacer(Modifier.width(5.dp))
                 Text("Kept", style = MaterialTheme.typography.bodySmall, color = TextMuted)
             }
-
-            row.canDelete -> CircleButton(
-                icon = R.drawable.ic_trash,
-                description = "Delete $name",
-                tint = Danger,
-                borderColor = Danger.copy(alpha = 0.4f),
-                onClick = onDelete,
-            )
 
             putAway -> CircleButton(
                 icon = R.drawable.ic_plus,
@@ -236,11 +357,102 @@ private fun CategoryListRow(
     }
 }
 
-private fun usageLine(row: CategoryRow, putAway: Boolean): String = when {
+/**
+ * The tick box, or a lock where a row cannot be deleted.
+ *
+ * ⚠ **An undeletable row shows a lock rather than an empty box.** An empty box that refuses to
+ * fill in reads as a broken tap; a lock says the row is not eligible, and the line underneath
+ * the name says why.
+ */
+@Composable
+private fun SelectionMark(selected: Boolean, selectable: Boolean) {
+    Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+        if (!selectable) {
+            Icon(
+                painterResource(R.drawable.ic_lock),
+                contentDescription = "Cannot be deleted",
+                tint = TextMuted,
+                modifier = Modifier.size(14.dp),
+            )
+        } else {
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .then(
+                        if (selected) Modifier.background(Danger)
+                        else Modifier.border(1.5.dp, Border, CircleShape),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Icon(
+                        painterResource(R.drawable.ic_check),
+                        contentDescription = "Selected",
+                        tint = AccentContrast,
+                        modifier = Modifier.size(13.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun usageLine(row: CategoryRow, putAway: Boolean, selecting: Boolean = false): String = when {
+    // During a selection the question is not "how much have I used this" but "can this go",
+    // so the one row that cannot answers before being asked.
+    selecting && !row.canDelete && row.category.isProtected -> "Always kept"
+    selecting && !row.canDelete -> count(row.uses, "transaction") + " " +
+        agree(row.uses, "uses", "use") + " it, so it stays"
     row.uses == 0 -> "Never used"
     putAway -> count(row.uses, "transaction") + " " +
         agree(row.uses, "keeps", "keep") + " this label"
     else -> count(row.uses, "transaction")
+}
+
+/**
+ * ⚠ **Names what is going, and says the one thing that is not obvious**: this is the only
+ * action on the screen that cannot be undone. Everything else here is a switch.
+ */
+@Composable
+private fun DeleteDialog(rows: List<CategoryRow>, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(SurfaceRaised)
+                .border(1.dp, Border, RoundedCornerShape(22.dp))
+                .padding(19.dp),
+        ) {
+            Text(
+                "Delete " + count(rows.size, "category", "categories") + "?",
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                rows.joinToString(", ") { it.category.name } + ". " +
+                    agree(rows.size, "It goes", "They go") + " for good — this is the one " +
+                    "thing here you cannot undo. You can add the " +
+                    agree(rows.size, "name", "names") + " again later, but " +
+                    agree(rows.size, "it starts", "they start") + " empty.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                DialogButton("Cancel", filled = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                DialogButton(
+                    "Delete",
+                    filled = true,
+                    danger = true,
+                    modifier = Modifier.weight(1f),
+                    onClick = onConfirm,
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -362,14 +574,28 @@ internal fun DialogButton(
     filled: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    // ⚠ **Red only for what cannot be undone.** Putting a category away is confirmed with the
+    // ordinary accent button because it is a switch; deleting is the one action on this screen
+    // with no way back, so it is the only one that gets to look alarming. Colouring both red
+    // would teach the red to mean nothing.
+    danger: Boolean = false,
     onClick: () -> Unit,
 ) {
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))
             .then(
-                if (filled) Modifier.background(if (enabled) Accent else Border)
-                else Modifier.border(1.dp, Border, RoundedCornerShape(14.dp)),
+                if (filled) {
+                    Modifier.background(
+                        when {
+                            !enabled -> Border
+                            danger -> Danger
+                            else -> Accent
+                        },
+                    )
+                } else {
+                    Modifier.border(1.dp, Border, RoundedCornerShape(14.dp))
+                },
             )
             .clickable(enabled = enabled, onClick = onClick)
             .padding(vertical = 13.dp),

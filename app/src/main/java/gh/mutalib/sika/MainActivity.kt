@@ -474,7 +474,7 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                             animated = animated,
                             onBack = { settingsRoute = SettingsRoute.ROOT },
                             onHide = svm::setHidden,
-                            onDelete = svm::delete,
+                            onDelete = svm::deleteMany,
                             onAdd = svm::add,
                         )
 

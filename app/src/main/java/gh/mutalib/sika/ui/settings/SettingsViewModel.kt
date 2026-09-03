@@ -12,6 +12,7 @@ import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ui.agree
 import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.home.ACCRA
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,9 +28,15 @@ import java.time.LocalDate
  * One category as the Categories screen needs to see it: the row itself, and how many
  * transactions point at it.
  *
- * [uses] is what decides whether the bin appears. It is read from the transactions table
- * rather than stored on the category, because a stored count is a second copy of a fact and
- * second copies drift.
+ * [uses] is what decides whether a put-away row can be *selected* for deleting. It is read from
+ * the transactions table rather than stored on the category, because a stored count is a second
+ * copy of a fact and second copies drift.
+ *
+ * ⚠ **It no longer decides which button a row shows.** Until 2026-09-03 an unused category got
+ * a bin and a used one got the minus, which meant Mutalib's phone — where only Food had ever
+ * been used — showed exactly one minus and six bins. Putting a category away is now offered on
+ * every row regardless of use, because it is reversible and harmless; deleting moved to a
+ * long-press on the put-away side, where the thing being deleted is already out of the way.
  */
 data class CategoryRow(val category: CategoryEntity, val uses: Int) {
     val canDelete: Boolean get() = uses == 0 && !category.isProtected
@@ -124,23 +131,52 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * ⚠ **Re-checks usage inside the transaction rather than trusting the screen.** The row
-     * on screen was read a moment ago; a cash-out notification answered in the shade since
-     * then could have put a transaction into this very category. The database is the only
-     * thing that knows, and it is asked at the moment of deleting.
+     * Deletes a selection of put-away categories, and reports honestly on any it could not.
+     *
+     * ⚠ **Re-checks usage inside the transaction rather than trusting the screen.** The rows
+     * on screen were read a moment ago; a cash-out notification answered in the shade since
+     * then could have put a transaction into one of these very categories. The database is the
+     * only thing that knows, and it is asked at the moment of deleting.
+     *
+     * ⚠ **A refusal is never silent, and never destructive.** Anything that turns out to hold
+     * transactions is put away instead and named in the message. The alternative — deleting it
+     * anyway — keeps the money and throws away the only record of what the money was for.
+     *
+     * ⚠ **Takes a list because deleting is a selection now, not a per-row button.** Mutalib's
+     * call on 2026-09-03: every category gets the minus, and the bin moved to a long-press on
+     * the put-away side. Looping a single-row version here would fire one toast per row and
+     * leave whichever landed last on screen.
      */
-    fun delete(row: CategoryRow) {
+    fun deleteMany(rows: List<CategoryRow>) {
+        if (rows.isEmpty()) return
         viewModelScope.launch {
-            val gone = categoryDao.deleteIfUnused(row.category.id, row.category.name)
-            _toast.value = if (gone) {
-                Toast("${row.category.name} deleted.")
-            } else {
-                Toast(
-                    "${row.category.name} has transactions in it now, so it was put away instead.",
+            val kept = mutableListOf<String>()
+            var deleted = 0
+            for (row in rows) {
+                val name = row.category.name
+                if (categoryDao.deleteIfUnused(row.category.id, name)) {
+                    deleted++
+                } else {
+                    categoryDao.setHidden(row.category.id, true)
+                    kept += name
+                }
+            }
+            _toast.value = when {
+                kept.isEmpty() -> Toast(count(deleted, "category", "categories") + " deleted.")
+                deleted == 0 -> Toast(
+                    kept.joinToString(" and ") + " " + agree(kept.size, "has", "have") +
+                        " transactions now, so " + agree(kept.size, "it was", "they were") +
+                        " put away instead.",
+                    bad = true,
+                )
+                else -> Toast(
+                    count(deleted, "category", "categories") + " deleted. " +
+                        kept.joinToString(" and ") + " " + agree(kept.size, "has", "have") +
+                        " transactions now, so " + agree(kept.size, "it was", "they were") +
+                        " put away instead.",
                     bad = true,
                 )
             }
-            if (!gone) categoryDao.setHidden(row.category.id, true)
         }
     }
 
