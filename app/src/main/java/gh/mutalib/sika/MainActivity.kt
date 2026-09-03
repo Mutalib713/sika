@@ -440,12 +440,17 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
 
             Box(Modifier.fillMaxSize()) {
                 when {
-                    showingAll -> AllTransactionsScreen(
-                        state = state,
-                        animated = animated,
-                        onBack = { showingAll = false },
-                        onTransactionClick = { sheetFor = it.id },
-                    )
+                    showingAll -> {
+                        val tvm: TermsViewModel = viewModel()
+                        val terms by tvm.terms.collectAsStateWithLifecycle()
+                        AllTransactionsScreen(
+                            state = state,
+                            animated = animated,
+                            onBack = { showingAll = false },
+                            onTransactionClick = { sheetFor = it.id },
+                            terms = terms,
+                        )
+                    }
 
                     tab == Tab.Report -> {
                         val rvm: ReportViewModel = viewModel()

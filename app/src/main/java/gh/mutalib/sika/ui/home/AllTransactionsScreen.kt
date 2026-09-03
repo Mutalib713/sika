@@ -40,6 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.data.TermEntity
+import gh.mutalib.sika.data.Terms
+import gh.mutalib.sika.ledger.Period
+import gh.mutalib.sika.ledger.today
+import java.time.Instant
 import gh.mutalib.sika.ledger.outflow
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.asCedis
@@ -55,8 +60,23 @@ import gh.mutalib.sika.ui.theme.TextPrimary
 import gh.mutalib.sika.ui.theme.categoryColor
 
 /** How far back the list reaches. */
+/**
+ * How far back the list reaches.
+ *
+ * ⚠ **The same four stretches the report offers, on Mutalib's instruction 2026-09-02:** *"the
+ * user might say maybe he want transactions from this month to that month or this semester"*.
+ * It used to be two — this month, or everything — which left no way to ask the question people
+ * actually ask, and no way at all to see a semester.
+ *
+ * ⚠ **Not a free "from March to July" range picker, deliberately.** That is two date pickers,
+ * a custom period and a fair amount of screen, to serve a question asked a couple of times a
+ * year; stepping covers "last month" and "this semester", which are asked constantly. If the
+ * arbitrary range turns out to be missed, it goes on top of this rather than instead of it.
+ */
 private enum class Span(val label: String) {
+    WEEK("This week"),
     THIS_MONTH("This month"),
+    SEMESTER("This semester"),
     EVERYTHING("All time"),
 }
 
@@ -106,19 +126,49 @@ fun AllTransactionsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onTransactionClick: (TransactionEntity) -> Unit = {},
+    /** Named semesters, so "this semester" can be one of the spans. Empty hides that option. */
+    terms: List<TermEntity> = emptyList(),
 ) {
     var filters by remember { mutableStateOf(Filters()) }
     var searching by remember { mutableStateOf(false) }
 
-    // The month-only list was what shipped first, and it quietly hid most of the ledger -
-    // two rows on screen out of 148 on record. "All time" reads the whole thing.
-    val source = if (filters.span == Span.EVERYTHING) state.allDays else state.days
+    // ⚠ **Always reads the whole ledger and narrows here**, rather than choosing between two
+    // pre-grouped lists. `state.days` is this month and nothing else, so a week or a semester
+    // could not be cut from it — and the month-only list was what shipped first and quietly
+    // hid most of the ledger, two rows on screen out of 148 on record.
+    val term = remember(terms) { Terms.currentOrLast(terms, today(ACCRA)) }
+    // ⚠ Semester is offered only when one has been named. An option that silently falls back
+    // to "all time" is worse than an absent one.
+    val spans = remember(term) {
+        Span.entries.filter { it != Span.SEMESTER || term != null }
+    }
+    val span = remember(filters.span, spans) {
+        if (filters.span in spans) filters.span else Span.THIS_MONTH
+    }
+    val window: Period? = remember(span, term) {
+        when (span) {
+            Span.WEEK -> Period.weekOf(today(ACCRA))
+            Span.THIS_MONTH -> Period.monthOf(today(ACCRA))
+            Span.SEMESTER -> term?.let { Period.namedSemester(it.name, it.start, it.endExclusive) }
+            Span.EVERYTHING -> null
+        }
+    }
+    val source = state.allDays
     val categories = remember(state.allDays) {
         state.allDays.flatMap { it.rows }.mapNotNull { it.label }.distinct().sorted()
     }
-    val days = remember(source, filters) {
+    val days = remember(source, filters, window) {
         source
-            .map { day -> day.copy(rows = day.rows.filter { it.matches(filters) }) }
+            .map { day ->
+                day.copy(
+                    rows = day.rows.filter { row ->
+                        val inWindow = window == null || window.contains(
+                            Instant.ofEpochMilli(row.occurredAt).atZone(ACCRA).toLocalDate(),
+                        )
+                        inWindow && row.matches(filters)
+                    },
+                )
+            }
             // A day whose every row was filtered out must not leave its heading behind.
             .filter { it.rows.isNotEmpty() }
     }
@@ -169,10 +219,12 @@ fun AllTransactionsScreen(
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
                     MenuChip(
-                        label = filters.span.label,
-                        on = filters.span != Span.THIS_MONTH,
-                        options = Span.entries.map { it.label },
-                    ) { i -> filters = filters.copy(span = Span.entries[i]) }
+                        // The semester's own name when there is one — "First semester, Year 1"
+                        // says more than the word "semester" ever could.
+                        label = if (span == Span.SEMESTER) term?.name ?: span.label else span.label,
+                        on = span != Span.THIS_MONTH,
+                        options = spans.map { it.label },
+                    ) { i -> filters = filters.copy(span = spans[i]) }
 
                     MenuChip(
                         label = filters.categoryLabel,
