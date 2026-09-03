@@ -62,6 +62,7 @@ import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.SurfaceRaised
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
+import gh.mutalib.sika.ui.theme.Warn
 import gh.mutalib.sika.ui.theme.categoryColor
 import gh.mutalib.sika.ui.theme.categoryIcon
 import gh.mutalib.sika.ui.theme.incomingIcon
@@ -106,6 +107,14 @@ fun HomeScreen(
     onOpenReport: () -> Unit = {},
     onTransactionClick: (TransactionEntity) -> Unit = {},
     onExplainGap: (Long, String?) -> Unit = { _, _ -> },
+    /**
+     * The categories a remembered gap can be filed under.
+     *
+     * ⚠ Defaults to empty, and an empty list hides the picker entirely rather than showing an
+     * empty row. A gap card with a heading and no chips under it looks broken.
+     */
+    gapCategories: List<String> = emptyList(),
+    onFileGap: (Long, String?) -> Unit = { _, _ -> },
 ) {
     val pullState = rememberPullToRefreshState()
     var pickedBar by remember(state.weekSummary?.period) { mutableStateOf<Int?>(null) }
@@ -174,7 +183,12 @@ fun HomeScreen(
                     item {
                         Spacer(Modifier.height(11.dp))
                         Rising(entrance, 2) {
-                            GapCard(gap, onExplain = { onExplainGap(gap.rowId, it) })
+                            GapCard(
+                                gap,
+                                onExplain = { onExplainGap(gap.rowId, it) },
+                                categories = gapCategories,
+                                onFile = { onFileGap(gap.rowId, it) },
+                            )
                         }
                     }
                 }
@@ -441,10 +455,19 @@ private fun CategoryRow(slice: CategorySlice) {
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(slice.label, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                // ⚠ **The marking, and the condition Mutalib's decision came with.** He chose
+                // to let remembered money into the totals only if the screen says so. This is
+                // the sentence that keeps that promise: without it a figure part-measured and
+                // part-recalled would look exactly like one MTN can prove.
                 Text(
-                    "${Math.round(slice.share * 100)}% of the week",
+                    "${Math.round(slice.share * 100)}% of the week" +
+                        if (slice.hasRemembered) {
+                            " · ${slice.fromBalance.asCedis()} from your balance"
+                        } else {
+                            ""
+                        },
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted,
+                    color = if (slice.hasRemembered) Warn else TextMuted,
                 )
             }
             Text(slice.amount.asCedis(), style = StatMoneyStyle, color = TextPrimary)

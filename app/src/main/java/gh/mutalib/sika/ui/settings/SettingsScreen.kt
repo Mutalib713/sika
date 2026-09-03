@@ -300,7 +300,7 @@ fun SettingsScreen(
                     // fills its own label in. The subtitle now says what the screen does
                     // rather than only counting what is in it.
                     SettingsRow(
-                        icon = R.drawable.ic_sparkles,
+                        icon = R.drawable.ic_stamp,
                         title = "Automatic labels",
                         subtitle = rulesSubtitle(state.rulesCount),
                         onClick = { onRoute(SettingsRoute.RULES) },

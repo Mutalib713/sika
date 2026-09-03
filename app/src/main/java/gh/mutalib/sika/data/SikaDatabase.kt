@@ -19,7 +19,7 @@ import androidx.room.TypeConverters
  */
 @Database(
     entities = [TransactionEntity::class, RuleEntity::class, CategoryEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -90,9 +90,25 @@ abstract class SikaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Gaps can now carry an amount and a category.
+         *
+         * ⚠ **Two columns, both nullable, no backfill.** `gapAmount` fills itself in on the
+         * next reconciliation pass, which runs on every sweep, so existing rows repair
+         * themselves within one launch. Backfilling here would mean running the reconciler
+         * inside a migration — on the main thread, mid-upgrade, with no way to report a
+         * failure. Leaving them null is the honest state: not yet computed.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("ALTER TABLE transactions ADD COLUMN gapAmount INTEGER")
+                connection.execSQL("ALTER TABLE transactions ADD COLUMN gapCategory TEXT")
+            }
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 // ⚠ **No `fallbackToDestructiveMigration()`.** It is the usual shortcut and
                 // it means "if the schema changed, delete everything and start over" — on a
                 // ledger whose whole value is months of history, and whose labels are the

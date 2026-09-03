@@ -503,6 +503,11 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                         onOpenReport = { tab = Tab.Report },
                         onTransactionClick = { sheetFor = it.id },
                         onExplainGap = vm::explainGap,
+                        // ⚠ Only categories in use, not every one ever created. The picker
+                        // sits inside a warning card on the main screen; offering nine chips
+                        // there turns an explanation into a filing exercise.
+                        gapCategories = categories.map { it.name },
+                        onFileGap = vm::fileGap,
                     )
                 }
                 // Fades the list out before it reaches the dock, so rows never collide with

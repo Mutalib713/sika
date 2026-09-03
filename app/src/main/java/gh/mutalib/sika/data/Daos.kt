@@ -162,6 +162,32 @@ interface TransactionDao {
     @Query("UPDATE transactions SET reconciled = :state WHERE id = :id")
     suspend fun setReconciled(id: Long, state: Reconciled)
 
+    /**
+     * Stores the state and the size of the hole together.
+     *
+     * ⚠ **One statement, because they are one fact.** Written separately, a crash between the
+     * two would leave a row flagged GAP with no amount — which reads on screen as a gap of
+     * GHS 0.00, a sentence that is both wrong and impossible.
+     *
+     * ⚠ Clears `gapAmount` on any non-GAP state, so a row that stops being a gap after a
+     * parser fix does not keep a stale figure that nothing displays but export would carry.
+     */
+    @Query(
+        "UPDATE transactions SET reconciled = :state, " +
+            "gapAmount = CASE WHEN :state = 'GAP' THEN :amount ELSE NULL END WHERE id = :id",
+    )
+    suspend fun setReconciled(id: Long, state: Reconciled, amount: Long?)
+
+    /**
+     * Files remembered money under a category, or takes it back out again.
+     *
+     * ⚠ **`AND reconciled = 'GAP'` is a guard, not a filter.** Only a gap has money that no
+     * message accounts for; letting this write to an ordinary row would put an amount into a
+     * total twice — once as the transaction, once as a phantom gap.
+     */
+    @Query("UPDATE transactions SET gapCategory = :category WHERE id = :id AND reconciled = 'GAP'")
+    suspend fun setGapCategory(id: Long, category: String?)
+
     @Query("SELECT COUNT(*) FROM transactions WHERE parsedOk = 1 AND label IS NULL")
     fun observeUnlabelledCount(): Flow<Int>
 

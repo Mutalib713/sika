@@ -1,5 +1,6 @@
 package gh.mutalib.sika
 
+import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ledger.UNCATEGORISED
 import gh.mutalib.sika.ledger.outflow
@@ -295,6 +296,86 @@ class PeriodSummaryTest {
 
     private fun income(id: Long, day: Int, amount: Long, balance: Long?, month: Int = 8) =
         row(id, day, month, Direction.IN, amount, 0, null, null, Shape.PAYMENT_RECEIVED, balance, true)
+
+    // ---------------------------------------------------------------- remembered money
+    //
+    // ⚠ **The only figures in this app that no message proves.** Mutalib chose on 2026-09-03
+    // to let an explained gap count toward a category, on the condition that it is marked
+    // rather than folded in silently. These tests hold him to both halves of that: the money
+    // must arrive in the total, AND `fromBalance` must say how much of it is remembered.
+
+    /** A row flagged as a gap, carrying the size of the hole and where it was filed. */
+    private fun gap(id: Long, day: Int, amount: Long, category: String?, month: Int = 8) =
+        row(id, day, month, Direction.OUT, 0, 0, null, null, Shape.PAYMENT_MADE, null, true)
+            .copy(
+                reconciled = Reconciled.GAP,
+                gapAmount = amount,
+                gapCategory = category,
+            )
+
+    @Test
+    fun `an explained gap counts toward its category and is marked as remembered`() {
+        // Measured: GHS 20.00 Food. Remembered: GHS 5.00 filed under Food.
+        // Food should read 2000 + 500 = 2500, of which 500 is from the balance.
+        val s = summarise(
+            listOf(out(id = 1, day = 3, amount = 2000, fee = 0, label = "Food"), gap(2, 5, 500, "Food")),
+            august, accra,
+        )
+        val food = s.slices.single { it.label == "Food" }
+        assertEquals(2500L, food.amount)
+        assertEquals(500L, food.fromBalance)
+        assertTrue(food.hasRemembered)
+        assertEquals(2500L, s.moneyOut)
+        assertEquals(500L, s.fromBalance)
+    }
+
+    /**
+     * ⚠ A gap nobody has filed must change nothing at all — the behaviour before this feature
+     * existed, and the state almost every gap will be in.
+     */
+    @Test
+    fun `an unexplained gap stays out of every total`() {
+        val s = summarise(
+            listOf(out(id = 1, day = 3, amount = 2000, fee = 0, label = "Food"), gap(2, 5, 500, null)),
+            august, accra,
+        )
+        assertEquals(2000L, s.moneyOut)
+        assertEquals(0L, s.fromBalance)
+        assertEquals(0L, s.slices.single { it.label == "Food" }.fromBalance)
+    }
+
+    /**
+     * ⚠ **A category whose only spending is a remembered gap still has to appear.** Filing
+     * money under a heading that is then missing from the screen is worse than not filing it:
+     * the money looks lost twice.
+     */
+    @Test
+    fun `a category with only remembered money still appears`() {
+        val s = summarise(
+            listOf(out(id = 1, day = 3, amount = 2000, fee = 0, label = "Food"), gap(2, 5, 700, "Transport")),
+            august, accra,
+        )
+        val transport = s.slices.single { it.label == "Transport" }
+        assertEquals(700L, transport.amount)
+        assertEquals(700L, transport.fromBalance)
+        // 2000 + 700 = 2700, so Transport is 700/2700 of the month.
+        assertEquals(700f / 2700f, transport.share, 0.0001f)
+    }
+
+    /**
+     * ⚠ Guards the DAO's promise from the other side: a gap with a category but no amount is
+     * an in-between state that reconciliation has not filled in yet, and it must not be read
+     * as GHS 0.00 of spending.
+     */
+    @Test
+    fun `a gap with no amount yet contributes nothing`() {
+        val s = summarise(
+            listOf(out(id = 1, day = 3, amount = 2000, fee = 0, label = "Food"), gap(2, 5, 0, "Food")),
+            august, accra,
+        )
+        assertEquals(2000L, s.moneyOut)
+        assertEquals(0L, s.fromBalance)
+    }
 
     private fun row(
         id: Long,

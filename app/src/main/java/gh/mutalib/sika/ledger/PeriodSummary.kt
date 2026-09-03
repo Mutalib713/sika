@@ -1,6 +1,7 @@
 package gh.mutalib.sika.ledger
 
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.Shape
 import java.time.Instant
@@ -45,7 +46,20 @@ data class CategorySlice(
     val share: Float,
     /** The same category last month. **Null means absent, which is not the same as zero.** */
     val previousAmount: Long?,
+    /**
+     * How much of [amount] came from a gap rather than from a message. Usually zero.
+     *
+     * ⚠ **This is the condition Mutalib's decision came with, carried in the data rather than
+     * left to the screen to remember.** He chose to let remembered money into the totals *and*
+     * to have it marked. If this were computed in the UI, the first screen that forgot to ask
+     * would quietly show a measured-looking figure that is partly recalled — which is the
+     * exact failure the marking exists to prevent. Every consumer of a slice gets it whether
+     * it wants it or not.
+     */
+    val fromBalance: Long = 0L,
 ) {
+    /** True when part of this figure is remembered rather than measured. */
+    val hasRemembered: Boolean get() = fromBalance > 0L
     /** Pesewas more (positive) or less (negative) than last month. Null with no comparison. */
     val change: Long? get() = previousAmount?.let { amount - it }
 
@@ -86,6 +100,14 @@ data class PeriodSummary(
     val moneyOut: Long,
     val closingBalance: Long?,
     val slices: List<CategorySlice>,
+    /**
+     * Of [moneyOut], how much came from gaps someone filed under a category from memory.
+     *
+     * Zero for anyone who has never explained a gap, which is the overwhelmingly common case
+     * and the reason this is a separate figure rather than a flag: a report can say
+     * "GHS 480 accounted for, GHS 20 from your balance" only if it knows both numbers.
+     */
+    val fromBalance: Long = 0L,
     val unlabelledCashOut: Long,
     val hasPrevious: Boolean,
     val transactionCount: Int,
@@ -176,7 +198,27 @@ fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): Perio
     val inMonth = real.filter { period.contains(dateOf(it, zone)) }
     val previous = real.filter { before.contains(dateOf(it, zone)) }
 
-    val moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.outflow() }
+    // ⚠ **Remembered money, and the only figures in this file that no message proves.**
+    //
+    // A gap is money the balance says left with no message to explain it. Mutalib can now file
+    // one under a category from memory, and his decision on 2026-09-03 was that it should
+    // count — *marked*, never silently. These two maps are how it reaches a total.
+    //
+    // ⚠ The gap belongs to the row that CAUGHT it, so it lands in whichever period that row
+    // falls in. That is a real approximation and worth stating: the hole itself happened
+    // somewhere in a window before that row, and near a period boundary it can be attributed
+    // to the wrong side. Pinning it to a date nobody knows would be worse — it would look
+    // exact. The row that caught it is at least a fact.
+    val remembered = inMonth.filter {
+        it.reconciled == Reconciled.GAP && it.gapCategory != null && (it.gapAmount ?: 0L) > 0L
+    }
+    val rememberedByLabel = remembered
+        .groupBy { it.gapCategory!! }
+        .mapValues { (_, rows) -> rows.sumOf { it.gapAmount ?: 0L } }
+    val fromBalance = rememberedByLabel.values.sum()
+
+    val moneyOut = inMonth.filter { it.direction == Direction.OUT }.sumOf { it.outflow() } +
+        fromBalance
     val moneyIn = inMonth.filter { it.direction == Direction.IN }.sumOf { it.inflow() }
 
     val previousByLabel = previous
@@ -184,17 +226,25 @@ fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): Perio
         .groupBy { it.label ?: UNCATEGORISED }
         .mapValues { (_, rows) -> rows.sumOf { it.outflow() } }
 
-    val slices = inMonth
+    val measuredByLabel = inMonth
         .filter { it.direction == Direction.OUT }
         .groupBy { it.label ?: UNCATEGORISED }
-        .map { (label, rows) ->
-            val amount = rows.sumOf { it.outflow() }
+        .mapValues { (_, rows) -> rows.sumOf { it.outflow() } }
+
+    // ⚠ The union of both, not just the measured labels. A category whose ONLY spending this
+    // period is a remembered gap still has to appear — otherwise explaining a gap files the
+    // money somewhere that is not on the screen, which is worse than leaving it out.
+    val slices = (measuredByLabel.keys + rememberedByLabel.keys)
+        .map { label ->
+            val recalled = rememberedByLabel[label] ?: 0L
+            val amount = (measuredByLabel[label] ?: 0L) + recalled
             CategorySlice(
                 label = label,
                 amount = amount,
                 // Guarded: a month with no outgoings would divide by zero.
                 share = if (moneyOut == 0L) 0f else amount.toFloat() / moneyOut,
                 previousAmount = previousByLabel[label],
+                fromBalance = recalled,
             )
         }
         .sortedByDescending { it.amount }
@@ -210,6 +260,7 @@ fun summarise(all: List<TransactionEntity>, period: Period, zone: ZoneId): Perio
             .maxByOrNull { it.occurredAt }
             ?.balanceAfter,
         slices = slices,
+        fromBalance = fromBalance,
         // The honesty note. Cash taken at an agent and never labelled is money this report
         // genuinely cannot explain, and saying so is the point of screen 3.
         unlabelledCashOut = inMonth

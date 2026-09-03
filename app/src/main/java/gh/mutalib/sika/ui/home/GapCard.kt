@@ -3,6 +3,8 @@ package gh.mutalib.sika.ui.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,7 +64,12 @@ import gh.mutalib.sika.ui.theme.Warn
  * stops asking, and that in six months the amount has a name attached to it.
  */
 @Composable
-fun GapCard(gap: GapDetail, onExplain: (String?) -> Unit) {
+fun GapCard(
+    gap: GapDetail,
+    onExplain: (String?) -> Unit,
+    categories: List<String> = emptyList(),
+    onFile: (String?) -> Unit = {},
+) {
     var typing by remember(gap.rowId) { mutableStateOf(false) }
     var text by remember(gap.rowId, gap.note) { mutableStateOf(gap.note.orEmpty()) }
     val focus = LocalFocusManager.current
@@ -126,8 +133,22 @@ fun GapCard(gap: GapDetail, onExplain: (String?) -> Unit) {
                             color = Warn,
                         )
                         Spacer(Modifier.height(2.dp))
+                        // ⚠ **Mutalib's own wording, 2026-09-03.** The line used to read
+                        // "From memory. No message, so it stays out of your totals." He
+                        // rejected "from memory" — it describes where the words came from,
+                        // when the thing worth saying is what happened: MTN sent nothing, and
+                        // the figure was worked out from the balance rather than typed.
+                        //
+                        // ⚠ The second sentence changes with the facts. Once the money is
+                        // filed under a category it is IN the totals, and a line still saying
+                        // it is out would be the app lying about its own arithmetic.
                         Text(
-                            "From memory. No message, so it stays out of your totals.",
+                            if (gap.category != null) {
+                                "MTN sent no message. The amount is from your balance, " +
+                                    "counted under ${gap.category}."
+                            } else {
+                                "MTN sent no message. The amount is from your balance."
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted,
                         )
@@ -184,6 +205,60 @@ fun GapCard(gap: GapDetail, onExplain: (String?) -> Unit) {
                 GapButton("I know what this was", filled = false) { typing = true }
             }
         }
+
+        // ⚠ **Only offered once the money has a name.** Filing an amount under Food before
+        // saying what it was is guessing with extra steps, and the note is the cheap part —
+        // it costs nothing to be wrong about. This is the expensive part: it moves money into
+        // a total that no message backs, so it waits until there is a reason.
+        if (gap.note != null && !typing && categories.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                if (gap.category != null) "Counted under" else "Count it under",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+            )
+            Spacer(Modifier.height(7.dp))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                categories.forEach { name ->
+                    val picked = gap.category == name
+                    GapChip(name, picked) {
+                        // ⚠ Tapping the chosen one un-chooses it. The same tap that put the
+                        // money into a total takes it back out, so nothing here is a one-way
+                        // door — which is the least an app owes you before it counts a figure
+                        // it cannot prove.
+                        onFile(if (picked) null else name)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A chip in the warning colour, so it reads as part of the gap rather than of the ledger. */
+@Composable
+private fun GapChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(15.dp))
+            .background(if (selected) Warn.copy(alpha = 0.9f) else Warn.copy(alpha = 0.10f))
+            .border(
+                1.dp,
+                if (selected) Warn else Warn.copy(alpha = 0.35f),
+                RoundedCornerShape(15.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 13.dp, vertical = 7.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodySmall,
+            // ⚠ Never white on the warning colour — docs/ui-guidelines.md. The surface is the
+            // readable pairing here, the same rule the accent buttons follow.
+            color = if (selected) Surface else TextPrimary,
+        )
     }
 }
 

@@ -56,6 +56,13 @@ data class GapDetail(
     val untilMillis: Long,
     /** What Mutalib said it was, if he has said. */
     val note: String?,
+    /**
+     * Which category the amount is counted under, if he has chosen one.
+     *
+     * ⚠ Null means it stays out of every total, exactly as gaps behaved before 2026-09-03.
+     * Choosing one is opt-in, per gap, and reversible by choosing it again.
+     */
+    val category: String? = null,
 )
 
 data class HomeState(
@@ -222,6 +229,25 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { dao.setGapNote(rowId, clean) }
     }
 
+    /**
+     * Files remembered money under a category, so it reaches that category's total.
+     *
+     * ⚠ **This is the only path in Sika that puts a figure into a total without a message
+     * behind it**, and it is deliberate — Mutalib's decision, 2026-09-03. Passing the category
+     * that is already set clears it again, so the choice is always reversible from the same
+     * tap that made it.
+     *
+     * ⚠ It does not touch the GAP flag or the note. The hole is still a hole; this only says
+     * where the money went.
+     */
+    fun fileGap(rowId: Long, category: String?) {
+        if (DemoMode.active) {
+            DemoMode.edit(rowId) { it.copy(gapCategory = category) }
+            return
+        }
+        viewModelScope.launch { dao.setGapCategory(rowId, category) }
+    }
+
     /** Adds a category from the sheet. IGNORE on conflict, so a duplicate name is harmless. */
     fun addCategory(name: String) {
         val clean = name.trim()
@@ -282,6 +308,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     sinceMillis = anchorBefore[row.id],
                     untilMillis = row.occurredAt,
                     note = row.gapNote,
+                    category = row.gapCategory,
                 )
             }
             .maxByOrNull { it.untilMillis }

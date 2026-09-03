@@ -54,6 +54,7 @@ import gh.mutalib.sika.ui.theme.StatMoneyStyle
 import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
+import gh.mutalib.sika.ui.theme.Warn
 import gh.mutalib.sika.ui.theme.categoryColor
 import gh.mutalib.sika.ui.theme.categoryIcon
 import kotlin.math.abs
@@ -456,10 +457,18 @@ private fun SliceRow(slice: CategorySlice) {
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(slice.label, style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+                // ⚠ Same marking as Home, for the same reason — see HomeScreen's note. The
+                // report is the screen someone quotes at themselves, so it is the last place
+                // a remembered figure should be able to pass as a measured one.
                 Text(
-                    "${Math.round(slice.share * 100)}% of total",
+                    "${Math.round(slice.share * 100)}% of total" +
+                        if (slice.hasRemembered) {
+                            " · ${slice.fromBalance.asCedis()} from your balance"
+                        } else {
+                            ""
+                        },
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextMuted,
+                    color = if (slice.hasRemembered) Warn else TextMuted,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {

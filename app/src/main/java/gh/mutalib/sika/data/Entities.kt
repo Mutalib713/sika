@@ -123,9 +123,41 @@ data class TransactionEntity(
      * six months later the amount has a name attached to it.
      *
      * Whether an explained gap should ALSO become a spendable amount in the category
-     * breakdown is a separate decision, deliberately not taken here — see PLAN task 16.
+     * breakdown was left open here until 2026-09-03. It is now [gapCategory]'s job.
      */
     val gapNote: String? = null,
+
+    /**
+     * How far the balance moved beyond what the messages account for, in pesewas.
+     *
+     * ⚠ **Persisted so the breakdown can use it, not because reconciliation needs it.** The
+     * reconciler computes this difference every run and used to throw it away, keeping only
+     * the GAP flag. Nothing that only reads transactions — `summarise` in particular — could
+     * therefore see how *much* was missing, so a gap could never appear in a category total
+     * however well it was explained.
+     *
+     * Always positive, and always about the hole *before* this row.
+     */
+    val gapAmount: Long? = null,
+
+    /**
+     * Which category the remembered money should count toward, if the answer is known.
+     *
+     * ⚠ **This is the one place Sika lets a figure into a total that no message proves.**
+     * Mutalib's decision, 2026-09-03, after being shown the trade: he took "count it and mark
+     * it" over leaving the money out, and over counting it silently. The marking is the
+     * condition on which it was agreed and is not decoration — see [PeriodSummary.fromBalance]
+     * and `CategorySlice.fromBalance`, which carry it all the way to the screen so no total is
+     * ever shown as measured when part of it is remembered.
+     *
+     * ⚠ **Setting this does NOT clear the GAP flag.** MTN still sent no message, and that
+     * stays true however confidently the purchase is recalled. Reconciliation keeps reporting
+     * it; what changes is only that the amount now has somewhere to go.
+     *
+     * ⚠ **Null and "no category" mean the same here**, deliberately: an explained gap with no
+     * category chosen stays out of every total, exactly as before this column existed.
+     */
+    val gapCategory: String? = null,
 
     /**
      * The original SMS, kept verbatim — Sacred Rule 6.

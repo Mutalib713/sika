@@ -28,7 +28,11 @@ object ReconcilePass {
         val byId = rows.associateBy { it.id }
 
         val checks = Reconciler.reconcile(rows)
-        for (c in checks) dao.setReconciled(c.id, c.state)
+        // ⚠ The difference used to be computed here and thrown away. Storing it is what lets
+        // an explained gap reach a category total at all — nothing downstream of this runs the
+        // reconciler, so an amount that only exists in memory is an amount the report cannot
+        // see. Absolute value: a gap has a size, not a direction.
+        for (c in checks) dao.setReconciled(c.id, c.state, c.difference?.let { kotlin.math.abs(it) })
 
         // ⚠ **The window opens at the last row that STATED a balance, not simply the previous
         // row.** A message with no balance in its text cannot anchor anything, so if one sits
