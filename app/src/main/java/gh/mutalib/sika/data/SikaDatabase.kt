@@ -143,6 +143,46 @@ abstract class SikaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Guarantees the category table is usable, whoever asks first.
+         *
+         * ⚠ **This exists because onboarding runs BEFORE the first sweep.** Seeding used to
+         * live only in `Sweeper`, which fires once the flow is finished — so the onboarding
+         * screen that asks *"which of these do you spend on?"* would have opened on an empty
+         * table for every brand-new install. It reads the live table, so there was nothing to
+         * show and nothing to switch off. Found on the device 2026-09-03.
+         *
+         * Seeds an empty table, tops up a populated one, and is safe to call repeatedly.
+         */
+        suspend fun ensureCategories(dao: CategoryDao) {
+            if (dao.count() == 0) dao.insertAll(SEED_CATEGORIES) else topUpDefaults(dao)
+        }
+
+        /**
+         * Adds any default category a phone does not have yet, and removes nothing.
+         *
+         * ⚠ **This exists because changing [SEED_CATEGORIES] does nothing to a phone that is
+         * already running.** Seeding fires once, when the table is empty, so Mutalib's own
+         * install would never have seen Utility bills or Groceries — he would have been shown
+         * an onboarding screen listing the very categories he asked to replace.
+         *
+         * ⚠ **Add-only, deliberately.** The three he dropped — Rent, Printing, Sent home —
+         * stay on any phone that already has them. Deleting a category that might hold
+         * transactions is the thing he ruled out on 2026-09-01, and "it looks unused right
+         * now" is not the same as "nothing points at it". They can be switched off on the
+         * onboarding screen or put away in Settings, both of which are reversible.
+         *
+         * ⚠ Matched case-insensitively, so a hand-made "groceries" is not duplicated by a
+         * seeded "Groceries".
+         */
+        suspend fun topUpDefaults(dao: CategoryDao) {
+            val have = dao.all().map { it.name.lowercase() }.toSet()
+            val missing = SEED_CATEGORIES.filter { it.name.lowercase() !in have }
+            if (missing.isEmpty()) return
+            val next = (dao.all().maxOfOrNull { it.sortOrder } ?: 0) + 1
+            dao.insertAll(missing.mapIndexed { i, c -> c.copy(id = 0, sortOrder = next + i) })
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
                 .addMigrations(
@@ -156,9 +196,20 @@ abstract class SikaDatabase : RoomDatabase() {
                 // rather than wipe the user's data at runtime.
                 .build()
 
-        /** The nine starters, seeded on first run. `Other` is last and protected. */
+        /**
+         * The starters, seeded on first run. `Other` is last and protected.
+         *
+         * ⚠ **Mutalib's list, 2026-09-03**: Rent, Printing and Sent home came out; Utility
+         * bills and Groceries went in. They are the categories a KNUST student actually
+         * reaches for, which is the only test that matters here.
+         *
+         * ⚠ **Changing this does NOT change a phone that already exists.** Seeding runs once,
+         * on first launch, so anyone already carrying Rent or Printing keeps them — and
+         * `categoryColor`/`categoryIcon` still know how to draw all three, deliberately. A
+         * default list is what a new install starts with, not a list of what is allowed.
+         */
         val SEED_CATEGORIES = listOf(
-            "Food", "Transport", "Data", "Airtime", "Rent", "Provisions", "Printing", "Sent home",
+            "Food", "Transport", "Data", "Airtime", "Provisions", "Printing", "Utility bills",
         ).mapIndexed { i, name ->
             CategoryEntity(name = name, sortOrder = i, isDefault = true)
         } + CategoryEntity(

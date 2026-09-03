@@ -30,10 +30,9 @@ object Sweeper {
         val db = SikaDatabase.get(context)
         val dao = db.transactions()
 
-        // Seed the categories on first run. IGNORE means running it again is harmless.
-        if (db.categories().count() == 0) {
-            db.categories().insertAll(SikaDatabase.SEED_CATEGORIES)
-        }
+        // Seeds a new phone, tops up an existing one. Onboarding calls the same function, so
+        // whichever runs first leaves a usable table — see ensureCategories.
+        SikaDatabase.ensureCategories(db.categories())
 
         // Full read every time. Filtering by "since the newest row" would be faster, but
         // it would also permanently skip anything that arrived out of order or was

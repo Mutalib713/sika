@@ -2,12 +2,17 @@ package gh.mutalib.sika.ui.onboarding
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import gh.mutalib.sika.data.SikaDatabase
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 
 /**
@@ -19,7 +24,7 @@ import java.time.LocalDate
  */
 enum class OnboardingStep {
     TOUR_INTRO, TOUR_READS, TOUR_CHECKS, TOUR_SEMESTER,
-    PERMISSION, NAME, STUDENT, NOTIFICATIONS,
+    PERMISSION, NAME, STUDENT, CATEGORIES, NOTIFICATIONS,
 }
 
 /**
@@ -85,7 +90,8 @@ fun OnboardingFlow(
             OnboardingStep.PERMISSION -> OnboardingStep.TOUR_SEMESTER
             OnboardingStep.NAME -> if (smsGranted) OnboardingStep.NAME else OnboardingStep.PERMISSION
             OnboardingStep.STUDENT -> OnboardingStep.NAME
-            OnboardingStep.NOTIFICATIONS -> OnboardingStep.STUDENT
+            OnboardingStep.CATEGORIES -> OnboardingStep.STUDENT
+            OnboardingStep.NOTIFICATIONS -> OnboardingStep.CATEGORIES
             OnboardingStep.TOUR_INTRO -> OnboardingStep.TOUR_INTRO
         }
     }
@@ -125,7 +131,37 @@ fun OnboardingFlow(
             student = isStudent
             OnboardingPrefs.setStudent(context, isStudent)
             OnboardingPrefs.setTerm(context, start, end)
-            step = OnboardingStep.NOTIFICATIONS
+            step = OnboardingStep.CATEGORIES
+        }
+
+        // ⚠ **Writes `isHidden` as each switch moves, not in a batch on Continue.** Two
+        // reasons: "Keep them all" then means literally nothing to undo, and someone who kills
+        // the app halfway through setup keeps the choices they had already made rather than
+        // silently losing them.
+        OnboardingStep.CATEGORIES -> {
+            val scope = rememberCoroutineScope()
+            val dao = remember { SikaDatabase.get(context).categories() }
+            // ⚠ **Seeds here, not only in the sweep.** The sweep runs after onboarding
+            // finishes, so on a brand-new install this screen would otherwise open on an empty
+            // table — a question about categories with no categories under it. It also tops up
+            // an existing phone, which is how a changed default list reaches someone who is
+            // already using the app. Safe to call every time this step is reached.
+            LaunchedEffect(Unit) { SikaDatabase.ensureCategories(dao) }
+            val categories by dao.observeAll()
+                .collectAsStateWithLifecycle(initialValue = emptyList())
+            val excluded = remember(categories) {
+                categories.filter { it.isHidden }.map { it.name }.toSet()
+            }
+            CategoryPickScreen(
+                categories = categories,
+                excluded = excluded,
+                onToggle = { name, on ->
+                    val row = categories.firstOrNull { it.name == name } ?: return@CategoryPickScreen
+                    scope.launch { dao.setHidden(row.id, !on) }
+                },
+                onNext = { step = OnboardingStep.NOTIFICATIONS },
+                onSkip = { step = OnboardingStep.NOTIFICATIONS },
+            )
         }
 
         OnboardingStep.NOTIFICATIONS -> AskNotifications(

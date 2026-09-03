@@ -83,6 +83,21 @@ fun AskPermission(onAllow: () -> Unit, onRestore: () -> Unit) {
  * places. Skipping is a real answer, not a failure: the greeting then says the time of day
  * with no name after it.
  */
+/**
+ * ⚠ **The questions carry their own progress dashes, numbered 1..4 separately from the tour.**
+ *
+ * Until 2026-09-03 only the four tour screens had them, so the flow showed a filling progress
+ * bar, reached the end of the tour, and then went silent for four more screens — which reads
+ * as "nearly done" followed by an unbounded queue of questions. Mutalib spotted the new
+ * category screen had no dashes; it turned out none of these did.
+ *
+ * ⚠ **Permission is deliberately NOT one of the four.** It is a gate rather than a step — it
+ * only appears when access has not been granted, so counting it would make the same flow show
+ * "1 of 5" or "1 of 4" depending on a decision made minutes earlier, and a total that moves is
+ * worse than no total.
+ */
+private const val ASK_STEPS = 4
+
 @Composable
 fun AskName(initial: String?, onDone: (String?) -> Unit) {
     var name by remember { mutableStateOf(initial.orEmpty()) }
@@ -96,6 +111,7 @@ fun AskName(initial: String?, onDone: (String?) -> Unit) {
     }
 
     OnboardingFrame(
+        step = 1, total = ASK_STEPS,
         primary = "Continue", onPrimary = { finish(name.trim().takeIf { it.isNotEmpty() }) },
         quiet = "Skip", onQuiet = { finish(null) },
     ) {
@@ -164,6 +180,7 @@ fun AskStudent(
     var picking by remember { mutableStateOf<DateField?>(null) }
 
     OnboardingFrame(
+        step = 2, total = ASK_STEPS,
         primary = "Continue",
         onPrimary = {
             val isStudent = student == true
@@ -272,6 +289,7 @@ private fun DateRow(label: String, date: LocalDate?, onClick: () -> Unit) {
 @Composable
 fun AskNotifications(onAllow: () -> Unit, onSkip: () -> Unit) {
     OnboardingFrame(
+        step = 4, total = ASK_STEPS,
         primary = "Allow notifications", onPrimary = onAllow,
         quiet = "Not now", onQuiet = onSkip,
     ) {

@@ -38,6 +38,11 @@ private val DARK_HUES = mapOf(
     "Provisions" to Color(0xFFE6AB02),
     "Printing" to Color(0xFFA6761D),
     "Sent home" to Color(0xFF8C6D8C),
+    // ⚠ Blue and deep cyan, the two gaps in this palette. Mutalib's list change, 2026-09-03:
+    // Rent, Printing and Sent home left the DEFAULTS but keep their hues and icons, because
+    // anyone who already has them still needs them drawn.
+    "Utility bills" to Color(0xFF2A7FB8),
+    "Groceries" to Color(0xFF00838F),
     "Other" to Color(0xFF666666),
 )
 
@@ -84,6 +89,8 @@ fun categoryIcon(name: String?): Int = when (name) {
     "Provisions" -> R.drawable.ic_cat_provisions
     "Printing" -> R.drawable.ic_cat_printing
     "Sent home" -> R.drawable.ic_cat_sent_home
+    "Utility bills" -> R.drawable.ic_cat_utilities
+    "Groceries" -> R.drawable.ic_cat_groceries
     "Other" -> R.drawable.ic_cat_other
     else -> R.drawable.ic_cat_none
 }

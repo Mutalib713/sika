@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "shopping-basket" - the project's only icon set. See docs/ui-guidelines.md.
+     Stroke is white; every use tints it via Icon(tint = ...). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M15,11l-1,9M19,11l-4,-7M2,11h20M3.5,11l1.6,7.4a2,2 0 0 0 2,1.6h9.8a2,2 0 0 0 2,-1.6l1.7,-7.4M4.5,15.5h15M5,11l4,-7M9,11l1,9"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

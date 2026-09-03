@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lucide "zap" - the project's only icon set. See docs/ui-guidelines.md.
+     Stroke is white; every use tints it via Icon(tint = ...).
+
+     ⚠ **A filled bolt, not a stroked one.** Lucide ships zap as a single closed outline, so
+     it is a fillColor here while every other ic_cat_* is a stroke. It reads the same at 15dp;
+     stroking this path would draw the bolt's outline twice. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M15.914,4a1.5,1.5 0 0 0 -2.474,-1.561l-9,9A1.5,1.5 0 0 0 5.5,14h4.002a0.5,0.5 0 0 1 0.471,0.666L8.086,20a1.5,1.5 0 0 0 2.475,1.56l9,-9A1.5,1.5 0 0 0 18.5,10h-3.997a0.5,0.5 0 0 1 -0.472,-0.667z"
+        android:fillColor="#FFFFFF" />
+</vector>
