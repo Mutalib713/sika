@@ -625,6 +625,11 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                         onNote = { vm.setNote(sheetRow, it) },
                         onAddCategory = vm::addCategory,
                         onDismiss = { sheetFor = null },
+                        pastGapNotes = state.pastGapNotes,
+                        onGapAnswer = { category, note ->
+                            vm.fileGap(sheetRow.id, category)
+                            vm.explainGap(sheetRow.id, note)
+                        },
                     )
                 }
             }

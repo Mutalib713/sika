@@ -306,8 +306,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             anchorBefore[r.id] = lastStated
             if (r.balanceAfter != null) lastStated = r.occurredAt
         }
+        // ⚠ **An answered gap leaves Home. Mutalib, 2026-09-03: *"once it is saved it should
+        // leave there"*.** The card used to stay for ever, on the reasoning that MTN still
+        // never sent that message — true, and beside the point once he has said what the money
+        // was. A card that cannot be finished stops being a question and becomes furniture.
+        //
+        // ⚠ **The row itself is untouched: it keeps its `GAP` verdict, its `gapNote` and its
+        // `gapCategory`.** Only the Home card is filtered. The answer stays editable from the
+        // transaction list, which is where his next question pointed — *"what if the user want
+        // to edit"* — and `TransactionSheet` grew the same editor on the same day.
         val newestGap = Reconciler.reconcile(all)
             .filter { it.state == Reconciled.GAP }
+            .filter { check -> all.firstOrNull { it.id == check.id }?.gapCategory == null }
             .mapNotNull { check ->
                 val row = ordered.firstOrNull { it.id == check.id } ?: return@mapNotNull null
                 GapDetail(

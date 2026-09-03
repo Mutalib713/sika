@@ -78,6 +78,10 @@ fun TransactionSheet(
     onAddCategory: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Words he has used to explain a gap before, for the bulb. Empty is fine. */
+    pastGapNotes: List<String> = emptyList(),
+    /** Where a gap's answer goes: the category to count it under, and the "Other" note. */
+    onGapAnswer: (category: String?, note: String?) -> Unit = { _, _ -> },
 ) {
     // Named `alsoRemember`, not `remember` - a local called `remember` shadows the
     // composable of the same name, which is a trap for whoever edits this next.
@@ -389,6 +393,22 @@ fun TransactionSheet(
                     color = Warn,
                 )
             }
+            // ⚠ **This is the answer to "what if the user wants to edit it".** Mutalib asked
+            // on 2026-09-03, in the same breath as asking for the Home card to disappear once
+            // saved — and he was right to ask, because until this the sheet only *announced*
+            // the gap. Saying "this doesn't add up" and offering no way to say what it was is
+            // a dead end, and once the card leaves Home it would have been the only screen
+            // where the money still appeared.
+            //
+            // ⚠ **The same `GapAnswer` the card uses, not a second copy.** Two hand-written
+            // chip rows for one decision drift the first time either is touched.
+            GapAnswer(
+                categories = categories.map { it.name },
+                category = row.gapCategory,
+                note = row.gapNote,
+                pastNotes = pastGapNotes,
+                onSave = onGapAnswer,
+            )
         }
 
         Spacer(Modifier.height(12.dp))

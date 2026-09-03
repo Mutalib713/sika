@@ -460,10 +460,17 @@ private fun SliceRow(slice: CategorySlice) {
                 // ⚠ Same marking as Home, for the same reason — see HomeScreen's note. The
                 // report is the screen someone quotes at themselves, so it is the last place
                 // a remembered figure should be able to pass as a measured one.
+                // ⚠ **"with no message from MTN", not "from your balance". Mutalib,
+                // 2026-09-03: *"dont say 15 from balance say something like mtn ddint send
+                // the 15"*.** "From your balance" describes where Sika got the number, which
+                // is Sika's problem, not his — and it reads as though the money left the
+                // balance, which every other figure on this screen also did. The fact worth
+                // marking is the one that makes this figure weaker than its neighbours: no
+                // message stands behind it. Same words as the gap card, deliberately.
                 Text(
                     "${Math.round(slice.share * 100)}% of total" +
                         if (slice.hasRemembered) {
-                            " · ${slice.fromBalance.asCedis()} from your balance"
+                            " · ${slice.fromBalance.asCedis()} with no message from MTN"
                         } else {
                             ""
                         },

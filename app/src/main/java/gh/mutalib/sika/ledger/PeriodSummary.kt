@@ -105,7 +105,7 @@ data class PeriodSummary(
      *
      * Zero for anyone who has never explained a gap, which is the overwhelmingly common case
      * and the reason this is a separate figure rather than a flag: a report can say
-     * "GHS 480 accounted for, GHS 20 from your balance" only if it knows both numbers.
+     * "GHS 480 accounted for, GHS 20 with no message from MTN" only if it knows both.
      */
     val fromBalance: Long = 0L,
     val unlabelledCashOut: Long,

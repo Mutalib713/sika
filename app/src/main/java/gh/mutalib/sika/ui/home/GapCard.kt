@@ -59,6 +59,9 @@ import gh.mutalib.sika.ui.theme.Warn
  * and remembering the purchase does not make one exist. What the note buys is that the card
  * stops asking, and that in six months the amount has a name attached to it.
  */
+/** The one category that explains nothing by itself, so it is the one that opens a box. */
+private const val OTHER = "Other"
+
 @Composable
 fun GapCard(
     gap: GapDetail,
@@ -76,18 +79,6 @@ fun GapCard(
      */
     pastNotes: List<String> = emptyList(),
 ) {
-    var typing by remember(gap.rowId) { mutableStateOf(false) }
-    var text by remember(gap.rowId, gap.note) { mutableStateOf(gap.note.orEmpty()) }
-    val focus = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    fun save() {
-        focus.clearFocus(force = true)
-        keyboard?.hide()
-        onExplain(text.trim().takeIf { it.isNotEmpty() })
-        typing = false
-    }
-
     Column(
         Modifier
             .fillMaxWidth()
@@ -119,142 +110,107 @@ fun GapCard(
             color = TextMuted,
         )
 
-        when {
-            // Already answered. Shown back rather than hidden, so the amount has a name on it
-            // months later, and tappable so a wrong guess can be corrected.
-            gap.note != null && !typing -> {
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { typing = true }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            gap.note,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Warn,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        // ⚠ **Mutalib's own wording, 2026-09-03.** The line used to read
-                        // "From memory. No message, so it stays out of your totals." He
-                        // rejected "from memory" — it describes where the words came from,
-                        // when the thing worth saying is what happened: MTN sent nothing, and
-                        // the figure was worked out from the balance rather than typed.
-                        //
-                        // ⚠ The second sentence changes with the facts. Once the money is
-                        // filed under a category it is IN the totals, and a line still saying
-                        // it is out would be the app lying about its own arithmetic.
-                        Text(
-                            if (gap.category != null) {
-                                "MTN sent no message. The amount is from your balance, " +
-                                    "counted under ${gap.category}."
-                            } else {
-                                "MTN sent no message. The amount is from your balance."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted,
-                        )
-                    }
-                    Icon(
-                        painterResource(R.drawable.ic_pencil),
-                        contentDescription = "Change what this was",
-                        tint = TextMuted,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
-            }
+        // ⚠ **The editor is shared with the history sheet, deliberately.** Once the card
+        // leaves Home the only way back to this answer is through the transaction list, and
+        // two hand-written copies of the same chips would drift the first time one is touched.
+        GapAnswer(
+            categories = categories,
+            category = gap.category,
+            note = gap.note,
+            pastNotes = pastNotes,
+            onSave = { category, note -> onFile(category); onExplain(note) },
+        )
+    }
+}
 
-            typing -> {
-                // ⚠ **Both jobs on one screen, which is the point of the change.** Until now
-                // the category picker only appeared AFTER a note was saved, so explaining a
-                // gap and filing it were two visits to the same card. Mutalib asked for them
-                // together, and he is right: he knows both facts at the same moment, and
-                // splitting them across two steps is how the second one never gets done.
-                // ⚠ **The old "Used before" chip row lived here and is gone.** It sat ABOVE
-                // the box, so the suggestions were asking to be read before there was anything
-                // to suggest against, and it pushed the box itself further down the card every
-                // time he wrote a new kind of note. They are behind the bulb now — same list,
-                // no permanent rent on the card.
-                Spacer(Modifier.height(12.dp))
-                SuggestionField(
-                    value = text,
-                    onValueChange = { text = it },
-                    prompt = "What was this money for?",
-                    // ⚠ Capped at three. The bulb is a hint, not a history screen, and a
-                    // popup listing everything he has ever typed is a list again.
-                    examples = pastNotes.take(3),
-                    placeholder = "Barber, or a friend I paid cash",
-                    // The gap card is amber throughout; an accent-teal box on it would look
-                    // like a control borrowed from another screen.
-                    accent = Warn,
-                    onDone = { save() },
-                )
-                if (categories.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        if (gap.category != null) "Counted under" else "Count it under",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        categories.forEach { name ->
-                            val picked = gap.category == name
-                            GapChip(name, picked) { onFile(if (picked) null else name) }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(9.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GapButton("Save", filled = true) { save() }
-                    GapButton("Cancel", filled = false) {
-                        text = gap.note.orEmpty()
-                        typing = false
-                    }
-                }
-            }
+/**
+ * Choosing what a gap was, in the same shape as labelling a transaction.
+ *
+ * ⚠ **Mutalib, 2026-09-03: *"it should just be like the transaction one … where u have the food
+ * and the other ones and also the other which brings the text box"*.** The card used to ask its
+ * own question first — a button reading "I know what this was", then a box, and only then the
+ * categories. That made explaining a gap a different act from labelling a payment, with a
+ * different vocabulary, for the same job.
+ *
+ * ⚠ **Nothing is written until Save**, for every category and not only "Other". His words:
+ * *"i cant see the save for the others but the other with the text box has save"*. Tapping a
+ * chip used to file the money on the spot, so six of the seven categories committed with no
+ * confirming press while "Other" waited for one — one card teaching two rules about when a tap
+ * counts. `TransactionSheet` has always had a single Save, and this matches it.
+ *
+ * ⚠ **The consequence, stated rather than buried: explaining now also counts.** Before this a
+ * note could be written with no category, so the amount stayed out of every total. Choosing a
+ * category *is* the explanation now, and a chosen category reaches its total.
+ */
+@Composable
+fun GapAnswer(
+    categories: List<String>,
+    category: String?,
+    note: String?,
+    pastNotes: List<String>,
+    onSave: (category: String?, note: String?) -> Unit,
+) {
+    if (categories.isEmpty()) return
 
-            else -> {
-                Spacer(Modifier.height(12.dp))
-                GapButton("I know what this was", filled = false) { typing = true }
-            }
+    var selected by remember(category) { mutableStateOf(category) }
+    var text by remember(note) { mutableStateOf(note.orEmpty()) }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    // ⚠ A note belongs to "Other" and nowhere else, the rule `TransactionSheet` already
+    // follows. Leaving "barber" attached to a gap filed under Food would leave the card
+    // stating two different things about the same money.
+    val pending = if (selected == OTHER) text.trim().takeIf { it.isNotEmpty() } else null
+    val changed = selected != category || pending != note
+
+    fun save() {
+        focus.clearFocus(force = true)
+        keyboard?.hide()
+        onSave(selected, pending)
+    }
+
+    Spacer(Modifier.height(14.dp))
+    Text("WHAT WAS IT FOR?", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+    Spacer(Modifier.height(8.dp))
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        categories.forEach { name ->
+            val picked = selected == name
+            // Tapping the chosen one un-chooses it, so nothing here is a one-way door — the
+            // least an app owes you before it counts a figure it cannot prove.
+            GapChip(name, picked) { selected = if (picked) null else name }
         }
+    }
 
-        // ⚠ **Only offered once the money has a name.** Filing an amount under Food before
-        // saying what it was is guessing with extra steps, and the note is the cheap part —
-        // it costs nothing to be wrong about. This is the expensive part: it moves money into
-        // a total that no message backs, so it waits until there is a reason.
-        // Shown once the answer is saved. While typing, the picker above is the live one —
-        // rendering both would put two identical chip rows on the same card.
-        if (gap.note != null && !typing && categories.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                if (gap.category != null) "Counted under" else "Count it under",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-            )
-            Spacer(Modifier.height(7.dp))
-            Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                categories.forEach { name ->
-                    val picked = gap.category == name
-                    GapChip(name, picked) {
-                        // ⚠ Tapping the chosen one un-chooses it. The same tap that put the
-                        // money into a total takes it back out, so nothing here is a one-way
-                        // door — which is the least an app owes you before it counts a figure
-                        // it cannot prove.
-                        onFile(if (picked) null else name)
-                    }
-                }
+    // The box, for the one chip that explains nothing by itself.
+    if (selected == OTHER) {
+        Spacer(Modifier.height(12.dp))
+        SuggestionField(
+            value = text,
+            onValueChange = { text = it },
+            prompt = "What was this money for?",
+            // ⚠ Capped at three. The bulb is a hint, not a history screen.
+            examples = pastNotes.take(3),
+            placeholder = "Barber, or a friend I paid cash",
+            // Amber throughout; an accent-teal box here would look like a control borrowed
+            // from another screen.
+            accent = Warn,
+            onDone = { save() },
+        )
+    }
+
+    // ⚠ **One Save, under everything, for every category.** It appears the moment the answer
+    // differs from what is stored and goes again once saved, so the card always says whether
+    // there is anything outstanding.
+    if (changed) {
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GapButton("Save", filled = true) { save() }
+            GapButton("Cancel", filled = false) {
+                selected = category
+                text = note.orEmpty()
             }
         }
     }
@@ -285,24 +241,34 @@ private fun GapChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Outlined in the warning colour, never filled with it — a warning is not an invitation. */
+/**
+ * The card's two actions.
+ *
+ * ⚠ **Save is filled solid, not tinted. Mutalib, 2026-09-03: *"the save doesnt look like its a
+ * button u will click"*.** It was `Warn` at 20% behind `Warn` text — a wash barely darker than
+ * the card it sits on, which reads as a label rather than a control. The rest of the app fills
+ * its confirming button and outlines its dismissing one, and this now does the same.
+ *
+ * ⚠ **`Surface` on `Warn`, never white** — docs/ui-guidelines.md. White on the warning amber is
+ * 1.9:1 and unreadable; the surface colour is the pairing the selected chip already uses.
+ */
 @Composable
 private fun GapButton(label: String, filled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(22.dp))
             .then(
-                if (filled) Modifier.background(Warn.copy(alpha = 0.2f))
-                else Modifier.border(1.dp, Warn.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
+                if (filled) Modifier.background(Warn)
+                else Modifier.border(1.dp, Warn.copy(alpha = 0.55f), RoundedCornerShape(22.dp)),
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 15.dp, vertical = 9.dp),
+            .padding(horizontal = 26.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.W600),
-            color = Warn,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (filled) Surface else Warn,
         )
     }
 }
