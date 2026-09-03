@@ -102,6 +102,14 @@ data class HomeState(
     val days: List<DayGroup> = emptyList(),
     /** Every transaction on record, grouped by day — what the "All time" filter reads. */
     val allDays: List<DayGroup> = emptyList(),
+    /**
+     * Every distinct explanation he has written for a gap, newest first.
+     *
+     * ⚠ **Read from the ledger, never a fixed list.** These become one-tap chips when the next
+     * gap needs explaining, and their whole value is that they are words he chose. A curated
+     * list of plausible reasons would be Sika guessing at his spending.
+     */
+    val pastGapNotes: List<String> = emptyList(),
     val total: Int = 0,
     /**
      * Every transaction on record, not just this month's.
@@ -319,6 +327,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             monthSummary = summarise(all, month, ACCRA),
             weekSummary = summarise(all, week, ACCRA),
             recent = all.sortedByDescending { it.occurredAt }.take(RECENT_ROWS),
+            pastGapNotes = all.asReversed()
+                .mapNotNull { it.gapNote?.trim()?.takeIf(String::isNotEmpty) }
+                .distinct()
+                .take(6),
             gaps = inMonth.count { it.reconciled == Reconciled.GAP },
             gap = newestGap,
             firstGap = inMonth.lastOrNull { it.reconciled == Reconciled.GAP },

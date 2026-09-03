@@ -22,8 +22,8 @@ android {
         targetSdk = 36
         // ⚠ Keep this in step with the git tag. Settings prints `versionName` at the bottom of
         // the screen, so a v1.0.0 tag on an APK that says 0.1 is a lie the person can see.
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
 
         // Room's DAOs talk to real SQLite, so they are tested on the real device rather
         // than against a mock. `./gradlew connectedDebugAndroidTest` runs these.

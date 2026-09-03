@@ -69,6 +69,16 @@ fun GapCard(
     onExplain: (String?) -> Unit,
     categories: List<String> = emptyList(),
     onFile: (String?) -> Unit = {},
+    /**
+     * Words he has used to explain a gap before.
+     *
+     * ⚠ **His own past answers, never a list Sika invented.** Mutalib asked for a suggested
+     * button here (2026-09-03), and the honest source for one is what he has already written:
+     * "barber" typed once should be a tap the second time. Making up plausible reasons — "a
+     * friend", "food" — would be the app guessing at his spending, which is the one thing it
+     * exists not to do.
+     */
+    pastNotes: List<String> = emptyList(),
 ) {
     var typing by remember(gap.rowId) { mutableStateOf(false) }
     var text by remember(gap.rowId, gap.note) { mutableStateOf(gap.note.orEmpty()) }
@@ -163,6 +173,28 @@ fun GapCard(
             }
 
             typing -> {
+                // ⚠ **Both jobs on one screen, which is the point of the change.** Until now
+                // the category picker only appeared AFTER a note was saved, so explaining a
+                // gap and filing it were two visits to the same card. Mutalib asked for them
+                // together, and he is right: he knows both facts at the same moment, and
+                // splitting them across two steps is how the second one never gets done.
+                if (pastNotes.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Used before",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        pastNotes.forEach { past ->
+                            GapChip(past, selected = text.trim() == past) { text = past }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = text,
@@ -190,6 +222,24 @@ fun GapCard(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (categories.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        if (gap.category != null) "Counted under" else "Count it under",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        categories.forEach { name ->
+                            val picked = gap.category == name
+                            GapChip(name, picked) { onFile(if (picked) null else name) }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GapButton("Save", filled = true) { save() }
@@ -210,6 +260,8 @@ fun GapCard(
         // saying what it was is guessing with extra steps, and the note is the cheap part —
         // it costs nothing to be wrong about. This is the expensive part: it moves money into
         // a total that no message backs, so it waits until there is a reason.
+        // Shown once the answer is saved. While typing, the picker above is the live one —
+        // rendering both would put two identical chip rows on the same card.
         if (gap.note != null && !typing && categories.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Text(

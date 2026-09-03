@@ -188,6 +188,7 @@ fun HomeScreen(
                                 onExplain = { onExplainGap(gap.rowId, it) },
                                 categories = gapCategories,
                                 onFile = { onFileGap(gap.rowId, it) },
+                                pastNotes = state.pastGapNotes,
                             )
                         }
                     }

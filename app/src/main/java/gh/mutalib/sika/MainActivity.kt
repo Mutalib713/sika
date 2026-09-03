@@ -56,6 +56,7 @@ import gh.mutalib.sika.data.Backup
 import gh.mutalib.sika.data.BackupIo
 import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.TermEntity
+import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.notify.DailyNudge
@@ -491,13 +492,18 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                                 terms = terms,
                                 animated = animated,
                                 onBack = { settingsRoute = SettingsRoute.ROOT },
-                                onAdd = tvm::add,
+                                // ⚠ Adding opens the editor on a BLANK draft rather than
+                                // inserting a row first. A semester that appears in the list
+                                // the instant you tap "+", already named and dated, is three
+                                // decisions made on your behalf before you have made one.
+                                onAdd = { editingTerm = TermEntity(name = "", startDay = 0, endExclusiveDay = 0) },
                                 onEdit = { editingTerm = it },
                                 onDelete = tvm::delete,
                             )
                             editingTerm?.let { term ->
                                 TermEditor(
                                     term = term,
+                                    suggestion = Terms.suggestedName(terms.size),
                                     onSave = tvm::save,
                                     onDismiss = { editingTerm = null },
                                 )

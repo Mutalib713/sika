@@ -212,13 +212,25 @@ private fun TermRow(
 @Composable
 fun TermEditor(
     term: TermEntity,
+    /** What the name box shows when it is empty — "Year 1, first semester". */
+    suggestion: String,
     onSave: (TermEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember(term.id) { mutableStateOf(term.name) }
-    var start by remember(term.id) { mutableStateOf(term.start) }
-    var lastDay by remember(term.id) { mutableStateOf(term.endExclusive.minusDays(1)) }
+    // ⚠ **Nothing is filled in for a new one — Mutalib, 2026-09-03: "dont name and give date
+    // automatically just suggest".** A pre-filled name and a pair of invented dates look like
+    // answers, and an answer you did not give is one you stop reading. So a new semester opens
+    // blank, with the name as a PLACEHOLDER and the dates as "Choose".
+    val isNew = term.id == 0L
+    var name by remember(term.id) { mutableStateOf(if (isNew) "" else term.name) }
+    var start by remember(term.id) {
+        mutableStateOf<java.time.LocalDate?>(if (isNew) null else term.start)
+    }
+    var lastDay by remember(term.id) {
+        mutableStateOf<java.time.LocalDate?>(if (isNew) null else term.endExclusive.minusDays(1))
+    }
     var picking by remember { mutableStateOf<String?>(null) }
+    val ready = start != null && lastDay != null && lastDay!!.isAfter(start)
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -246,6 +258,36 @@ fun TermEditor(
                 ),
                 modifier = Modifier.fillMaxWidth(),
             )
+            // ⚠ **A visible chip, not the text field's placeholder.** The placeholder was the
+            // obvious choice and it does not work: Material only draws one while the field is
+            // focused and empty, so the suggestion Mutalib asked to see was invisible until he
+            // tapped into the box — by which point he is already typing his own. A chip is
+            // always on screen, says what it will do, and fills the field in one tap.
+            if (name.isBlank()) {
+                Spacer(Modifier.height(9.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Suggested",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                    )
+                    Spacer(Modifier.width(9.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(15.dp))
+                            .background(Accent.copy(alpha = 0.14f))
+                            .clickable { name = suggestion }
+                            .padding(horizontal = 13.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            suggestion,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Accent,
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(12.dp))
             DateButton("Starts", start) { picking = "start" }
             Spacer(Modifier.height(8.dp))
@@ -253,7 +295,7 @@ fun TermEditor(
 
             // ⚠ Said plainly rather than silently corrected. Swapping the dates for him would
             // be guessing which one he mistyped.
-            if (!lastDay.isAfter(start)) {
+            if (start != null && lastDay != null && !lastDay!!.isAfter(start)) {
                 Spacer(Modifier.height(9.dp))
                 Text(
                     "The end has to come after the start.",
@@ -268,15 +310,22 @@ fun TermEditor(
                 DialogButton(
                     "Save",
                     filled = true,
+                    // ⚠ Disabled rather than silently doing nothing. A Save that looks
+                    // available and ignores the tap is the worst of both.
+                    enabled = ready,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        if (name.isNotBlank() && lastDay.isAfter(start)) {
+                        val s0 = start
+                        val e0 = lastDay
+                        if (s0 != null && e0 != null && e0.isAfter(s0)) {
                             onSave(
                                 term.copy(
-                                    name = name.trim(),
-                                    startDay = start.toEpochDay(),
+                                    // An untouched name takes the suggestion. He saw it in the
+                                    // box, so accepting it by not typing is a real choice.
+                                    name = name.trim().ifBlank { suggestion },
+                                    startDay = s0.toEpochDay(),
                                     // Back to exclusive on the way in.
-                                    endExclusiveDay = lastDay.plusDays(1).toEpochDay(),
+                                    endExclusiveDay = e0.plusDays(1).toEpochDay(),
                                 ),
                             )
                             onDismiss()
@@ -288,17 +337,23 @@ fun TermEditor(
     }
 
     when (picking) {
-        "start" -> TermDatePicker("When does it start?", start, { start = it; picking = null }) {
-            picking = null
-        }
-        "end" -> TermDatePicker("When does it end?", lastDay, { lastDay = it; picking = null }) {
-            picking = null
-        }
+        // ⚠ The picker opens on a sensible date when none is set — that is the "suggest" half
+        // — without writing anything back until he actually taps a day.
+        "start" -> TermDatePicker(
+            "When does it start?",
+            start ?: java.time.LocalDate.now(),
+            { start = it; picking = null },
+        ) { picking = null }
+        "end" -> TermDatePicker(
+            "When does it end?",
+            lastDay ?: (start ?: java.time.LocalDate.now()).plusMonths(4),
+            { lastDay = it; picking = null },
+        ) { picking = null }
     }
 }
 
 @Composable
-private fun DateButton(label: String, value: java.time.LocalDate, onClick: () -> Unit) {
+private fun DateButton(label: String, value: java.time.LocalDate?, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -310,6 +365,10 @@ private fun DateButton(label: String, value: java.time.LocalDate, onClick: () ->
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
         Spacer(Modifier.weight(1f))
-        Text(TERM_DATE.format(value), style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+        Text(
+            value?.let { TERM_DATE.format(it) } ?: "Choose",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (value == null) Accent else TextPrimary,
+        )
     }
 }

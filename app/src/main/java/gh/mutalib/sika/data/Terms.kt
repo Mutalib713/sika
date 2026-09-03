@@ -25,11 +25,15 @@ object Terms {
      *
      * Two semesters to a year, which is KNUST's shape — index 0 and 1 are Year 1, 2 and 3 are
      * Year 2, and so on.
+     *
+     * ⚠ **Year first — "Year 1, first semester".** Mutalib's own phrasing, 2026-09-03, and it
+     * is the better order anyway: the year is what distinguishes one row from another in a
+     * list of eight, so it belongs where the eye lands first.
      */
     fun suggestedName(index: Int): String {
         val year = index / 2 + 1
-        val half = if (index % 2 == 0) "First" else "Second"
-        return "$half semester, Year $year"
+        val half = if (index % 2 == 0) "first" else "second"
+        return "Year $year, $half semester"
     }
 
     /**

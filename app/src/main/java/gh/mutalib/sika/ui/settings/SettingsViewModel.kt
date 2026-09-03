@@ -235,30 +235,20 @@ class TermsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Adds one, named for its position.
+     * Writes one, whether it is new or an edit.
      *
-     * ⚠ **Starts the day after the last one ends, and runs a nominal four months.** Both are
-     * suggestions the date pickers overwrite — the point is that "add a semester" should
-     * produce something plausible to edit rather than an empty form, since the common case is
-     * the next term after the one already recorded.
+     * ⚠ **id == 0 means "not saved yet"**, which is Room's own convention for an
+     * autoGenerate primary key. Adding no longer inserts a row on the spot — see
+     * SemestersScreen — so this is the single place a semester reaches the table, new or not.
      */
-    fun add() {
+    fun save(term: TermEntity) {
         viewModelScope.launch {
-            val existing = dao.all()
-            val start = existing.lastOrNull()?.endExclusive ?: LocalDate.now(ACCRA)
-            dao.insert(
-                TermEntity(
-                    name = Terms.suggestedName(existing.size),
-                    startDay = start.toEpochDay(),
-                    endExclusiveDay = start.plusMonths(4).toEpochDay(),
-                ),
-            )
+            if (term.id == 0L) dao.insert(term) else dao.update(term)
         }
     }
 
-    fun save(term: TermEntity) {
-        viewModelScope.launch { dao.update(term) }
-    }
+    /** How many are recorded, so the editor can suggest a name for the next one. */
+    suspend fun count(): Int = dao.count()
 
     /** ⚠ Removes the grouping, never a transaction. See SemestersScreen for why. */
     fun delete(term: TermEntity) {
