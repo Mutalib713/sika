@@ -102,6 +102,16 @@ fun SettingsRow(
     // changed nothing at any of them.
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    /**
+     * A third line, quieter than the subtitle, for what tapping the row will do.
+     *
+     * ⚠ **Its own line, not appended to the subtitle with a separator.** "Sika reads MoMo
+     * messages and nothing else · tap to check" ran a statement of fact and an instruction
+     * together in one sentence, so the instruction read as part of the claim. Mutalib asked
+     * for it to come down, 2026-09-02, and he is right: a fact and a thing to do are two
+     * different kinds of sentence and should not share a line.
+     */
+    hint: String? = null,
     tint: Color? = null,
     onClick: (() -> Unit)? = null,
     trailing: @Composable () -> Unit = {},
@@ -127,10 +137,43 @@ fun SettingsRow(
                 Spacer(Modifier.height(2.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextMuted)
             }
+            if (hint != null) {
+                Spacer(Modifier.height(3.dp))
+                // ⚠ `bodySmall`, not `labelSmall`. Label styles in this typography carry wide
+                // letter-spacing meant for one- or two-word chips; on a sentence it reads as
+                // stretched, which is what it looked like on the device. Same size as the
+                // subtitle, distinguished by the accent instead.
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = Accent)
+            }
         }
         Spacer(Modifier.width(10.dp))
         trailing()
     }
+}
+
+/**
+ * A small filled pill for a state that is on or off.
+ *
+ * ⚠ **Replaces bare coloured text.** "On" in accent, sitting alone at the end of a row, was
+ * the same shape as every other trailing value on the screen — and those are all *settings you
+ * are about to change*. This one is a fact being reported. A pill reads as a badge rather than
+ * a control, which is the difference. Mutalib, 2026-09-02: *"the 'on' at the sms should be a
+ * little bit better"*.
+ *
+ * ⚠ The background is the same colour at low alpha rather than a second colour from the
+ * palette, so a pill never introduces a hue the theme has not already approved.
+ */
+@Composable
+fun StatusPill(text: String, colour: Color) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.W600),
+        color = colour,
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(colour.copy(alpha = 0.15f))
+            .padding(horizontal = 11.dp, vertical = 5.dp),
+    )
 }
 
 /** A value and a chevron — the shape that means "this opens something". */

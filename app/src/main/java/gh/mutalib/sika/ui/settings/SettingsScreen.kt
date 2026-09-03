@@ -202,7 +202,7 @@ fun SettingsScreen(
                 SectionLabel("READING YOUR MESSAGES")
                 SettingsCard {
                     SettingsRow(
-                        icon = R.drawable.ic_notification,
+                        icon = R.drawable.ic_wallet,
                         title = "Ask what a cash-out was for",
                         subtitle = "The moment the message lands",
                     ) {
@@ -268,18 +268,17 @@ fun SettingsScreen(
                         icon = R.drawable.ic_message,
                         title = "SMS access",
                         subtitle = if (smsGranted) {
-                            "Sika reads MoMo messages and nothing else · tap to check"
+                            "Sika reads MoMo messages and nothing else"
                         } else {
                             "Without it there is nothing to track"
                         },
+                        hint = "Tap to check in Android settings",
                         tint = if (smsGranted) TextMuted else Danger,
                         onClick = { openAppSettings(context) },
                     ) {
-                        Text(
-                            if (smsGranted) "On" else "Turn on",
-                            style = MaterialTheme.typography.bodyMedium
-                                .copy(fontWeight = FontWeight.W600),
-                            color = if (smsGranted) Accent else Danger,
+                        StatusPill(
+                            if (smsGranted) "Allowed" else "Turn on",
+                            if (smsGranted) Accent else Danger,
                         )
                     }
                 }
