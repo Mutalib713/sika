@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import gh.mutalib.sika.data.Backup
 import gh.mutalib.sika.data.BackupIo
 import gh.mutalib.sika.data.CategoryEntity
+import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.notify.DailyNudge
@@ -82,6 +83,9 @@ import gh.mutalib.sika.ui.settings.ReviewQueueScreen
 import gh.mutalib.sika.ui.settings.SettingsRoute
 import gh.mutalib.sika.ui.settings.SettingsScreen
 import gh.mutalib.sika.ui.settings.SettingsToast
+import gh.mutalib.sika.ui.settings.SemestersScreen
+import gh.mutalib.sika.ui.settings.TermEditor
+import gh.mutalib.sika.ui.settings.TermsViewModel
 import gh.mutalib.sika.ui.settings.SettingsViewModel
 import gh.mutalib.sika.ui.splash.SplashScreen
 import gh.mutalib.sika.ui.theme.Accent
@@ -473,6 +477,27 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                             animated = animated,
                             onBack = { settingsRoute = SettingsRoute.ROOT },
                         )
+
+                        SettingsRoute.SEMESTERS -> {
+                            val tvm: TermsViewModel = viewModel()
+                            val terms by tvm.terms.collectAsStateWithLifecycle()
+                            var editingTerm by remember { mutableStateOf<TermEntity?>(null) }
+                            SemestersScreen(
+                                terms = terms,
+                                animated = animated,
+                                onBack = { settingsRoute = SettingsRoute.ROOT },
+                                onAdd = tvm::add,
+                                onEdit = { editingTerm = it },
+                                onDelete = tvm::delete,
+                            )
+                            editingTerm?.let { term ->
+                                TermEditor(
+                                    term = term,
+                                    onSave = tvm::save,
+                                    onDismiss = { editingTerm = null },
+                                )
+                            }
+                        }
 
                         SettingsRoute.RULES -> LearnedRulesScreen(
                             rules = rules,

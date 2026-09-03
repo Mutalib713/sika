@@ -57,7 +57,7 @@ import gh.mutalib.sika.ui.theme.ThemeMode
 import gh.mutalib.sika.ui.theme.Warn
 
 /** Where Settings can send you. Kept here so MainActivity has one thing to switch on. */
-enum class SettingsRoute { ROOT, CATEGORIES, RULES, REVIEW }
+enum class SettingsRoute { ROOT, CATEGORIES, RULES, REVIEW, SEMESTERS }
 
 /**
  * Settings.
@@ -152,7 +152,10 @@ fun SettingsScreen(
                         title = "Semester",
                         subtitle = termSubtitle(isStudent, termStart, termEnd),
                         tint = if (termOver) Warn else TextMuted,
-                        onClick = { editing = Personal.SEMESTER },
+                        // ⚠ Opens the LIST now, not the old pair of date pickers. Naming
+                        // semesters means there can be several, and a dialog that edits "the"
+                        // semester has nowhere to put the second one.
+                        onClick = { onRoute(SettingsRoute.SEMESTERS) },
                     ) { Chevron() }
                 }
                 // ⚠ **"Show the tour again" was removed here on 2026-09-02, at Mutalib's

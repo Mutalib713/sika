@@ -265,3 +265,37 @@ fun ParsedTransaction.toEntity(occurredAt: Long, rawBody: String) = TransactionE
     rawBody = rawBody,
     parsedOk = true,
 )
+
+/**
+ * One named stretch of a student's year — "First semester, Year 1".
+ *
+ * ⚠ **A table rather than the two SharedPreferences keys it replaces, and the reason is
+ * Mutalib's own instruction (2026-09-02):** *"the semester we can label them lets say first
+ * sem year 1 or something"*. Labelling implies more than one, and more than one implies a
+ * list you can step through — which turns semester mode from a setting configured once into
+ * the way the year is actually divided. He graduates in 2029, so that is about eight of them.
+ *
+ * ⚠ **Dates are stored as epoch days, not millis and not text.** A semester is a range of
+ * DAYS; storing an instant would invite a timezone question that has no answer here, and
+ * storing text would make ordering a string comparison. Epoch day is one integer, sorts
+ * correctly, and converts to `LocalDate` without a zone.
+ *
+ * ⚠ **[endExclusiveDay] is exclusive**, matching `Period` everywhere else in this app. The
+ * last millisecond of a range is where bugs hide; "before the first day of the next term" has
+ * no such edge.
+ */
+@Entity(tableName = "terms")
+data class TermEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** What Mutalib calls it. Free text — his year numbering is his business, not Sika's. */
+    val name: String,
+    val startDay: Long,
+    val endExclusiveDay: Long,
+) {
+    val start: java.time.LocalDate get() = java.time.LocalDate.ofEpochDay(startDay)
+    val endExclusive: java.time.LocalDate get() = java.time.LocalDate.ofEpochDay(endExclusiveDay)
+
+    /** True while today falls inside it. Half-open, so the last day still counts. */
+    fun contains(day: java.time.LocalDate): Boolean =
+        !day.isBefore(start) && day.isBefore(endExclusive)
+}

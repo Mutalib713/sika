@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import gh.mutalib.sika.data.DemoMode
 import gh.mutalib.sika.data.SikaDatabase
+import gh.mutalib.sika.data.TermEntity
+import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.ledger.Period
 import gh.mutalib.sika.ledger.PeriodMode
 import gh.mutalib.sika.ledger.PeriodSummary
@@ -65,6 +67,17 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
+            // ⚠ Carries the old single term into the list before anything reads it, so a phone
+            // upgrading from v1.0.1 keeps the semester it already had instead of losing it to
+            // an empty table.
+            val termDao = SikaDatabase.get(app).terms()
+            Terms.ensureSeeded(app, termDao)
+            terms.value = termDao.all()
+            if (_mode.value == PeriodMode.SEMESTER && terms.value.isNotEmpty()) {
+                _period.value = semesterPeriod(termIndexFor(today(ACCRA)))
+            }
+        }
+        viewModelScope.launch {
             val first = dao.oldestTimestamp()
             if (first != null) {
                 val date = Instant.ofEpochMilli(first).atZone(ACCRA).toLocalDate()
@@ -94,17 +107,69 @@ class ReportViewModel(app: Application) : AndroidViewModel(app) {
     /** Switching mode always lands on the *current* week/month/semester, never a stale offset. */
     fun setMode(mode: PeriodMode) {
         _mode.value = mode
-        _period.value = Period.current(mode, today(ACCRA), semesterStart.value, oldest.value)
+        _period.value =
+            if (mode == PeriodMode.SEMESTER) semesterPeriod(termIndexFor(today(ACCRA)))
+            else Period.current(mode, today(ACCRA), semesterStart.value, oldest.value)
     }
 
+    /**
+     * ⚠ **A semester steps to the NEXT NAMED TERM, not by its own length in days.**
+     *
+     * The old behaviour shifted by however many days the current stretch happened to be, which
+     * was the only thing possible when a semester was one anonymous range. Now that Mutalib
+     * names them, "previous semester" has an exact meaning and it is a row in a list — and the
+     * two answers disagree badly, because semesters are not equal lengths and the vacation
+     * between them belongs to neither.
+     *
+     * Falls back to the day-shift when no terms are recorded, so someone who has never opened
+     * the semester screen still gets a working ‹ ›.
+     */
     fun step(steps: Long) {
-        val next = _period.value.shift(steps)
+        val current = _period.value
+        if (current.mode == PeriodMode.SEMESTER && terms.value.isNotEmpty()) {
+            val index = terms.value.indexOfFirst { it.name == current.name }
+                .takeIf { it >= 0 } ?: termIndexFor(today(ACCRA))
+            val target = (index + steps).toInt()
+            if (target in terms.value.indices) _period.value = semesterPeriod(target)
+            return
+        }
+        val next = current.shift(steps)
         // Never walk into the future: there is nothing there, and an empty state the user
         // navigated into by accident reads as a bug.
         if (!next.startsAfter(today(ACCRA))) _period.value = next
     }
 
-    val canStepForward: StateFlow<Boolean> = _period
-        .map { !it.shift(1).startsAfter(today(ACCRA)) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    /** The term list, ordered by start date. Empty until the first semester is named. */
+    private val terms = MutableStateFlow<List<TermEntity>>(emptyList())
+
+    private fun termIndexFor(day: LocalDate): Int {
+        val list = terms.value
+        if (list.isEmpty()) return -1
+        val here = Terms.currentOrLast(list, day)
+        return list.indexOf(here).coerceAtLeast(0)
+    }
+
+    /**
+     * A period for the term at [index], or the old open-ended stretch when there is no list.
+     *
+     * ⚠ The fallback matters: naming semesters is optional, and someone who never does must
+     * keep exactly the behaviour they had before this existed.
+     */
+    private fun semesterPeriod(index: Int): Period {
+        val list = terms.value
+        val term = list.getOrNull(index)
+            ?: return Period.current(
+                PeriodMode.SEMESTER, today(ACCRA), semesterStart.value, oldest.value,
+            )
+        return Period.namedSemester(term.name, term.start, term.endExclusive)
+    }
+
+    val canStepForward: StateFlow<Boolean> = combine(_period, terms) { period, list ->
+        if (period.mode == PeriodMode.SEMESTER && list.isNotEmpty()) {
+            val i = list.indexOfFirst { it.name == period.name }
+            i >= 0 && i < list.lastIndex
+        } else {
+            !period.shift(1).startsAfter(today(ACCRA))
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 }

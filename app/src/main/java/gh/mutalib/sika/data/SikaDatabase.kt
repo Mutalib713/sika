@@ -18,8 +18,13 @@ import androidx.room.TypeConverters
  * The JSON lands in `app/schemas/` and is committed.
  */
 @Database(
-    entities = [TransactionEntity::class, RuleEntity::class, CategoryEntity::class],
-    version = 5,
+    entities = [
+        TransactionEntity::class,
+        RuleEntity::class,
+        CategoryEntity::class,
+        TermEntity::class,
+    ],
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -28,6 +33,7 @@ abstract class SikaDatabase : RoomDatabase() {
     abstract fun transactions(): TransactionDao
     abstract fun rules(): RuleDao
     abstract fun categories(): CategoryDao
+    abstract fun terms(): TermDao
 
     companion object {
         const val NAME = "sika.db"
@@ -106,9 +112,42 @@ abstract class SikaDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 5 to 6: semesters become a named list instead of one anonymous stretch.
+         *
+         * ⚠ **`CREATE TABLE`, so nothing existing is touched at all** — this migration cannot
+         * lose a transaction because it never mentions that table.
+         *
+         * ⚠ **The two SharedPreferences keys it replaces are NOT read here, and are not
+         * deleted either.** A migration runs inside the database and has no business reaching
+         * into a preferences file; the bridge that turns an old single term into the first row
+         * of this table lives in `Terms.ensureSeeded`, where it can run on a background thread
+         * and be tested. Leaving the old keys in place also means an install that rolls back to
+         * v1.0.1 still finds its semester dates where it left them.
+         *
+         * ⚠ **No index on `startDay` despite every read ordering by it.** A student has single
+         * digits of these. An index would be larger than the table.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS terms (
+                        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        startDay INTEGER NOT NULL,
+                        endExclusiveDay INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         private fun build(context: Context): SikaDatabase =
             Room.databaseBuilder(context, SikaDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(
+                    MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                )
                 // ⚠ **No `fallbackToDestructiveMigration()`.** It is the usual shortcut and
                 // it means "if the schema changed, delete everything and start over" — on a
                 // ledger whose whole value is months of history, and whose labels are the

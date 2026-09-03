@@ -354,7 +354,10 @@ private fun AddCategoryDialog(onAdd: (String) -> Unit, onDismiss: () -> Unit) {
 
 /** Never white on the accent — 1.49:1, invisible. docs/ui-guidelines.md. */
 @Composable
-private fun DialogButton(
+// ⚠ Internal rather than private since 2026-09-03: the semester editor is a second
+// dialog in this package and needs the same button. Two copies of a button is how two
+// dialogs end up looking subtly different.
+internal fun DialogButton(
     label: String,
     filled: Boolean,
     modifier: Modifier = Modifier,

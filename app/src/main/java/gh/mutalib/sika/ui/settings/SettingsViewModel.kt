@@ -9,8 +9,11 @@ import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
+import gh.mutalib.sika.data.TermEntity
+import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.ui.count
+import gh.mutalib.sika.ui.home.ACCRA
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * One category as the Categories screen needs to see it: the row itself, and how many
@@ -208,5 +212,56 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private fun summarise(r: BackupIo.Import): String {
         val head = headline(r)
         return if (r.problems.isEmpty()) head else head + " " + skipped(r.problems.size)
+    }
+}
+
+/**
+ * The named semesters, and the three things you can do to one.
+ *
+ * ⚠ **Its own ViewModel rather than more fields on [SettingsViewModel].** Terms are read by
+ * the report as well as by Settings, and the report has no business constructing a Settings
+ * ViewModel to get at them. Small and separate beats large and shared.
+ */
+class TermsViewModel(app: Application) : AndroidViewModel(app) {
+
+    private val dao = SikaDatabase.get(app).terms()
+
+    val terms: StateFlow<List<TermEntity>> =
+        dao.observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    init {
+        // Carries a pre-2026-09-03 single term into the list. Idempotent — see Terms.ensureSeeded.
+        viewModelScope.launch { Terms.ensureSeeded(getApplication(), dao) }
+    }
+
+    /**
+     * Adds one, named for its position.
+     *
+     * ⚠ **Starts the day after the last one ends, and runs a nominal four months.** Both are
+     * suggestions the date pickers overwrite — the point is that "add a semester" should
+     * produce something plausible to edit rather than an empty form, since the common case is
+     * the next term after the one already recorded.
+     */
+    fun add() {
+        viewModelScope.launch {
+            val existing = dao.all()
+            val start = existing.lastOrNull()?.endExclusive ?: LocalDate.now(ACCRA)
+            dao.insert(
+                TermEntity(
+                    name = Terms.suggestedName(existing.size),
+                    startDay = start.toEpochDay(),
+                    endExclusiveDay = start.plusMonths(4).toEpochDay(),
+                ),
+            )
+        }
+    }
+
+    fun save(term: TermEntity) {
+        viewModelScope.launch { dao.update(term) }
+    }
+
+    /** ⚠ Removes the grouping, never a transaction. See SemestersScreen for why. */
+    fun delete(term: TermEntity) {
+        viewModelScope.launch { dao.delete(term.id) }
     }
 }

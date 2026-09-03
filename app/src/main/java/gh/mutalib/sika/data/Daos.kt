@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
@@ -316,3 +317,37 @@ interface CategoryDao {
 
 /** One row of [CategoryDao.observeUsage]: a label and how many transactions carry it. */
 data class CategoryUsage(val name: String, val uses: Int)
+
+/**
+ * The semesters Mutalib has named.
+ *
+ * ⚠ **Ordered by start date, never by id.** Terms are added in whatever order he remembers
+ * them, and stepping ‹ › through the report has to walk them chronologically. Sorting by
+ * insertion order would send "previous semester" to whichever one he happened to type second.
+ */
+@Dao
+interface TermDao {
+
+    @Query("SELECT * FROM terms ORDER BY startDay")
+    suspend fun all(): List<TermEntity>
+
+    @Query("SELECT * FROM terms ORDER BY startDay")
+    fun observe(): Flow<List<TermEntity>>
+
+    @Query("SELECT COUNT(*) FROM terms")
+    suspend fun count(): Int
+
+    @Insert
+    suspend fun insert(term: TermEntity): Long
+
+    @Update
+    suspend fun update(term: TermEntity)
+
+    /**
+     * ⚠ Deleting a term does not touch a single transaction. A semester is a lens on the
+     * ledger, not a container for it — the rows keep their dates and simply stop being
+     * grouped under that name.
+     */
+    @Query("DELETE FROM terms WHERE id = :id")
+    suspend fun delete(id: Long)
+}

@@ -79,6 +79,15 @@ data class Period(
     val mode: PeriodMode,
     val start: LocalDate,
     val endExclusive: LocalDate,
+    /**
+     * What Mutalib calls this semester — "First semester, Year 1".
+     *
+     * ⚠ **Null for every mode except SEMESTER, and null for a semester nobody has named.** A
+     * week and a month describe themselves from their dates; a semester does not, which is the
+     * whole reason this field exists. When it is null the label falls back to the dates, so an
+     * unnamed term is still legible rather than blank.
+     */
+    val name: String? = null,
 ) {
     val label: String get() = when (mode) {
         PeriodMode.WEEK -> {
@@ -90,7 +99,10 @@ data class Period(
             }
         }
         PeriodMode.MONTH -> MONTH_FULL.format(start)
-        PeriodMode.SEMESTER -> "Since ${DAY_MONTH.format(start)}"
+        // ⚠ The name wins when there is one. "First semester, Year 1" is what he actually
+        // calls the stretch; "Since 5 Jan" is what the app can work out on its own, and is
+        // only used when he has not said.
+        PeriodMode.SEMESTER -> name ?: "Since ${DAY_MONTH.format(start)}"
         PeriodMode.ALL -> "All time"
     }
 
@@ -190,6 +202,21 @@ data class Period(
          */
         fun semesterFrom(from: LocalDate, today: LocalDate): Period =
             Period(PeriodMode.SEMESTER, from, today.plusDays(1))
+
+        /**
+         * A named semester with both ends fixed.
+         *
+         * ⚠ **Takes the name and the dates rather than a `TermEntity`, deliberately.** This
+         * file is pure Kotlin with no Android and no Room import — the same property that lets
+         * every period test run on a laptop in milliseconds. Handing it a database row would
+         * trade that away for one saved line at the call site.
+         *
+         * ⚠ **`endExclusive` is used as given, not clamped to today.** A finished semester is
+         * a closed range and its totals must never move again; clamping would make last year's
+         * figures quietly depend on when you looked at them.
+         */
+        fun namedSemester(name: String?, from: LocalDate, endExclusive: LocalDate): Period =
+            Period(PeriodMode.SEMESTER, from, endExclusive, name)
 
         /** The current period for a mode, given where "now" is. */
         fun current(
