@@ -2,8 +2,6 @@ package gh.mutalib.sika.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -12,6 +10,7 @@ import androidx.compose.ui.window.Dialog
 import gh.mutalib.sika.ui.onboarding.TermDatePicker
 import gh.mutalib.sika.ui.theme.Danger
 import gh.mutalib.sika.ui.theme.SurfaceRaised
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.layout.Box
@@ -42,8 +41,10 @@ import gh.mutalib.sika.R
 import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.ui.Aura
+import gh.mutalib.sika.ui.SuggestionField
 import gh.mutalib.sika.ui.home.ACCRA
 import gh.mutalib.sika.ui.theme.Accent
+import gh.mutalib.sika.ui.theme.Border
 
 import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.TextMuted
@@ -212,8 +213,15 @@ private fun TermRow(
 @Composable
 fun TermEditor(
     term: TermEntity,
-    /** What the name box shows when it is empty — "Year 1, first semester". */
-    suggestion: String,
+    /**
+     * What the bulb offers, best guess first. The first entry is also the box's placeholder
+     * and the name an untouched field falls back to on save, so this must never be empty.
+     *
+     * ⚠ **More than one, because the series is knowable and he may be adding out of order.**
+     * A student setting up three semesters at once should not have to retype
+     * "Year 2, first semester" by hand just because Sika guessed the next one in sequence.
+     */
+    suggestions: List<String>,
     onSave: (TermEntity) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -229,6 +237,7 @@ fun TermEditor(
     var lastDay by remember(term.id) {
         mutableStateOf<java.time.LocalDate?>(if (isNew) null else term.endExclusive.minusDays(1))
     }
+    val suggestion = suggestions.first()
     var picking by remember { mutableStateOf<String?>(null) }
     val ready = start != null && lastDay != null && lastDay!!.isAfter(start)
 
@@ -242,51 +251,20 @@ fun TermEditor(
         ) {
             Text("Semester", style = MaterialTheme.typography.headlineSmall, color = TextPrimary)
             Spacer(Modifier.height(12.dp))
-            OutlinedTextField(
+            // ⚠ **The bulb, not a chip and not the placeholder — third attempt, and his call.**
+            // The placeholder failed because Material only draws one while the field is focused
+            // AND empty, so the suggestion was invisible until he was already typing over it.
+            // The chip that replaced it worked but was not what he kept asking for, and it put
+            // a `labelSmall` heading beside `bodySmall` chip text — the font mismatch he
+            // spotted. `SuggestionField` carries the whole pattern now.
+            SuggestionField(
                 value = name,
                 onValueChange = { name = it },
-                singleLine = true,
-                label = { Text("Name", color = TextMuted) },
-                textStyle = MaterialTheme.typography.bodyMedium,
-                shape = RoundedCornerShape(13.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    focusedBorderColor = Accent,
-                    unfocusedBorderColor = TextMuted,
-                    cursorColor = Accent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
+                prompt = "Which semester and year are you in?",
+                examples = suggestions.take(2),
+                placeholder = suggestion,
+                label = "Name",
             )
-            // ⚠ **A visible chip, not the text field's placeholder.** The placeholder was the
-            // obvious choice and it does not work: Material only draws one while the field is
-            // focused and empty, so the suggestion Mutalib asked to see was invisible until he
-            // tapped into the box — by which point he is already typing his own. A chip is
-            // always on screen, says what it will do, and fills the field in one tap.
-            if (name.isBlank()) {
-                Spacer(Modifier.height(9.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Suggested",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                    )
-                    Spacer(Modifier.width(9.dp))
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(15.dp))
-                            .background(Accent.copy(alpha = 0.14f))
-                            .clickable { name = suggestion }
-                            .padding(horizontal = 13.dp, vertical = 7.dp),
-                    ) {
-                        Text(
-                            suggestion,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Accent,
-                        )
-                    }
-                }
-            }
 
             Spacer(Modifier.height(12.dp))
             DateButton("Starts", start) { picking = "start" }
@@ -359,16 +337,37 @@ private fun DateButton(label: String, value: java.time.LocalDate?, onClick: () -
             .fillMaxWidth()
             .clip(RoundedCornerShape(13.dp))
             .background(Surface)
+            // ⚠ **The border is the fix, not the icons.** Mutalib, 2026-09-03: *"the start and
+            // end it doesnt even show that it is a date picker"*. These rows sat directly under
+            // an outlined text box wearing nothing but a fill, so they read as panels printing
+            // a value rather than controls that open something. Matching the field's outline is
+            // what puts them in the same family; the calendar says which kind of control, and
+            // the chevron says it goes somewhere.
+            .border(1.dp, Border, RoundedCornerShape(13.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            painterResource(R.drawable.ic_calendar),
+            contentDescription = null,
+            tint = if (value == null) Accent else TextMuted,
+            modifier = Modifier.size(15.dp),
+        )
+        Spacer(Modifier.width(10.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
         Spacer(Modifier.weight(1f))
         Text(
             value?.let { TERM_DATE.format(it) } ?: "Choose",
             style = MaterialTheme.typography.bodyMedium,
             color = if (value == null) Accent else TextPrimary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            painterResource(R.drawable.ic_chevron_right),
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(13.dp),
         )
     }
 }

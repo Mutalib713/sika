@@ -26,14 +26,17 @@ object Terms {
      * Two semesters to a year, which is KNUST's shape — index 0 and 1 are Year 1, 2 and 3 are
      * Year 2, and so on.
      *
-     * ⚠ **Year first — "Year 1, first semester".** Mutalib's own phrasing, 2026-09-03, and it
-     * is the better order anyway: the year is what distinguishes one row from another in a
-     * list of eight, so it belongs where the eye lands first.
+     * ⚠ **Semester first — "First semester, Year 1". Corrected 2026-09-03 from his data, not
+     * from an opinion.** This used to read "Year 1, first semester" on the strength of how he
+     * phrased the request in chat. Then the three semesters he had actually typed on the phone
+     * turned out to be *"First semester, Year 1"*, *"Second semester, Year 1"*, *"First
+     * semester, Year 2"* — every one of them the other way round. What someone types unprompted
+     * beats what they said in passing, and a suggestion that does not match the rows already in
+     * the list is worse than no suggestion.
      */
     fun suggestedName(index: Int): String {
-        val year = index / 2 + 1
-        val half = if (index % 2 == 0) "first" else "second"
-        return "Year $year, $half semester"
+        val half = if (index % 2 == 0) "First" else "Second"
+        return "$half semester, Year ${index / 2 + 1}"
     }
 
     /**

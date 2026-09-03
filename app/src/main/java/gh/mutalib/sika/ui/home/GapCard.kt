@@ -16,12 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -35,11 +31,11 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import gh.mutalib.sika.R
 import gh.mutalib.sika.notify.GapAlert
 import gh.mutalib.sika.parser.asCedis
+import gh.mutalib.sika.ui.SuggestionField
 import gh.mutalib.sika.ui.theme.Surface
 import gh.mutalib.sika.ui.theme.TextMuted
 import gh.mutalib.sika.ui.theme.TextPrimary
@@ -178,49 +174,24 @@ fun GapCard(
                 // gap and filing it were two visits to the same card. Mutalib asked for them
                 // together, and he is right: he knows both facts at the same moment, and
                 // splitting them across two steps is how the second one never gets done.
-                if (pastNotes.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Used before",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp),
-                    ) {
-                        pastNotes.forEach { past ->
-                            GapChip(past, selected = text.trim() == past) { text = past }
-                        }
-                    }
-                }
+                // ⚠ **The old "Used before" chip row lived here and is gone.** It sat ABOVE
+                // the box, so the suggestions were asking to be read before there was anything
+                // to suggest against, and it pushed the box itself further down the card every
+                // time he wrote a new kind of note. They are behind the bulb now — same list,
+                // no permanent rent on the card.
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
+                SuggestionField(
                     value = text,
                     onValueChange = { text = it },
-                    singleLine = true,
-                    placeholder = {
-                        Text(
-                            "Barber, or a friend I paid cash",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextMuted,
-                        )
-                    },
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    shape = RoundedCornerShape(13.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { save() }),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedBorderColor = Warn,
-                        unfocusedBorderColor = Warn.copy(alpha = 0.4f),
-                        focusedContainerColor = Surface,
-                        unfocusedContainerColor = Surface,
-                        cursorColor = Warn,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
+                    prompt = "What was this money for?",
+                    // ⚠ Capped at three. The bulb is a hint, not a history screen, and a
+                    // popup listing everything he has ever typed is a list again.
+                    examples = pastNotes.take(3),
+                    placeholder = "Barber, or a friend I paid cash",
+                    // The gap card is amber throughout; an accent-teal box on it would look
+                    // like a control borrowed from another screen.
+                    accent = Warn,
+                    onDone = { save() },
                 )
                 if (categories.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))

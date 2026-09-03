@@ -503,7 +503,17 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                             editingTerm?.let { term ->
                                 TermEditor(
                                     term = term,
-                                    suggestion = Terms.suggestedName(terms.size),
+                                    // ⚠ The next in the series first, then the three after
+                                    // it — so setting up a whole year is four taps and no
+                                    // typing, and adding one out of order is still one tap.
+                                    // Anchored on the row being edited when it already has a
+                                    // place, so editing semester 2 does not offer semester 5.
+                                    suggestions = (0..3).map {
+                                        val at = terms.indexOfFirst { t -> t.id == term.id }
+                                        Terms.suggestedName(
+                                            (if (at >= 0) at else terms.size) + it,
+                                        )
+                                    },
                                     onSave = tvm::save,
                                     onDismiss = { editingTerm = null },
                                 )
