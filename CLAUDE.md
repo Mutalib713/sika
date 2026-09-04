@@ -123,6 +123,30 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   hour-wide window measured in *real* seconds, so a jumped-forward alarm goes overdue
   (`whenElapsed` negative in `dumpsys alarm`) and then fires seconds-to-minutes later in real
   time. It is not broken; it is batched. Measured 2026-09-02: it fired ~30s after the jump.
+- ⚠ **The Pixel drops to `offline` under load, and the fix is adbd, NOT the cable.** Measured
+  2026-09-04: it enumerated fine, then died on the first real command or transfer, and stayed
+  offline through `kill-server`/`start-server`, `reconnect device`, `reconnect offline` and a
+  20-attempt loop. **A new cable changed nothing.** What fixed it every time: Developer options
+  → toggle **USB debugging off, then on** (that restarts adbd on the phone). If that fails,
+  revoke USB debugging authorisations and replug. Set up wireless adb (`adb tcpip 5555`) while
+  the link is healthy and this stops mattering.
+- ⚠ **The emulator opens OFF-SCREEN at `233,-1020` every launch — it is not the AVD config.**
+  `emulator-user.ini` already said `window.x/y = 100`, so editing it does nothing. Move it with
+  Win32 after boot (PowerShell `Add-Type` + `user32.dll MoveWindow`, see the 2026-09-04 session).
+  Without this the emulator is running and invisible, which reads as "it did not start".
+- ⚠ **Never run the emulator and `./gradlew check` at the same time on this laptop.** The test
+  worker crashes with "the child process have crashed … the build machine is extremely loaded"
+  — a green suite reported as a failure. Kill the emulator (`adb -s emulator-5554 emu kill`)
+  before running check.
+- ⚠ **`adb shell am broadcast` to an UNEXPORTED receiver is enqueued and then silently
+  dropped.** ActivityManager logs "Broadcasting" and "Enqueued … : 0" and the receiver never
+  runs — which looks exactly like it ran and found nothing to do. That produced a false "it
+  works" on 2026-09-04. `DebugSmsReceiver` and `TermAlertReceiver` are `exported="true"` in
+  `src/debug/AndroidManifest.xml` for this reason; anything else needs the same treatment or an
+  emulator with a rolled clock.
+- ⚠ **His Pixel is on Android 17 (SDK 37); the `wird_pixel6pro` AVD is Android 14 (SDK 34).**
+  The emulator cannot reproduce an API-version regression, so "it works on the emulator" is not
+  the same claim as "it works on his phone" — say which one was tested.
 - ⚠ **SMS behaviour still must be verified on the real Pixel with real messages.** An emulator
   can fake an SMS, but it cannot reproduce doze, battery optimisation, or MTN's real wording.
 - ⚠ **`adb shell am broadcast` CANNOT inject a real SMS.** `SMS_RECEIVED` is a protected
