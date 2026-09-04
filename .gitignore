@@ -47,7 +47,12 @@ desktop.ini
 # copy is Mutalib's actual financial history: every counterparty, every balance, every
 # transaction id. The tool that makes this folder is now in the repo, so the folder it writes
 # to has to be ignored here rather than remembered by whoever runs it.
-/tools/.pulled/
+# ⚠ **Every copy of the real ledger, not just one folder.** Pulling the database off the
+# phone to inspect or repair it is routine, and each pull lands in whatever directory the
+# command named — .pulled2, .pulled_after, .pulled_now. Only the first was ignored, so a
+# `git add -A` would have committed Mutalib's actual transactions, counterparties and
+# balances to a repo. Caught 2026-09-04. The glob is the fix; a list would rot.
+/tools/.pulled*/
 
 # Python bytecode from tools/
 __pycache__/
