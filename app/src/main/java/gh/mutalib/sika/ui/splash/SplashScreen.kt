@@ -86,13 +86,19 @@ import kotlinx.coroutines.launch
  * ```
  *   0ms   the mark, matching the system splash exactly — nothing appears to happen
  *   0ms   ──────────► ground washes system → app                        (420ms)
- * 100ms   ──────────► the portal opens: slit → full oval                (260ms)
- * 150ms   ──────────► the mark sinks through the plane and vanishes     (240ms)
- * 390ms   ──────────► it rises back out, clipped, and overshoots once   (480ms)
- * 630ms   ──────────► the portal shuts behind it                        (240ms)
- * 720ms   ──────────► "Sika" fades up and rises 12dp                    (300ms)
- * 840ms   ──────────► the line under it fades in                        (280ms)
- * 1120ms  hold, or longer if the ledger is still being read
+ * 120ms   ──────────► the portal opens: slit → full oval                (340ms)
+ * 180ms   ──────────► the mark sinks through the plane and vanishes     (300ms)
+ * 480ms   ──────────► it rises back out, clipped, and overshoots once   (640ms)
+ * 800ms   ──────────► the portal shuts behind it                        (300ms)
+ * 960ms   ──────────► "Sika" fades up and rises 12dp                    (340ms)
+ * 1120ms  ──────────► the line under it fades in                        (320ms)
+ * 1450ms  hold, or longer if the ledger is still being read
+ *
+ * ⚠ **Every beat is ~35% longer than the first build. Mutalib watched it on the Pixel and
+ * said *"that was very fast"* (2026-09-04).** The first pass was tuned against the playbook's
+ * 500-800ms window for an authored entrance, which is right for a transition and wrong for a
+ * sequence with four beats in it: at that speed the dive and the rise read as one blur rather
+ * than as something going through something.
  *   ↓     ──────────► everything fades out, mark drifts to 1.05         (260ms)
  * ```
  *
@@ -163,34 +169,34 @@ fun SplashScreen(
         }
         launch { wash.animateTo(1f, tween(420, easing = LinearOutSlowInEasing)) }
         launch {
-            delay(100)
-            portalOpen.animateTo(1f, tween(260, easing = ENTER))
+            delay(120)
+            portalOpen.animateTo(1f, tween(340, easing = ENTER))
             // Shuts behind the mark rather than after it has landed: by 630ms the mark is
             // already clear of the plane, so the portal closing reads as a consequence of the
             // arrival instead of a separate event tacked on the end.
-            delay(270)
-            portalOpen.animateTo(0f, tween(240, easing = FastOutSlowInEasing))
+            delay(340)
+            portalOpen.animateTo(0f, tween(300, easing = FastOutSlowInEasing))
         }
         launch {
-            delay(150)
+            delay(180)
             // Down fast — an exit should be quicker than an entrance.
-            markDrop.animateTo(MARK_TRAVEL, tween(240, easing = FastOutSlowInEasing))
+            markDrop.animateTo(MARK_TRAVEL, tween(300, easing = FastOutSlowInEasing))
             // ...and back up slowly, with one overshoot. One, not a rubber ball: the bounce is
             // punctuation on an arrival, and a mark that wobbles three times reads as a toy.
-            launch { markDrop.animateTo(0f, tween(480, easing = OVERSHOOT)) }
+            launch { markDrop.animateTo(0f, tween(640, easing = OVERSHOOT)) }
             launch {
-                markScale.animateTo(1.045f, tween(300, easing = ENTER))
-                markScale.animateTo(1f, tween(180, easing = FastOutSlowInEasing))
+                markScale.animateTo(1.045f, tween(380, easing = ENTER))
+                markScale.animateTo(1f, tween(220, easing = FastOutSlowInEasing))
             }
         }
         launch {
-            delay(720)
-            launch { nameAlpha.animateTo(1f, tween(300, easing = LinearOutSlowInEasing)) }
-            launch { nameRise.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
+            delay(960)
+            launch { nameAlpha.animateTo(1f, tween(340, easing = LinearOutSlowInEasing)) }
+            launch { nameRise.animateTo(0f, tween(340, easing = FastOutSlowInEasing)) }
         }
         launch {
-            delay(840)
-            lineAlpha.animateTo(1f, tween(280))
+            delay(1120)
+            lineAlpha.animateTo(1f, tween(320))
         }
     }
 
@@ -341,16 +347,16 @@ private val DISC_GROUND = Color(0xFFE8F6FA)
 /**
  * The floor on how long the splash stays up.
  *
- * ⚠ **Raised from 900ms to 1120ms on 2026-09-03, and only because the entrance grew.** It is
+ * ⚠ **900ms → 1120ms → 1450ms, and every step only because the entrance grew.** It is
  * not a taste change: the last beat of the portal sequence — the description line — finishes at
- * 1120ms, and a floor shorter than the animation would start the exit fade over a line that had
+ * 1450ms, and a floor shorter than the animation would start the exit fade over a line that had
  * only just arrived. The rule is that the floor is the length of the entrance, so if the
  * choreography is ever shortened this comes down with it.
  *
  * Still short enough that it never becomes the thing standing between someone and their money,
  * and on a full inbox it costs nothing at all — the sweep is the longer of the two.
  */
-private const val MINIMUM_HOLD = 1120L
+private const val MINIMUM_HOLD = 1450L
 
 /**
  * Sized to match Android's own splash icon exactly, so the handover has nothing to give it away.
