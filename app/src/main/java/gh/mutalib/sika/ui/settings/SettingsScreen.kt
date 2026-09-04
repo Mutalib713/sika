@@ -240,8 +240,13 @@ fun SettingsScreen(
                     RowDivider()
                     SettingsRow(
                         icon = R.drawable.ic_calendar,
-                        title = "Semester ending",
-                        subtitle = "A week before one ends, and again once it has",
+                        // ⚠ "Semester ending" told you when it fires and nothing about what
+                        // you get. Mutalib, 2026-09-04: *"semester endding says nothing
+                        // shouldnt it be like semester sunnary"*. Every other row here is
+                        // named for its content — "Monthly summary", "End-of-day reminder" —
+                        // and this one was the odd one out.
+                        title = "Semester summary",
+                        subtitle = "A week before one ends, and the total when it does",
                     ) {
                         SettingsSwitch(termAlert) {
                             termAlert = it

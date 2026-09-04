@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.PixelCopy
 import android.view.View
 import android.view.Window
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.core.graphics.createBitmap
+import gh.mutalib.sika.TAG
 import gh.mutalib.sika.ui.animationsEnabled
 import kotlin.math.hypot
 import kotlinx.coroutines.launch
@@ -129,10 +131,23 @@ fun ThemeRevealHost(
         // "Default phone theme" on a phone that is already light is a real setting change
         // and no visual one, and rippling for it would look like a bug.
         if (!animated || snapshot != null || nextDark == currentlyDark) {
+            // ⚠ **Every skip says which one it was. Added 2026-09-04 because the ripple
+            // stopped working and there was no way to find out why.** Four separate reasons
+            // ended in the same silent `onModeChange`, so a broken effect and a deliberately
+            // skipped one were indistinguishable from the outside — and from a log.
+            Log.i(
+                TAG,
+                "theme reveal skipped: " + when {
+                    !animated -> "reduced motion is on"
+                    snapshot != null -> "one is already running"
+                    else -> "the appearance is not changing"
+                },
+            )
             onModeChange(next)
         } else {
             capture(view) { bitmap ->
                 if (bitmap == null) {
+                    Log.w(TAG, "theme reveal: the screenshot failed, switching without it")
                     onModeChange(next)
                 } else {
                     snapshot = bitmap.asImageBitmap()
@@ -225,10 +240,19 @@ private fun capture(view: View, onReady: (Bitmap?) -> Unit) {
             window,
             Rect(at[0], at[1], at[0] + view.width, at[1] + view.height),
             bitmap,
-            { result -> onReady(if (result == PixelCopy.SUCCESS) bitmap else null) },
+            { result ->
+                // The result code is the whole diagnosis: SUCCESS is 0, and everything else
+                // names a different reason (ERROR_DESTINATION_INVALID, ERROR_SOURCE_NO_DATA,
+                // ERROR_TIMEOUT…). Swallowing it left nothing to go on.
+                if (result != PixelCopy.SUCCESS) Log.w(TAG, "PixelCopy refused: result=$result")
+                onReady(if (result == PixelCopy.SUCCESS) bitmap else null)
+            },
             Handler(Looper.getMainLooper()),
         )
-    }.onFailure { onReady(null) }
+    }.onFailure {
+        Log.w(TAG, "PixelCopy threw", it)
+        onReady(null)
+    }
 }
 
 private fun Context.activityWindow(): Window? {

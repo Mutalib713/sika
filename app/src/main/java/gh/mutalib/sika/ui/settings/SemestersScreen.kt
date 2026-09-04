@@ -239,7 +239,14 @@ fun TermEditor(
     }
     val suggestion = suggestions.first()
     var picking by remember { mutableStateOf<String?>(null) }
-    val ready = start != null && lastDay != null && lastDay!!.isAfter(start)
+    // ⚠ **A name is required. Mutalib, 2026-09-04: saving with the box empty used to take
+    // the suggestion, and he was right that it should not.** The suggestion is grey
+    // placeholder text, which reads as a hint rather than as a value — so "save without
+    // typing" felt like saving nothing and silently produced "First semester, Year 1".
+    // A name someone did not choose is worse than being made to choose one, because the
+    // whole point of naming semesters was that he calls them what he calls them.
+    val named = name.isNotBlank()
+    val ready = named && start != null && lastDay != null && lastDay!!.isAfter(start)
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -298,9 +305,9 @@ fun TermEditor(
                         if (s0 != null && e0 != null && e0.isAfter(s0)) {
                             onSave(
                                 term.copy(
-                                    // An untouched name takes the suggestion. He saw it in the
-                                    // box, so accepting it by not typing is a real choice.
-                                    name = name.trim().ifBlank { suggestion },
+                                    // No `ifBlank` fallback any more: `ready` guarantees a
+                                    // name, so a default here could only ever mask a bug.
+                                    name = name.trim(),
                                     startDay = s0.toEpochDay(),
                                     // Back to exclusive on the way in.
                                     endExclusiveDay = e0.plusDays(1).toEpochDay(),
