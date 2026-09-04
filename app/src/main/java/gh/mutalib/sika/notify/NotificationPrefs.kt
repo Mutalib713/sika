@@ -24,6 +24,8 @@ object NotificationPrefs {
     private const val END_OF_DAY = "notify_end_of_day"
     private const val GAP = "notify_gap"
     private const val MONTHLY = "notify_monthly"
+    private const val TERM_END = "notify_term_end"
+    private const val TERMS_TOLD = "terms_told"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -65,4 +67,39 @@ object NotificationPrefs {
 
     fun setMonthly(context: Context, on: Boolean) =
         prefs(context).edit { putBoolean(MONTHLY, on) }
+
+    /** A week before a semester ends, and again once it has. */
+    fun termEnd(context: Context): Boolean = prefs(context).getBoolean(TERM_END, true)
+
+    fun setTermEnd(context: Context, on: Boolean) =
+        prefs(context).edit { putBoolean(TERM_END, on) }
+
+    /**
+     * Which semester alerts have already gone out, as `"<termId>:<KIND>"`.
+     *
+     * ⚠ **This exists so the windows in [TermAlert.due] can be a week wide.** Firing on exactly
+     * the right day is a promise a phone cannot keep — off, flat, or in a drawer, and the one
+     * day passes. Wide windows plus a record of what was said gives an alert that still arrives
+     * after a fortnight in a drawer, and still arrives only once.
+     *
+     * ⚠ **Never returns the live set.** `SharedPreferences` documents the set from
+     * `getStringSet` as one you must not modify — mutating it corrupts the in-memory copy and
+     * the change may not survive to disk. The defensive copy is the fix and is not optional.
+     */
+    fun termsTold(context: Context): Set<String> =
+        prefs(context).getStringSet(TERMS_TOLD, emptySet())?.toSet() ?: emptySet()
+
+    fun rememberTermTold(context: Context, key: String) =
+        prefs(context).edit { putStringSet(TERMS_TOLD, termsTold(context) + key) }
+
+    /**
+     * Forgets that a semester was ever announced, so editing its dates re-arms both alerts.
+     *
+     * ⚠ Without this, moving a term's end date forward would be silent: the alert was already
+     * sent for the old date, the key is unchanged because it is built from the row id, and the
+     * new ending would pass with nothing said.
+     */
+    fun forgetTermTold(context: Context, termId: Long) = prefs(context).edit {
+        putStringSet(TERMS_TOLD, termsTold(context).filterNot { it.startsWith("$termId:") }.toSet())
+    }
 }

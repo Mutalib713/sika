@@ -29,6 +29,28 @@
             android:name=".sms.DebugSmsReceiver"
             android:exported="true"
             tools:ignore="ExportedReceiver" />
+
+        <!--
+          ⚠ **The same receiver as in the main manifest, exported for debug builds only.**
+          `tools:replace` is what makes that legal: without it the merger sees exported="false"
+          from src/main and exported="true" here and fails the build rather than guessing.
+
+          It exists because the semester check runs at 9am and there is no way to ask it a
+          question from `adb` otherwise — a broadcast from uid 2000 to an unexported receiver
+          is accepted into the queue and then silently dropped, which reads exactly like the
+          receiver running and finding nothing to say. That cost a wrong "it works" on
+          2026-09-04.
+
+          ⚠ **This proves the receiver and the notification, NOT the alarm delivering to it.**
+          Same caveat as DebugSmsReceiver: a hand-sent broadcast is not the real trigger. The
+          alarm path is identical to MonthlyReport's, which was proved on the emulator with a
+          rolled clock on 2026-09-02.
+        -->
+        <receiver
+            android:name=".notify.TermAlertReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver"
+            tools:replace="android:exported" />
     </application>
 
 </manifest>

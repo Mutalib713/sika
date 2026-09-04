@@ -95,6 +95,7 @@ fun SettingsScreen(
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
     var gapAlert by remember { mutableStateOf(NotificationPrefs.gapAlert(context)) }
     var monthly by remember { mutableStateOf(NotificationPrefs.monthly(context)) }
+    var termAlert by remember { mutableStateOf(NotificationPrefs.termEnd(context)) }
 
     // Read into state rather than straight from prefs, so editing one updates the row under
     // your thumb instead of on the next visit to this screen.
@@ -234,6 +235,17 @@ fun SettingsScreen(
                         SettingsSwitch(monthly) {
                             monthly = it
                             NotificationPrefs.setMonthly(context, it)
+                        }
+                    }
+                    RowDivider()
+                    SettingsRow(
+                        icon = R.drawable.ic_calendar,
+                        title = "Semester ending",
+                        subtitle = "A week before one ends, and again once it has",
+                    ) {
+                        SettingsSwitch(termAlert) {
+                            termAlert = it
+                            NotificationPrefs.setTermEnd(context, it)
                         }
                     }
                     RowDivider()

@@ -61,6 +61,7 @@ import gh.mutalib.sika.ledger.today
 import gh.mutalib.sika.notify.CashOutPrompt
 import gh.mutalib.sika.notify.DailyNudge
 import gh.mutalib.sika.notify.MonthlyReport
+import gh.mutalib.sika.notify.TermAlert
 import gh.mutalib.sika.sms.Sweeper
 import gh.mutalib.sika.ui.Aura
 import gh.mutalib.sika.ui.Dock
@@ -275,6 +276,7 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
     LaunchedEffect(Unit) {
         DailyNudge.schedule(context, ACCRA)
         MonthlyReport.schedule(context, ACCRA)
+        TermAlert.schedule(context, ACCRA)
     }
 
     // Notifications are asked for SECOND, and only once SMS is granted.

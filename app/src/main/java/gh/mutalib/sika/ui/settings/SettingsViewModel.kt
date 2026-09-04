@@ -12,6 +12,7 @@ import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.notify.NotificationPrefs
 import gh.mutalib.sika.ui.agree
 import gh.mutalib.sika.ui.count
 import gh.mutalib.sika.ui.home.ACCRA
@@ -279,7 +280,16 @@ class TermsViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun save(term: TermEntity) {
         viewModelScope.launch {
-            if (term.id == 0L) dao.insert(term) else dao.update(term)
+            if (term.id == 0L) {
+                dao.insert(term)
+            } else {
+                dao.update(term)
+                // ⚠ **Editing a semester re-arms both of its alerts.** The "already told"
+                // key is built from the row id, which does not change when the dates do — so
+                // without this, moving an end date forward would pass in silence, because
+                // Sika still believes it has announced that semester's ending.
+                NotificationPrefs.forgetTermTold(getApplication(), term.id)
+            }
         }
     }
 
@@ -288,6 +298,11 @@ class TermsViewModel(app: Application) : AndroidViewModel(app) {
 
     /** ⚠ Removes the grouping, never a transaction. See SemestersScreen for why. */
     fun delete(term: TermEntity) {
-        viewModelScope.launch { dao.delete(term.id) }
+        viewModelScope.launch {
+            dao.delete(term.id)
+            // Nothing points at a deleted term, so its record is dead weight — and an id
+            // Room later reuses would arrive pre-silenced.
+            NotificationPrefs.forgetTermTold(getApplication(), term.id)
+        }
     }
 }

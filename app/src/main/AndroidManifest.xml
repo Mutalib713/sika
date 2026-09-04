@@ -192,6 +192,19 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!--
+          The morning check for a semester ending. Same shape as the two above: unexported,
+          because BOOT_COMPLETED is a protected broadcast only the system can send, and the
+          alarm's own action arrives by an explicit PendingIntent that needs no export.
+        -->
+        <receiver
+            android:name=".notify.TermAlertReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
