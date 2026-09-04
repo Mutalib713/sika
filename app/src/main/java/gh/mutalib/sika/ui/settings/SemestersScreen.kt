@@ -62,8 +62,11 @@ private val TERM_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yy
  * again" into "the semester before this one" — a question that finally has an exact answer.
  *
  * ⚠ **A semester is a lens, not a container.** Deleting one touches no transaction: the rows
- * keep their dates and simply stop being grouped under that name. That is why there is no
- * confirmation dialog here, unlike putting a category away — nothing is at risk.
+ * keep their dates and simply stop being grouped under that name.
+ *
+ * ⚠ **It still asks first, since 2026-09-04.** "Nothing is at risk" was true of the money and
+ * false of the work — Mutalib lost all three of his semesters to a bin that sat one unguarded
+ * tap away, and a name plus two dates cannot be recovered from anywhere else in the app.
  */
 @Composable
 fun SemestersScreen(
@@ -76,6 +79,14 @@ fun SemestersScreen(
     modifier: Modifier = Modifier,
 ) {
     val now = today(ACCRA)
+    // ⚠ **Deleting asks first. Added 2026-09-04, after Mutalib lost all three of his.**
+    // The old reasoning was that a semester is a lens rather than a container, so deleting
+    // one risks no transaction and needs no confirmation. That was right about the money and
+    // wrong about the work: the name and the two dates are things he sat and typed, they
+    // cannot be recovered from anywhere else in the app, and the bin sat one unguarded tap
+    // away on a row whose whole body is also tappable.
+    var confirming by remember { mutableStateOf<TermEntity?>(null) }
+
     Box(modifier.fillMaxSize()) {
         Aura(animated = animated)
         LazyColumn(
@@ -105,7 +116,7 @@ fun SemestersScreen(
                     // marking only the live one answers the question someone actually has.
                     current = term.contains(now),
                     onEdit = { onEdit(term) },
-                    onDelete = { onDelete(term) },
+                    onDelete = { confirming = term },
                 )
                 Spacer(Modifier.height(9.dp))
             }
@@ -129,6 +140,57 @@ fun SemestersScreen(
                         color = Accent,
                     )
                 }
+            }
+        }
+    }
+
+    confirming?.let { term ->
+        RemoveTermDialog(
+            term = term,
+            onConfirm = { onDelete(term); confirming = null },
+            onDismiss = { confirming = null },
+        )
+    }
+}
+
+/**
+ * ⚠ **Says what survives, not just "are you sure?".** The thing worth knowing here is the
+ * thing people fear and the app does not do: no transaction is touched. Naming that is what
+ * makes the dialog worth reading rather than a speed bump to tap through.
+ */
+@Composable
+private fun RemoveTermDialog(term: TermEntity, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(SurfaceRaised)
+                .border(1.dp, Border, RoundedCornerShape(22.dp))
+                .padding(19.dp),
+        ) {
+            Text(
+                "Remove ${term.name}?",
+                style = MaterialTheme.typography.headlineSmall,
+                color = TextPrimary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "No transaction is touched — they keep their dates and stop being grouped " +
+                    "under this name. You would have to type the name and both dates again.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted,
+            )
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                DialogButton("Cancel", filled = false, modifier = Modifier.weight(1f), onClick = onDismiss)
+                DialogButton(
+                    "Remove",
+                    filled = true,
+                    danger = true,
+                    modifier = Modifier.weight(1f),
+                    onClick = onConfirm,
+                )
             }
         }
     }
