@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // Kotlin applied explicitly, the classic way. AGP 8 has no built-in Kotlin, which is
@@ -39,6 +41,43 @@ android {
     }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 
+    /**
+     * Release signing, read from `keystore.properties` if it is there.
+     *
+     * ⚠ **This replaced `signingConfig = signingConfigs.getByName("debug")` on 2026-09-04, and
+     * the reason is the one thing about app signing that bites late.** Android refuses an
+     * update signed by a different key than the installed copy. Handing testers debug-signed
+     * builds and switching to a real key later would force every one of them to uninstall —
+     * and uninstalling Sika destroys the ledger, which is the one thing in this app that
+     * cannot be rebuilt. The key has to be right before the first stranger installs it, not
+     * before the first release.
+     *
+     * ⚠ **The keystore lives OUTSIDE the repo** (`~/.android/sika-release.jks`) and both it
+     * and `keystore.properties` are gitignored. Lose either and no future build can ever
+     * update an installed Sika.
+     *
+     * ⚠ **Absent config falls back to the debug key rather than failing the build.** A clone
+     * on another machine, or CI with no secrets, must still be able to run `assembleRelease`
+     * to prove the code compiles and shrinks. What it produces is not distributable, and
+     * `releaseSigned` below is what tells you which you got.
+     */
+    val keystoreProperties = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val releaseSigned = keystoreProperties.getProperty("storeFile")?.let { file(it).exists() } == true
+
+    signingConfigs {
+        if (releaseSigned) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -47,10 +86,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Debug key for now, so a release build installs over a debug one. A real
-            // keystore is not needed: this app is sideloaded to one phone and never
-            // published. PROFILE.md § 7, distribution row.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (releaseSigned) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "Sika: no keystore.properties, signing release with the DEBUG key. " +
+                        "This build must not be given to anyone.",
+                )
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
