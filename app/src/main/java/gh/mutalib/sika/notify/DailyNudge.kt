@@ -43,7 +43,16 @@ import java.time.ZonedDateTime
  */
 object DailyNudge {
 
-    const val CHANNEL_ID = "daily_nudge"
+    /**
+     * ⚠ **The `_v2` is load-bearing, for the same reason it was on the category prompt.**
+     * Android ignores every change to a channel that already exists — importance, sound,
+     * everything — because those become the user's settings the moment it is created.
+     * Raising the importance of `daily_nudge` would compile, run, log success and change
+     * nothing on the phone. A new id is the only way to ship a new default, and the old one
+     * is deleted so it does not linger in Settings as a switch that controls nothing.
+     */
+    const val CHANNEL_ID = "daily_nudge_v2"
+    private const val OLD_CHANNEL_ID = "daily_nudge"
     private const val NOTIFICATION_ID = 20_260_901
     const val ACTION_FIRE = "gh.mutalib.sika.DAILY_NUDGE"
 
@@ -54,15 +63,33 @@ object DailyNudge {
         val channel = NotificationChannel(
             CHANNEL_ID,
             "End-of-day reminder",
-            // DEFAULT, and unlike the cash-out prompt that is right here: this one has no
-            // buttons to hide, so arriving collapsed costs nothing. It is a summary to be
-            // read when convenient, not a question to be answered on the spot.
-            NotificationManager.IMPORTANCE_DEFAULT,
+            // ⚠ **HIGH since 2026-09-06, and DEFAULT was a real error — the SAME error
+            // already made and fixed on the category prompt, never carried across to here.**
+            //
+            // The old note said this one has no buttons to hide, so arriving collapsed costs
+            // nothing. That was wrong about what collapsed means in practice. A DEFAULT
+            // notification arrives silent, and at 9pm it lands in a shade already holding
+            // WhatsApp, Muslim Pro and Google Tasks, then gets cleared with everything else.
+            //
+            // Mutalib reported he had NEVER seen it. Every mechanical cause was ruled out on
+            // his own phone: the alarm was registered for 21:00 with no standby restriction,
+            // POST_NOTIFICATIONS was granted, the switch was on, the channel existed and was
+            // unblocked, and the count was above zero on 16 of the last 21 days. It had been
+            // firing the whole time. Firing a notification nobody ever sees is not a
+            // reminder; it is a log entry.
+            //
+            // The nagging objection does not apply any more either. [CategoryPrompt] now
+            // catches unnamed spending as it happens, so this only speaks about what slipped
+            // through — which should be rare, and is worth a banner exactly because it is.
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = "A nightly reminder of transactions that still need a category."
         }
-        ContextCompat.getSystemService(context, NotificationManager::class.java)
-            ?.createNotificationChannel(channel)
+        ContextCompat.getSystemService(context, NotificationManager::class.java)?.apply {
+            createNotificationChannel(channel)
+            // The v1 channel is dead. Left alone it sits in Settings controlling nothing.
+            deleteNotificationChannel(OLD_CHANNEL_ID)
+        }
     }
 
     /**
@@ -153,7 +180,9 @@ object DailyNudge {
             // Says what it is for, in his own terms: the report cannot explain money it
             // cannot name, and tonight is while he still remembers.
             .setContentText("Tap to name them while you still remember.")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // Matches the channel. PRIORITY_* is what pre-Android-8 phones read; set
+            // alongside the channel importance, never instead of it.
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(open)
 
