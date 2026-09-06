@@ -3,6 +3,7 @@ package gh.mutalib.sika
 import gh.mutalib.sika.notify.CategoryPrompt
 import gh.mutalib.sika.parser.Shape
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,6 +79,39 @@ class CategoryPromptTest {
             "GHS 5.00 spent",
             CategoryPrompt.headline(500L, Shape.PAYMENT_FOR, ""),
         )
+    }
+
+    // ---------------------------------------------------------------- learning a shop
+
+    /**
+     * ⚠ **A cash-out must never offer "Always", and this is the exclusion that matters.**
+     *
+     * A learned rule is keyed on the counterparty. For a shop that is the shop; for a
+     * cash-out it is the *agent who handed over the notes*, and Mutalib uses the same agent
+     * for whatever he happens to need cash for. One tap would file every future cash-out
+     * from that agent as Food — silently, and looking for all the world like the app had
+     * learned something useful.
+     */
+    @Test
+    fun aCashOutNeverOffersToLearnTheAgent() {
+        assertFalse(CategoryPrompt.offersAlways(Shape.CASH_OUT, "MTN AGENT 054"))
+    }
+
+    /** A shop repeats, so a rule is exactly the right thing to offer. */
+    @Test
+    fun aShopPaymentOffersToLearnTheShop() {
+        assertTrue(CategoryPrompt.offersAlways(Shape.MERCHANT_PAY, "MELCOM"))
+        assertTrue(CategoryPrompt.offersAlways(Shape.PAYMENT_FOR, "ECG PREPAID"))
+    }
+
+    /**
+     * Nothing to key a rule on. A rule stored under the empty string would claim every
+     * unparsed row in the review queue, since a blank counterparty is what an unreadable
+     * message looks like.
+     */
+    @Test
+    fun aPaymentWithNoCounterpartyOffersNothingToLearn() {
+        assertFalse(CategoryPrompt.offersAlways(Shape.PAYMENT_FOR, ""))
     }
 
     /**

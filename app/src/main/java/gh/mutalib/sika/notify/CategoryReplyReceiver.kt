@@ -8,6 +8,7 @@ import androidx.core.app.RemoteInput
 import gh.mutalib.sika.TAG
 import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.LabelSource
+import gh.mutalib.sika.data.RuleEntity
 import gh.mutalib.sika.data.SikaDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,11 +18,15 @@ import kotlinx.coroutines.launch
 /**
  * Handles the category prompt's buttons.
  *
- * **Three steps, because picking is not the same as deciding.** Tapping a category only
- * proposes it; the notification then asks *"Save it?"* and only **Save** writes anything.
+ * **Two taps, because picking is not the same as deciding.** Tapping a category only
+ * proposes it; the notification then asks again, and only the second tap writes anything.
  * Mutalib asked for this on 2026-08-31, and the reason is stronger than convenience: these
  * buttons live in the notification shade, where a thumb is already swiping past, and a
  * mis-tap used to relabel a transaction silently with no undo.
+ *
+ * That second tap is [CategoryPrompt.STEP_SAVE] for this row alone, or
+ * [CategoryPrompt.STEP_ALWAYS] to teach the shop as well — his choice, 2026-09-06, over
+ * the app learning quietly from a tap he was never shown a switch for.
  *
  * The proposed category rides on the PendingIntent rather than being stored, so dismissing
  * the shade without saving leaves the ledger untouched.
@@ -69,8 +74,16 @@ class CategoryReplyReceiver : BroadcastReceiver() {
                     }
 
                     // Proposed only. Nothing is written.
-                    CategoryPrompt.STEP_PICK ->
-                        CategoryPrompt.showConfirm(app, rowId, row.amount, label)
+                    CategoryPrompt.STEP_PICK -> CategoryPrompt.showConfirm(
+                        context = app,
+                        rowId = rowId,
+                        amount = row.amount,
+                        // The shape and the counterparty decide whether the confirm step can
+                        // offer "Always". A cash-out cannot — see the STEP_ALWAYS branch.
+                        shape = row.shape,
+                        counterparty = row.counterparty,
+                        category = label,
+                    )
 
                     // Back to the category list, still without writing.
                     CategoryPrompt.STEP_CHANGE -> CategoryPrompt.show(
@@ -86,29 +99,57 @@ class CategoryReplyReceiver : BroadcastReceiver() {
                         categories = db.categories().visible().map { it.name },
                     )
 
+                    /**
+                     * Save it and teach the shop — the same write the transaction sheet's
+                     * *remember this* toggle makes.
+                     *
+                     * ⚠ **`applyRule` is what makes this worth tapping.** Writing the rule
+                     * alone would only affect money that has not arrived yet; running it
+                     * sweeps up every earlier payment to this shop that nothing has claimed,
+                     * which on a phone with months of history is usually the bulk of them.
+                     * Its `labelSource IN ('NONE', 'AUTO_RULE')` guard is what keeps that
+                     * from touching anything decided by hand.
+                     *
+                     * ⚠ The row itself is written PROMPT, not AUTO_RULE, and the order
+                     * matters: `applyRule` skips PROMPT rows, so labelling first means the
+                     * rule cannot overwrite the very answer that created it.
+                     */
+                    CategoryPrompt.STEP_ALWAYS -> {
+                        db.transactions().setLabel(rowId, label, LabelSource.PROMPT)
+                        if (row.counterparty.isBlank()) {
+                            // Should be unreachable — the button is only drawn when there is
+                            // a counterparty — but a rule keyed on "" would claim every
+                            // unparsed row in the review queue at once. Too cheap not to guard.
+                            Log.w(TAG, "row $rowId: no counterparty, saved without a rule")
+                        } else {
+                            db.rules().put(
+                                RuleEntity(row.counterparty, label, System.currentTimeMillis()),
+                            )
+                            val touched = db.transactions().applyRule(row.counterparty, label)
+                            Log.i(TAG, "a rule learned from the shade covered $touched rows")
+                            logPrivate { "shade rule '${row.counterparty}' -> '$label'" }
+                        }
+                        CategoryPrompt.cancel(app, rowId)
+                    }
+
                     // The only branch that touches the ledger.
                     CategoryPrompt.STEP_SAVE -> {
                         // PROMPT, not AUTO_RULE: this is a human answering a question, so a
                         // learned rule must never later overwrite it.
                         db.transactions().setLabel(rowId, label, LabelSource.PROMPT)
 
-                        // ⚠ **Deliberately no learn-once rule here**, unlike the transaction
-                        // sheet. A rule is keyed on the counterparty, and a cash-out's
-                        // counterparty is the *agent*, not the purchase. Mutalib uses the
-                        // same agent for whatever he happens to need cash for, so "the agent
-                        // by the junction = Food" would quietly mislabel every future
-                        // cash-out from that agent — and worse, it would look like the app
-                        // had learned something.
+                        // ⚠ **This one, and no rule — which for a cash-out is the ONLY
+                        // option the notification offers.** A rule is keyed on the
+                        // counterparty, and a cash-out's counterparty is the *agent*, not
+                        // the purchase. Mutalib uses the same agent for whatever he happens
+                        // to need cash for, so "the agent by the junction = Food" would
+                        // quietly mislabel every future cash-out from him — and worse, it
+                        // would look like the app had learned something.
                         //
-                        // ⚠ **That reasoning covers cash-outs and only cash-outs, and since
-                        // 2026-09-06 this prompt also answers ordinary payments — where a
-                        // rule would be exactly right.** MELCOM is MELCOM every time. Left
-                        // as-is on purpose rather than by oversight: writing a rule from the
-                        // shade would teach the app something Mutalib never saw a switch for,
-                        // and the transaction sheet asks him with a visible toggle. The cost
-                        // is that the same shop keeps being asked about until he answers it
-                        // once inside the app. Open question, his to settle — do not "fix"
-                        // it by quietly generalising from a shade tap.
+                        // For a shop this branch is reached by the "Just once" button, with
+                        // "Always" sitting beside it. Same write either way; the difference
+                        // is entirely in what else happens, and that is Mutalib's to pick per
+                        // transaction rather than the app's to assume.
                         CategoryPrompt.cancel(app, rowId)
                         // The row id is enough to follow the flow; the label is what he spent
                     // the money on.

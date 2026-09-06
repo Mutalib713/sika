@@ -75,6 +75,14 @@ object CategoryPrompt {
     const val STEP_PICK = "pick"
     /** Saving is a second, deliberate tap. This is the one that writes. */
     const val STEP_SAVE = "save"
+    /**
+     * Save it **and** remember the shop, so this counterparty is never asked about again.
+     *
+     * Mutalib's choice, 2026-09-06, over learning silently. It is the same write the
+     * transaction sheet's *remember this* toggle makes — the difference is only that the
+     * toggle is visible there and this is a button here. Never offered for a cash-out.
+     */
+    const val STEP_ALWAYS = "always"
     /** Back to the category list without writing anything. */
     const val STEP_CHANGE = "change"
     /** A typed description arriving from the notification's own text box. */
@@ -212,21 +220,56 @@ object CategoryPrompt {
      *
      * The proposal is held in the notification itself rather than in the database, so
      * dismissing the shade without saving leaves the ledger exactly as it was.
+     *
+     * ## Two layouts, because a shop and an agent are not the same problem
+     *
+     * ⚠ **Android draws three action buttons and no more**, so this is a genuine choice
+     * about what to leave out rather than a preference. Mutalib settled it on 2026-09-06:
+     *
+     * - **A shop** repeats. MELCOM is MELCOM every time, so the useful third option is
+     *   *Always* — teach the rule and never be asked about that shop again. Learning is
+     *   offered rather than assumed, because a rule written silently from a shade tap is one
+     *   he was never shown a switch for.
+     * - **A cash-out** does not repeat in any way a rule could use. The counterparty is the
+     *   agent who handed over the notes, and the same agent funds a taxi one day and lunch
+     *   the next — so *Always* would be actively wrong there, and the third button stays the
+     *   text box for saying what this one purchase was.
+     *
+     * A payment with no counterparty at all falls back to the cash-out layout, since there
+     * is nothing to key a rule on.
      */
-    fun showConfirm(context: Context, rowId: Long, amount: Long, category: String) {
+    fun showConfirm(
+        context: Context,
+        rowId: Long,
+        amount: Long,
+        shape: Shape,
+        counterparty: String,
+        category: String,
+    ) {
         if (!canPost(context)) return
         ensureChannel(context)
+
+        val canLearn = offersAlways(shape, counterparty)
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("${amount.asCedis()} → $category")
-            .setContentText("Save it?")
+            // ⚠ **The question goes here, not on the buttons.** Three actions share one
+            // notification's width, so "Just this one" and "Always MELCOM" would both be
+            // truncated to something unreadable. Short buttons, and the line above them
+            // carries the meaning — which is also the line a heads-up banner shows first.
+            .setContentText(
+                if (canLearn) "Just this one, or always $counterparty?" else "Save it?",
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             // ⚠ NOT auto-cancel: the whole point is that it waits for a deliberate answer.
             .setAutoCancel(false)
             .setContentIntent(openSheetIntent(context, rowId))
             .addAction(
                 NotificationCompat.Action.Builder(
-                    0, "Save", replyIntent(context, rowId, category, 0, STEP_SAVE),
+                    0,
+                    if (canLearn) "Just once" else "Save",
+                    replyIntent(context, rowId, category, 0, STEP_SAVE),
                 ).build(),
             )
             .addAction(
@@ -234,7 +277,15 @@ object CategoryPrompt {
                     0, "Change", replyIntent(context, rowId, category, 1, STEP_CHANGE),
                 ).build(),
             )
-            .addAction(noteAction(context, rowId, category))
+            .addAction(
+                if (canLearn) {
+                    NotificationCompat.Action.Builder(
+                        0, "Always", replyIntent(context, rowId, category, 2, STEP_ALWAYS),
+                    ).build()
+                } else {
+                    noteAction(context, rowId, category)
+                },
+            )
         try {
             NotificationManagerCompat.from(context).notify(notificationId(rowId), builder.build())
         } catch (e: SecurityException) {
@@ -269,6 +320,24 @@ object CategoryPrompt {
             .setAllowGeneratedReplies(false)
             .build()
     }
+
+    /**
+     * Whether this row's confirm step should offer **Always** instead of the text box.
+     *
+     * ⚠ **False for a cash-out, and that is the whole reason this is a function.** A rule
+     * is keyed on the counterparty; a cash-out's counterparty is the agent who handed over
+     * the notes, and the same agent funds a taxi one day and lunch the next. Offering
+     * *Always* there would let one tap mislabel every future cash-out from that agent —
+     * silently, and while looking like the app had learned something useful.
+     *
+     * False with no counterparty too: there would be nothing to key the rule on, and a rule
+     * stored under the empty string would claim every unparsed row in the review queue.
+     *
+     * Internal so a test can hold both exclusions still. They are one line of code and the
+     * kind that gets "simplified" by someone who has not read the paragraph above.
+     */
+    internal fun offersAlways(shape: Shape, counterparty: String): Boolean =
+        shape != Shape.CASH_OUT && counterparty.isNotBlank()
 
     /**
      * The line at the top of the notification: how much, and where it went.
