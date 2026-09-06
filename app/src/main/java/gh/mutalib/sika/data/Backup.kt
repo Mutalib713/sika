@@ -47,25 +47,35 @@ object Backup {
      * trip, minutes before the wipe would have proved it the hard way.
      *
      * Version 1 files are still readable: the reader requires only the original sixteen
-     * columns and treats a seventeenth as optional.
+     * columns and treats later ones as optional.
+     *
+     * ⚠ **Bumped to 3 on 2026-09-04, and the same way: by looking, not by being told.** Two
+     * more things had been added to the app and never reached the file — `gapAmount` and
+     * `gapCategory`, so a gap counted under a category came back uncounted, and the whole
+     * `terms` table, so every named semester was lost on restore. That is three times this
+     * exact failure has happened. The fix this time is not another column: `BackupTest`
+     * reflects over `TransactionEntity` and fails the build when a field is missing from
+     * [TX_HEADER], so the next person to add one is told before the wipe rather than after.
      */
-    const val VERSION = 2
+    const val VERSION = 3
     const val MIME = "text/csv"
 
     private const val S_TRANSACTIONS = "[transactions]"
     private const val S_CATEGORIES = "[categories]"
     private const val S_RULES = "[rules]"
+    private const val S_SEMESTERS = "[semesters]"
 
     private val TX_HEADER = listOf(
         "txId", "occurredAt", "direction", "shape", "amount", "fee", "tax",
         "counterparty", "reference", "balanceAfter", "label", "labelSource", "note",
-        "parsedOk", "reconciled", "rawBody", "gapNote",
+        "parsedOk", "reconciled", "rawBody", "gapNote", "gapAmount", "gapCategory",
     )
 
     /** What a version-1 file has. Anything beyond this is optional when reading. */
     private const val TX_REQUIRED = 16
     private val CAT_HEADER = listOf("name", "sortOrder", "isDefault", "isProtected", "isHidden")
     private val RULE_HEADER = listOf("counterparty", "label", "createdAt")
+    private val TERM_HEADER = listOf("name", "startDay", "endExclusiveDay")
 
     /** A filename with the date in it, because a folder of `sika.csv` files helps nobody. */
     fun fileName(today: java.time.LocalDate): String = "sika-$today.csv"
@@ -76,6 +86,7 @@ object Backup {
         transactions: List<TransactionEntity>,
         categories: List<CategoryEntity>,
         rules: List<RuleEntity>,
+        terms: List<TermEntity> = emptyList(),
     ): String = buildString {
         appendLine(Csv.row(listOf("SIKA BACKUP", VERSION.toString())))
 
@@ -90,6 +101,7 @@ object Backup {
                         t.counterparty, t.reference, t.balanceAfter?.toString(),
                         t.label, t.labelSource.name, t.note,
                         if (t.parsedOk) "1" else "0", t.reconciled.name, t.rawBody, t.gapNote,
+                        t.gapAmount?.toString(), t.gapCategory,
                     ),
                 ),
             )
@@ -115,6 +127,16 @@ object Backup {
         rules.forEach { r ->
             appendLine(Csv.row(listOf(r.counterparty, r.label, r.createdAt.toString())))
         }
+
+        // ⚠ Last, so a version-2 reader meeting this section stops at an unknown marker
+        // rather than misreading semesters as rules.
+        appendLine(S_SEMESTERS)
+        appendLine(Csv.row(TERM_HEADER))
+        terms.forEach { t ->
+            appendLine(
+                Csv.row(listOf(t.name, t.startDay.toString(), t.endExclusiveDay.toString())),
+            )
+        }
     }
 
     // ------------------------------------------------------------------ reading
@@ -124,6 +146,7 @@ object Backup {
         val transactions: List<TransactionEntity> = emptyList(),
         val categories: List<CategoryEntity> = emptyList(),
         val rules: List<RuleEntity> = emptyList(),
+        val terms: List<TermEntity> = emptyList(),
         /** One line per unreadable row, in plain words. Shown, never swallowed. */
         val problems: List<String> = emptyList(),
         /** Set when the file is not a Sika backup at all. */
@@ -157,6 +180,7 @@ object Backup {
         val transactions = mutableListOf<TransactionEntity>()
         val categories = mutableListOf<CategoryEntity>()
         val rules = mutableListOf<RuleEntity>()
+        val terms = mutableListOf<TermEntity>()
         val problems = mutableListOf<String>()
         var section = ""
 
@@ -164,12 +188,17 @@ object Backup {
             val line = index + 2 // 1-based, and the marker line was dropped
             val head = row.firstOrNull()
             when {
-                head == S_TRANSACTIONS || head == S_CATEGORIES || head == S_RULES -> {
+                head == S_TRANSACTIONS || head == S_CATEGORIES || head == S_RULES ||
+                    head == S_SEMESTERS -> {
                     section = head
                     return@forEachIndexed
                 }
-                // The header line of whichever section just started.
-                head == "txId" || head == "name" || (head == "counterparty" && section == S_RULES) ->
+                // The header line of whichever section just started. ⚠ "name" opens both the
+                // categories and the semesters sections, so it has to be qualified by which
+                // one is running or a semester header is read as a category row.
+                head == "txId" ||
+                    (head == "name" && (section == S_CATEGORIES || section == S_SEMESTERS)) ||
+                    (head == "counterparty" && section == S_RULES) ->
                     return@forEachIndexed
                 head == null -> return@forEachIndexed
             }
@@ -185,9 +214,13 @@ object Backup {
                 S_RULES -> rule(row)
                     ?.let(rules::add)
                     ?: problems.add("Line $line: could not read this rule.")
+
+                S_SEMESTERS -> term(row)
+                    ?.let(terms::add)
+                    ?: problems.add("Line $line: could not read this semester.")
             }
         }
-        return Parsed(transactions, categories, rules, problems)
+        return Parsed(transactions, categories, rules, terms, problems)
     }
 
     /**
@@ -228,7 +261,25 @@ object Backup {
             reconciled = enumOrNull<Reconciled>(r[14]) ?: Reconciled.UNCHECKED,
             // Absent in a version-1 file, which is not an error.
             gapNote = r.getOrNull(16),
+            // ⚠ Absent in versions 1 and 2. `gapAmount` going missing is the quiet one: the
+            // gap still shows, but the money it was counted for stops being counted, and the
+            // totals move without anything saying why.
+            gapAmount = r.getOrNull(17)?.toLongOrNull(),
+            gapCategory = r.getOrNull(18)?.takeIf { it.isNotBlank() },
         )
+    }
+
+    /**
+     * ⚠ **A semester with an unreadable date is skipped, never guessed.** Both are epoch days
+     * — plain integers — so anything that will not parse means the file is damaged, and a
+     * semester silently landing on the wrong dates would misfile every transaction under it.
+     */
+    private fun term(r: List<String?>): TermEntity? {
+        val name = r.getOrNull(0)?.takeIf { it.isNotBlank() } ?: return null
+        val start = r.getOrNull(1)?.toLongOrNull() ?: return null
+        val end = r.getOrNull(2)?.toLongOrNull() ?: return null
+        if (end <= start) return null
+        return TermEntity(name = name, startDay = start, endExclusiveDay = end)
     }
 
     private fun category(r: List<String?>): CategoryEntity? {

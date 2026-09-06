@@ -6,6 +6,7 @@ import gh.mutalib.sika.data.Csv
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.Reconciled
 import gh.mutalib.sika.data.RuleEntity
+import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.data.TransactionEntity
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.Shape
@@ -180,5 +181,77 @@ class BackupTest {
     @Test
     fun `the file name carries its date`() {
         assertEquals("sika-2026-09-01.csv", Backup.fileName(java.time.LocalDate.of(2026, 9, 1)))
+    }
+
+    // ---- the guard against this file rotting again ------------------------------------
+
+    /**
+     * ⚠ **Every column of [TransactionEntity] must be in the backup, and this test is the only
+     * thing that will say so.**
+     *
+     * The same failure has now happened three times. `gapNote` was added and never reached the
+     * format (found 2026-09-01, minutes before a wipe). Then `gapAmount` and `gapCategory` were
+     * added and never reached it either, and neither did the whole `terms` table (found in the
+     * 2026-09-04 audit). Each time, the export looked complete and restored cleanly while
+     * quietly dropping something that could not be recovered from anywhere else.
+     *
+     * A reviewer will not catch this — the code that forgets a column is the code that looks
+     * finished. So the check is mechanical: reflect over the entity and fail the build.
+     *
+     * If you are here because this test failed, you added a field. Add it to `TX_HEADER`,
+     * write it in `Backup.write`, read it in `Backup.transaction`, restore it in
+     * `BackupIo.apply`, and bump `Backup.VERSION`. Do not add it to the ignore list below
+     * unless it genuinely cannot be restored.
+     */
+    @Test
+    fun `every transaction column is in the backup`() {
+        // `id` is the phone's own row number and is deliberately not carried between devices.
+        val notBackedUp = setOf("id")
+        val fields = TransactionEntity::class.java.declaredFields
+            .map { it.name }
+            .filterNot { it.contains("$") || it in notBackedUp }
+            .toSet()
+
+        val written = Backup.write(
+            transactions = listOf(tx()),
+            categories = emptyList(),
+            rules = emptyList(),
+        )
+        val header = written.lineSequence().first { it.startsWith("txId") }.split(",")
+            .map { it.trim('"') }.toSet()
+
+        val missing = fields - header
+        assertTrue(
+            "TransactionEntity has ${missing.size} field(s) the backup does not carry: " +
+                "$missing. A restore would silently lose them.",
+            missing.isEmpty(),
+        )
+    }
+
+    /** The same, for the semesters section — the table the audit found missing entirely. */
+    @Test
+    fun `semesters survive a round trip`() {
+        val term = TermEntity(name = "First semester, Year 1", startDay = 20_000, endExclusiveDay = 20_120)
+        val text = Backup.write(emptyList(), emptyList(), emptyList(), listOf(term))
+        val back = Backup.read(text)
+        assertEquals(emptyList<String>(), back.problems)
+        assertEquals(1, back.terms.size)
+        assertEquals("First semester, Year 1", back.terms[0].name)
+        assertEquals(20_000L, back.terms[0].startDay)
+        assertEquals(20_120L, back.terms[0].endExclusiveDay)
+    }
+
+    /** A semester whose dates will not parse is skipped and reported, never guessed at. */
+    @Test
+    fun `a damaged semester is reported rather than invented`() {
+        val good = TermEntity(name = "Fine", startDay = 20_000, endExclusiveDay = 20_120)
+        // A row appended to the semesters section with an unreadable start day. Appending is
+        // safe because that section is written last, deliberately.
+        val text = Backup.write(emptyList(), emptyList(), emptyList(), listOf(good)) +
+            Csv.row(listOf("Broken", "nope", "20120")) + "\n"
+        val back = Backup.read(text)
+        assertEquals(1, back.terms.size)
+        assertEquals("Fine", back.terms[0].name)
+        assertEquals(1, back.problems.size)
     }
 }

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.app.RemoteInput
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.SikaDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -94,7 +95,10 @@ class CashOutReplyReceiver : BroadcastReceiver() {
                         // cash-out from that agent — and worse, it would look like the app
                         // had learned something.
                         CashOutPrompt.cancel(app, rowId)
-                        Log.i(TAG, "cash-out row $rowId saved as '$label' from the shade")
+                        // The row id is enough to follow the flow; the label is what he spent
+                    // the money on.
+                    Log.i(TAG, "cash-out row $rowId saved from the shade")
+                    logPrivate { "cash-out row $rowId saved as '$label'" }
                     }
                 }
             } catch (t: Throwable) {

@@ -37,18 +37,22 @@ object BackupIo {
         val notes: Int = 0,
         val categories: Int = 0,
         val rules: Int = 0,
+        val terms: Int = 0,
         val problems: List<String> = emptyList(),
         val error: String? = null,
     ) {
         val changedNothing: Boolean
-            get() = added == 0 && labels == 0 && notes == 0 && categories == 0 && rules == 0
+            get() = added == 0 && labels == 0 && notes == 0 && categories == 0 &&
+                rules == 0 && terms == 0
     }
 
     suspend fun export(context: Context, uri: Uri): Export = withContext(Dispatchers.IO) {
         runCatching {
             val db = SikaDatabase.get(context)
             val transactions = db.transactions().allChronological()
-            val text = Backup.write(transactions, db.categories().all(), db.rules().all())
+            val text = Backup.write(
+                transactions, db.categories().all(), db.rules().all(), db.terms().all(),
+            )
             context.contentResolver.openOutputStream(uri, "wt")
                 ?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
                 ?: return@runCatching Export(0, "Sika could not open that file to write.")
@@ -87,6 +91,7 @@ object BackupIo {
         val transactions = db.transactions()
         val categories = db.categories()
         val rules = db.rules()
+        val terms = db.terms()
 
         val existingNames = categories.all().associateBy { it.name }
         var newCategories = 0
@@ -131,6 +136,9 @@ object BackupIo {
             t.gapNote?.takeIf { it.isNotBlank() }?.let { note ->
                 notes += transactions.restoreGapNote(t.txId, note)
             }
+            t.gapCategory?.takeIf { it.isNotBlank() }?.let { category ->
+                transactions.restoreGapCategory(t.txId, category, t.gapAmount)
+            }
         }
 
         var newRules = 0
@@ -142,11 +150,23 @@ object BackupIo {
             }
         }
 
+        // ⚠ **Matched on name, not id.** The id in a file belongs to the phone that wrote it,
+        // and a semester is identified by what he called it. Never overwrites: a term already
+        // on the phone is the newer decision, same rule as rules and labels.
+        var newTerms = 0
+        val existingTerms = terms.all().map { it.name }.toSet()
+        parsed.terms.forEach { t ->
+            if (t.name !in existingTerms) {
+                terms.insert(t.copy(id = 0))
+                newTerms++
+            }
+        }
+
         Log.i(
             TAG,
             "imported: added=" + added + " labels=" + labels + " notes=" + notes +
-                " categories=" + newCategories + " rules=" + newRules,
+                " categories=" + newCategories + " rules=" + newRules + " semesters=" + newTerms,
         )
-        return Import(added, labels, notes, newCategories, newRules, parsed.problems)
+        return Import(added, labels, notes, newCategories, newRules, newTerms, parsed.problems)
     }
 }

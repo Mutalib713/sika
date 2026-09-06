@@ -3,6 +3,7 @@ package gh.mutalib.sika.sms
 import android.content.Context
 import android.util.Log
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.warnPrivate
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
@@ -104,7 +105,12 @@ object Sweeper {
             Log.i(TAG, "sweep: ${it.found} matched, ${it.parsed} transactions, " +
                 "${it.notTransactions} not transactions, ${it.unrecognised} unrecognised, " +
                 "${it.newlyAdded} new, ${it.totalInLedger} in ledger, ${it.queued} queued for review")
-            Log.i(TAG, "transaction senders: " + it.senders.joinToString { s -> "${s.first}=${s.second}" })
+            // ⚠ **Debug only: these are raw SMS `address` values.** MTN's are shortcodes,
+            // but the field holds whatever sent the message, so a person's number can land
+            // here the moment anything unexpected parses as a transaction. The count is the
+            // useful part in release; the identities are not.
+            Log.i(TAG, "transaction senders: ${it.senders.size} distinct")
+            logPrivate { "senders: " + it.senders.joinToString { s -> "${s.first}=${s.second}" } }
             it.queuedSamples.forEach { (reason, body) ->
                 // ⚠ Debug only. This is a whole MoMo message: amount, counterparty,
                 // balance. It is what the parser gets fixed from, and it must not be in a

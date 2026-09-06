@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.ledger.PeriodSummary
 import gh.mutalib.sika.parser.asCedis
 import java.time.LocalTime
@@ -189,7 +190,13 @@ object MonthlyReport {
         // BroadcastReceiver would take the reschedule down with it.
         try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
-            Log.i(TAG, "monthly report posted: " + title(summary))
+            // ⚠ **The event in the release log, the amounts only in a debug build.**
+            // `title()` is "September: GHS 92.20 out, GHS 101.00 in" — a month of
+            // someone's money, written to logcat on every phone this ships to. Knowing
+            // the notification fired is what makes a "why did I not get it" report
+            // answerable; the figures add nothing to that.
+            Log.i(TAG, "monthly report posted")
+            logPrivate { "monthly report: " + title(summary) }
         } catch (e: SecurityException) {
             Log.w(TAG, "monthly report refused by the system", e)
         }

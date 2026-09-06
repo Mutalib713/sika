@@ -13,6 +13,7 @@ import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.parser.asCedis
 import java.time.LocalDate
@@ -222,7 +223,8 @@ object TermAlert {
         // BroadcastReceiver would take the reschedule down with it.
         return try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
-            Log.i(TAG, "term alert posted: " + title(due))
+            Log.i(TAG, "term alert posted")
+            logPrivate { "term alert: " + title(due) }
             true
         } catch (e: SecurityException) {
             Log.w(TAG, "term alert refused by the system", e)

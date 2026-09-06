@@ -151,6 +151,21 @@ interface TransactionDao {
     suspend fun restoreGapNote(txId: String, note: String): Int
 
     /**
+     * ⚠ **`gapAmount` comes back with it, and that is the point.** The category says where the
+     * money was counted; the amount is how much. Restoring the first without the second files
+     * a gap under Food and contributes nothing to Food's total — a category that looks answered
+     * and changes no figure, which is worse than one that is plainly still open.
+     *
+     * Fill-only, like every other restore here: a decision already on the phone is newer than
+     * the file and wins.
+     */
+    @Query(
+        "UPDATE transactions SET gapCategory = :category, gapAmount = :amount " +
+            "WHERE txId = :txId AND gapCategory IS NULL",
+    )
+    suspend fun restoreGapCategory(txId: String, category: String, amount: Long?): Int
+
+    /**
      * Records what the money before this row actually was.
      *
      * ⚠ Sets the note and **nothing else**. It deliberately does not touch `reconciled`: the
