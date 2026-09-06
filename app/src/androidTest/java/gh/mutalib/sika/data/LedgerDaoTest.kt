@@ -295,6 +295,63 @@ class LedgerDaoTest {
         assertEquals(0, AutoLabel.run(transactions, rules, listOf(-1L, -1L)))
     }
 
+    /**
+     * ⚠ **The rows the fix would otherwise have abandoned.**
+     *
+     * Naming new arrivals does nothing for a transaction that landed during the months when
+     * nothing consulted the rules at all. Three rows of Mutalib's real ledger were in that
+     * state on 2026-09-06 — payments to a shop he had already taught — and no event in the
+     * app would ever have come back for them.
+     */
+    @Test
+    fun theCatchUpNamesRowsThatArrivedBeforeItRan() = runTest {
+        val id = transactions.insert(airtimeRow())
+        rules.put(RuleEntity("MTN AIRTIME", "Airtime", createdAt = 1L))
+
+        assertEquals(1, AutoLabel.catchUp(transactions))
+
+        val row = transactions.byId(id)!!
+        assertEquals("Airtime", row.label)
+        assertEquals(LabelSource.AUTO_RULE, row.labelSource)
+    }
+
+    /**
+     * ⚠ **It fills blanks and nothing else — a stricter guard than `applyRule`'s.**
+     *
+     * `applyRule` may rewrite an older `AUTO_RULE` label, because it runs at the moment
+     * Mutalib asks for a rule and that is him changing his mind. This one runs unattended on
+     * every single launch, where quietly rewriting an existing label would be the app
+     * changing his mind for him.
+     */
+    @Test
+    fun theCatchUpNeverTouchesARowThatAlreadyHasALabel() = runTest {
+        val manual = transactions.insert(airtimeRow())
+        transactions.setLabel(manual, "Data", LabelSource.MANUAL)
+        val guessed = transactions.insert(airtimeRow(txId = "999000222"))
+        transactions.setLabel(guessed, "Other", LabelSource.AUTO_KEYWORD)
+
+        rules.put(RuleEntity("MTN AIRTIME", "Airtime", createdAt = 1L))
+
+        assertEquals("nothing was blank, so nothing should change", 0, AutoLabel.catchUp(transactions))
+        assertEquals("Data", transactions.byId(manual)!!.label)
+        assertEquals("Other", transactions.byId(guessed)!!.label)
+    }
+
+    /**
+     * ⚠ A rule keyed on the empty string must not claim the review queue, every row of which
+     * has a blank counterparty — that is what an unreadable message looks like.
+     */
+    @Test
+    fun theCatchUpLeavesTheReviewQueueAlone() = runTest {
+        transactions.insert(
+            SmsIngest.unparsedRow("total gibberish", receivedAt = 1_756_300_000_000L, reason = "t"),
+        )
+        rules.put(RuleEntity("", "Food", createdAt = 1L))
+
+        assertEquals(0, AutoLabel.catchUp(transactions))
+        assertNull(transactions.reviewQueue().first().label)
+    }
+
     // ------------------------------------------------------------- rows from real messages
 
     private fun airtimeRow(txId: String? = null): TransactionEntity {

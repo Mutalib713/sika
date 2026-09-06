@@ -222,3 +222,20 @@ dependencies {
     androidTestImplementation("androidx.room:room-testing:2.8.4")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
 }
+
+// ⚠ **`check` must COMPILE the instrumented tests, even though it cannot run them.**
+//
+// It did not, and the cost was measured on 2026-09-06: `MigrationTest` had called
+// `Cursor.getText()` — a method that does not exist; the name is `getString` — since commit
+// 2c44bc8. `./gradlew check` passed every time in between, because it compiles the JVM tests
+// and lints the androidTest sources without ever asking Kotlin to build them. So the entire
+// instrumented suite, including the dedupe guarantees that Sacred Rule 4 rests on, could not
+// be run at all and nothing said so.
+//
+// Running those tests needs a device and `check` must work with nothing plugged in — but
+// *compiling* them needs nothing, takes seconds, and turns "silently un-runnable" into a
+// build failure. Which is the same argument as reconciliation itself: a verification you
+// have to remember to trigger is one that stops happening.
+tasks.named("check") {
+    dependsOn("compileDebugAndroidTestKotlin")
+}

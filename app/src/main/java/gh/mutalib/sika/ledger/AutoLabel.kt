@@ -86,6 +86,27 @@ object AutoLabel {
     }
 
     /**
+     * Applies every learned rule to every row that still has no category.
+     *
+     * ⚠ **Naming new arrivals was not enough.** Rules land at two moments — when the rule
+     * is written, and when a row is inserted — and anything falling between them was never
+     * revisited by anything. Three rows of Mutalib's own ledger were in exactly that state on
+     * 2026-09-06: payments to a shop he had already taught, arriving after the rule existed,
+     * during the months when new arrivals consulted no rules at all.
+     *
+     * Cheap enough to run on every sweep (one statement, not one per rule), and running it
+     * every time is what turns "applied at two moments" into something that is simply true —
+     * including after a restored backup, which writes rows and rules independently.
+     *
+     * @return how many rows it named.
+     */
+    suspend fun catchUp(dao: TransactionDao): Int {
+        val filled = dao.applyAllRules()
+        if (filled > 0) Log.i(TAG, "auto-label: a learned rule caught up with $filled older rows")
+        return filled
+    }
+
+    /**
      * Labels whatever among [ids] still has no category.
      *
      * @return how many rows got one, for the log line and the tests.

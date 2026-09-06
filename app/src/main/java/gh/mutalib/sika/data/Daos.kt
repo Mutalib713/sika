@@ -218,6 +218,39 @@ interface TransactionDao {
     suspend fun unlabelledIn(ids: List<Long>): List<TransactionEntity>
 
     /**
+     * Applies **every** learned rule to **every** row that still has no category, in one
+     * statement — the catch-up half of the 2026-09-06 fix.
+     *
+     * ⚠ **Naming new arrivals was not enough, and his own ledger is the proof.** Rules were
+     * applied at two moments only: when a rule was created, and (after the fix) when a row
+     * was inserted. Anything that landed in the gap between those — a payment arriving after
+     * its rule existed, which is precisely what the bug caused — stayed unnamed forever, and
+     * no later event would ever come back for it. Three of his rows were in exactly that
+     * state. Running this on every sweep turns "applied at two moments" into an invariant
+     * that simply holds, which also covers a restored backup and a re-read after a parser fix.
+     *
+     * ⚠ **`label IS NULL`, which is STRICTER than [applyRule]'s `labelSource` guard, and
+     * deliberately so.** `applyRule` runs when Mutalib has just asked for a rule, so
+     * rewriting an older `AUTO_RULE` label is him changing his mind. This runs unattended on
+     * every launch, where the only safe act is filling a blank.
+     *
+     * ⚠ `counterparty <> ''` because a rule keyed on the empty string would otherwise claim
+     * every row in the review queue at once.
+     */
+    @Query(
+        """
+        UPDATE transactions SET
+            label = (SELECT r.label FROM rules r WHERE r.counterparty = transactions.counterparty),
+            labelSource = 'AUTO_RULE'
+        WHERE label IS NULL
+          AND parsedOk = 1
+          AND counterparty <> ''
+          AND EXISTS (SELECT 1 FROM rules r WHERE r.counterparty = transactions.counterparty)
+        """,
+    )
+    suspend fun applyAllRules(): Int
+
+    /**
      * How many of one day's transactions still have no category — what the end-of-day
      * nudge counts before deciding whether it has anything worth saying.
      *

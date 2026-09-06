@@ -56,9 +56,9 @@ class MigrationTest {
 
         db.query("SELECT txId, label, labelSource, amount, fee, note FROM transactions").use { c ->
             assertTrue("the row must survive the migration", c.moveToFirst())
-            assertEquals("tx-1", c.getText(0))
-            assertEquals("Food", c.getText(1))
-            assertEquals("MANUAL", c.getText(2))
+            assertEquals("tx-1", c.getString(0))
+            assertEquals("Food", c.getString(1))
+            assertEquals("MANUAL", c.getString(2))
             assertEquals(1500L, c.getLong(3))
             assertEquals(50L, c.getLong(4))
             // A row written before the column existed genuinely has no note, and null is the

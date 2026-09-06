@@ -82,6 +82,12 @@ object Sweeper {
         // about money spent months ago. Naming is silent; asking is not.
         val autoLabelled = AutoLabel.run(context, insertedIds)
 
+        // ⚠ **And the rows that are already here.** Naming new arrivals leaves behind every
+        // row that landed during the months when nothing consulted the rules at all — three
+        // of Mutalib's on 2026-09-06 — and no later event would ever come back for those.
+        // Fills blanks only; never rewrites a label. See TransactionDao.applyAllRules.
+        val caughtUp = AutoLabel.catchUp(dao)
+
         // Sacred Rule 3: the check runs on every sweep rather than on request. It is cheap,
         // and a verification you have to remember to trigger is one that stops happening.
         val reconcile = ReconcilePass.run(context)
@@ -107,7 +113,7 @@ object Sweeper {
             notTransactions = notTransactions,
             unrecognised = unrecognised.size,
             newlyAdded = newlyAdded,
-            autoLabelled = autoLabelled,
+            autoLabelled = autoLabelled + caughtUp,
             oldest = messages.filter { MomoParser.parse(it.body) is ParseResult.Parsed }
                 .minOfOrNull { it.receivedAt },
             newest = messages.filter { MomoParser.parse(it.body) is ParseResult.Parsed }
