@@ -204,7 +204,7 @@ Screen inventory: [`docs/screens.md`](docs/screens.md). Stitch prompts for visua
   and applies it to every other row from that party. The hand-set row is always `MANUAL`, so a rule
   can never later overwrite a decision made by hand.
   `check: PASS`, gate.py 0 block, humanizer 100.0/85.
-  - [x] **Device check passed 2026-08-31.** Tapped a `AKOSUA MENSAH` row, tapped **Food**,
+  - [x] **Device check passed 2026-08-31.** Tapped a real counterparty row, tapped **Food**,
         and **all three** of her rows — 31 Aug, 29 Aug and 28 Aug — relabelled at once. One tap,
         three rows. The learn-once mechanism working on real data, which is the answer to risk #2
         (label rot).

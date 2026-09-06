@@ -69,6 +69,10 @@ object DemoRows {
         add(0, 12, 40, "AUNTIE WAAKYE JOINT", 1_500, "Food")
 
         // Yesterday
+        // ⚠ A REAL person's name was here until 2026-09-06, copied off the phone while
+        // building this list. Demo rows are the one thing that gets screenshotted and put
+        // in a public README, so a real counterparty here is the shortest path from "my
+        // ledger" to "the internet". Every name in this file must be invented.
         add(1, 20, 5, "AKOSUA MENSAH", 13_500, "Food")
         add(1, 13, 20, "CASH OUT AGENT", 4_000, null, shape = Shape.CASH_OUT, fee = 50)
         add(1, 11, 2, "ZZZ PROVISIONS", 800, "Provisions")
