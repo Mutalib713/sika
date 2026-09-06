@@ -80,6 +80,15 @@ fun SettingsScreen(
     onRoute: (SettingsRoute) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    /**
+     * Fires the end-of-day reminder immediately, with today's real count.
+     *
+     * ⚠ **A diagnostic, not a feature, and it must use the real path.** Posting a fake
+     * notification here would prove only that this button works. It counts today's unlabelled
+     * rows and calls the same `show` the 9pm alarm calls, so the answer it gives is about the
+     * reminder rather than about itself.
+     */
+    onTestNudge: () -> Unit,
     // ⚠ `onRunSetupAgain` was removed on 2026-09-02 with the "Show the tour again" row. The
     // machinery it drove is intact — `OnboardingPrefs.setTourSeen(false)` plus `setDone(false)`
     // sends someone back through the flow — so restoring the row is a few lines, not a rebuild.
@@ -91,7 +100,7 @@ fun SettingsScreen(
     var choosingTheme by remember { mutableStateOf(false) }
     var themeRowCentre by remember { mutableStateOf<Offset?>(null) }
 
-    var cashOut by remember { mutableStateOf(NotificationPrefs.cashOutPrompt(context)) }
+    var cashOut by remember { mutableStateOf(NotificationPrefs.categoryPrompt(context)) }
     var endOfDay by remember { mutableStateOf(NotificationPrefs.endOfDay(context)) }
     var gapAlert by remember { mutableStateOf(NotificationPrefs.gapAlert(context)) }
     var monthly by remember { mutableStateOf(NotificationPrefs.monthly(context)) }
@@ -205,14 +214,19 @@ fun SettingsScreen(
             item {
                 SectionLabel("READING YOUR MESSAGES")
                 SettingsCard {
+                    // ⚠ **"Ask what a cash-out was for" until 2026-09-06.** It described the
+                    // old behaviour exactly, which was the problem: Mutalib read the row,
+                    // believed the app would ask about his spending, and it only ever asked
+                    // about cash-outs. The title is what makes a promise here, so it now
+                    // makes the one the code actually keeps.
                     SettingsRow(
                         icon = R.drawable.ic_wallet,
-                        title = "Ask what a cash-out was for",
-                        subtitle = "The moment the message lands",
+                        title = "Ask what a payment was for",
+                        subtitle = "The moment it lands, when nothing could name it",
                     ) {
                         SettingsSwitch(cashOut) {
                             cashOut = it
-                            NotificationPrefs.setCashOutPrompt(context, it)
+                            NotificationPrefs.setCategoryPrompt(context, it)
                         }
                     }
                     RowDivider()
@@ -220,6 +234,16 @@ fun SettingsScreen(
                         icon = R.drawable.ic_clock,
                         title = "Remind me at the end of the day",
                         subtitle = "Only when something is still unlabelled",
+                        // ⚠ **Tapping fires tonight's reminder now, and this exists because
+                        // the reminder had never once arrived.** Mutalib, 2026-09-06: never
+                        // seen it. A 9pm alarm is close to untestable by hand — you wait a
+                        // day per attempt, and a silent night is equally consistent with
+                        // "nothing to say", "the alarm never fired" and "the channel is
+                        // muted". This collapses that to one tap: if a notification appears,
+                        // everything downstream of the alarm works and the alarm is the
+                        // suspect. If nothing appears, the count or the channel is.
+                        hint = "Tap to send tonight's reminder now",
+                        onClick = { onTestNudge() },
                     ) {
                         SettingsSwitch(endOfDay) {
                             endOfDay = it

@@ -151,7 +151,7 @@ class DebugSmsReceiver : BroadcastReceiver() {
                     // prompt a real one would. Without this the injector would report
                     // success on a path the notification never runs on — which is exactly
                     // the kind of gap that makes a debug tool worse than none.
-                    promptOnCashOut = true,
+                    promptForCategory = true,
                 )
             } catch (t: Throwable) {
                 Log.e(TAG, "debug-inject: ingest failed", t)

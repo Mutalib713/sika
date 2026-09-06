@@ -79,7 +79,7 @@ object GapAlert {
             Log.i(TAG, "gap alert: switched off in Settings")
             return
         }
-        if (!CashOutPrompt.canPost(context)) {
+        if (!CategoryPrompt.canPost(context)) {
             Log.w(TAG, "gap alert suppressed: notifications not permitted")
             return
         }

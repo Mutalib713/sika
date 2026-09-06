@@ -168,7 +168,7 @@ object MonthlyReport {
             Log.i(TAG, "monthly report: switched off in Settings")
             return
         }
-        if (!CashOutPrompt.canPost(context)) {
+        if (!CategoryPrompt.canPost(context)) {
             Log.w(TAG, "monthly report suppressed: notifications not permitted")
             return
         }

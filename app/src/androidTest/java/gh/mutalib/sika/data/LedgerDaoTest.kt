@@ -3,6 +3,7 @@ package gh.mutalib.sika.data
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import gh.mutalib.sika.ledger.AutoLabel
 import gh.mutalib.sika.parser.Direction
 import gh.mutalib.sika.parser.MomoParser
 import gh.mutalib.sika.parser.ParseResult
@@ -223,6 +224,75 @@ class LedgerDaoTest {
         // The transaction is still there and still counted, just under Other.
         assertEquals(1, transactions.count())
         assertEquals("Other", transactions.byTxId("83077174642")!!.label)
+    }
+
+    // ----------------------------------------------------------------- auto-labelling
+
+    /**
+     * ⚠ **The bug Mutalib reported on 2026-09-06, proved against real SQLite.**
+     *
+     * Learned rules were applied once, to rows that already existed, at the moment the rule
+     * was written — and never again. Nothing read the `rules` table when a message arrived,
+     * so a shop taught to the app in August still arrived unlabelled in September. "Tell me
+     * once" was really "tell me every time", and the only visible symptom was a ledger that
+     * would not stay named.
+     */
+    @Test
+    fun aLearnedRuleLandsOnATransactionThatArrivesAfterIt() = runTest {
+        rules.put(RuleEntity("MTN AIRTIME", "Airtime", createdAt = 1L))
+
+        val id = transactions.insert(airtimeRow())
+        val named = AutoLabel.run(transactions, rules, listOf(id))
+
+        assertEquals(1, named)
+        val row = transactions.byId(id)!!
+        assertEquals("Airtime", row.label)
+        assertEquals(LabelSource.AUTO_RULE, row.labelSource)
+    }
+
+    /**
+     * A hand-set label outranks everything. `setLabelIfUnset` is guarded on `label IS NULL`,
+     * and this is the guard being real rather than intended — the failure it prevents is the
+     * app quietly overwriting a decision, which nobody would notice until a total moved.
+     */
+    @Test
+    fun autoLabellingNeverOverwritesAHandSetLabel() = runTest {
+        rules.put(RuleEntity("MTN AIRTIME", "Airtime", createdAt = 1L))
+
+        val id = transactions.insert(airtimeRow())
+        transactions.setLabel(id, "Data", LabelSource.MANUAL)
+        val named = AutoLabel.run(transactions, rules, listOf(id))
+
+        assertEquals("nothing should have been written", 0, named)
+        val row = transactions.byId(id)!!
+        assertEquals("Data", row.label)
+        assertEquals(LabelSource.MANUAL, row.labelSource)
+    }
+
+    /**
+     * With no rule, the words in the message still get a guess — and this is the half that
+     * never ran on the inbox sweep at all, so a first-run backfill of months of history
+     * arrived with nothing named.
+     */
+    @Test
+    fun aKeywordGuessFillsARowNoRuleClaims() = runTest {
+        val id = transactions.insert(airtimeRow())
+        val named = AutoLabel.run(transactions, rules, listOf(id))
+
+        assertEquals(1, named)
+        val row = transactions.byId(id)!!
+        assertEquals("Airtime", row.label)
+        assertEquals(LabelSource.AUTO_KEYWORD, row.labelSource)
+    }
+
+    /**
+     * ⚠ Room returns -1 for a row the dedupe ignored, and the sweep hands its whole
+     * `insertAll` result over untouched. Treating -1 as an id would query for row minus one
+     * on every launch — harmless here, but only by luck.
+     */
+    @Test
+    fun idsFromIgnoredInsertsAreSkipped() = runTest {
+        assertEquals(0, AutoLabel.run(transactions, rules, listOf(-1L, -1L)))
     }
 
     // ------------------------------------------------------------- rows from real messages

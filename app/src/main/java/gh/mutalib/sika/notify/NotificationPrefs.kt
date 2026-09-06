@@ -6,13 +6,13 @@ import androidx.core.content.edit
 /**
  * Which of Sika's notifications are wanted.
  *
- * ⚠ **Both default to on, and that is a real decision rather than laziness.** The cash-out
- * prompt is the only way a `CASH OUT AGENT` row ever gets a name — MoMo does not say what the
- * cash was spent on, so without the prompt that money is permanently unexplained. Defaulting
- * it off would make the app quietly worse for anyone who never opens Settings.
+ * ⚠ **Both default to on, and that is a real decision rather than laziness.** The prompt is
+ * the only way an unnamed row ever gets a category without opening the app — MoMo does not say
+ * what money was spent on, so without it that spending stays permanently unexplained.
+ * Defaulting it off would make the app quietly worse for anyone who never opens Settings.
  *
  * ⚠ **These are a preference, not the permission.** Android's own notification switch still
- * outranks both: [CashOutPrompt.canPost] checks the system state as well, because a user who
+ * outranks both: [CategoryPrompt.canPost] checks the system state as well, because a user who
  * turned Sika's notifications off in Android settings has said something stronger than
  * anything stored here.
  *
@@ -30,10 +30,18 @@ object NotificationPrefs {
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    /** Ask what a cash-out was for, the moment the message lands. */
-    fun cashOutPrompt(context: Context): Boolean = prefs(context).getBoolean(CASH_OUT, true)
+    /**
+     * Ask what money just spent was for, the moment the message lands.
+     *
+     * ⚠ **The stored key is still `notify_cash_out` and must stay that way.** This covered
+     * cash-outs only until 2026-09-06; renaming the key would read as "never set" on a phone
+     * that already has it, silently resetting the switch to its default and discarding
+     * whatever Mutalib chose. The key is storage, the function name is meaning — they are
+     * allowed to disagree, and here they have to.
+     */
+    fun categoryPrompt(context: Context): Boolean = prefs(context).getBoolean(CASH_OUT, true)
 
-    fun setCashOutPrompt(context: Context, on: Boolean) =
+    fun setCategoryPrompt(context: Context, on: Boolean) =
         prefs(context).edit { putBoolean(CASH_OUT, on) }
 
     /** One reminder at the end of the day, and only when something is still unlabelled. */

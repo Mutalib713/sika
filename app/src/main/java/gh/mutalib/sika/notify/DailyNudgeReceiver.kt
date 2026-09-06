@@ -5,13 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import gh.mutalib.sika.TAG
-import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.ui.home.ACCRA
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 
 /**
  * Fires the end-of-day nudge, then books tomorrow's.
@@ -35,12 +33,9 @@ class DailyNudgeReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val today = LocalDate.now(ACCRA)
-                val from = today.atStartOfDay(ACCRA).toInstant().toEpochMilli()
-                val to = today.plusDays(1).atStartOfDay(ACCRA).toInstant().toEpochMilli()
-
-                val count = SikaDatabase.get(app).transactions().countUnlabelledBetween(from, to)
-                DailyNudge.show(app, count)
+                // Counting lives in DailyNudge so the Settings test button runs these exact
+                // lines rather than an imitation of them.
+                DailyNudge.fireNow(app, ACCRA)
             } catch (t: Throwable) {
                 Log.e(TAG, "daily nudge failed", t)
             } finally {

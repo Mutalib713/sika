@@ -201,7 +201,7 @@ object TermAlert {
             Log.i(TAG, "term alert: switched off in Settings")
             return false
         }
-        if (!CashOutPrompt.canPost(context)) {
+        if (!CategoryPrompt.canPost(context)) {
             Log.w(TAG, "term alert suppressed: notifications not permitted")
             return false
         }

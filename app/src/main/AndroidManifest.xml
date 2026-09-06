@@ -45,7 +45,7 @@
 
       A runtime permission since Android 13. ⚠ Without it `notify()` neither throws nor
       posts — the notification simply never appears — so the app checks it explicitly rather
-      than discovering the silence later. See CashOutPrompt.canPost.
+      than discovering the silence later. See CategoryPrompt.canPost.
 
       Refusing it costs the prompt, not the ledger: a cash-out is still recorded and can
       still be labelled by hand from the transaction sheet.
@@ -148,7 +148,7 @@
           would let any app on the phone relabel rows in the ledger without a trace.
         -->
         <receiver
-            android:name=".notify.CashOutReplyReceiver"
+            android:name=".notify.CategoryReplyReceiver"
             android:exported="false" />
 
         <!--

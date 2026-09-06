@@ -58,7 +58,7 @@ import gh.mutalib.sika.data.CategoryEntity
 import gh.mutalib.sika.data.TermEntity
 import gh.mutalib.sika.data.Terms
 import gh.mutalib.sika.ledger.today
-import gh.mutalib.sika.notify.CashOutPrompt
+import gh.mutalib.sika.notify.CategoryPrompt
 import gh.mutalib.sika.notify.DailyNudge
 import gh.mutalib.sika.notify.MonthlyReport
 import gh.mutalib.sika.notify.TermAlert
@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun rowIdFrom(intent: Intent?): Long? =
-        intent?.getLongExtra(CashOutPrompt.EXTRA_ROW_ID, -1L)?.takeIf { it > 0L }
+        intent?.getLongExtra(CategoryPrompt.EXTRA_ROW_ID, -1L)?.takeIf { it > 0L }
 }
 
 private sealed interface Gate {
@@ -287,7 +287,7 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
     // prompt and the monthly report, not the ledger.
     val askNotifications = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { /* Either answer is fine. CashOutPrompt.canPost checks before every post. */ }
+    ) { /* Either answer is fine. CategoryPrompt.canPost checks before every post. */ }
 
     // ⚠ **No automatic notification prompt any more.** It used to fire on reaching Home,
     // which would now be the SECOND time of asking — onboarding puts the case in words first,
@@ -539,6 +539,12 @@ private fun SikaApp(openRow: MutableState<Long?>, onSwept: () -> Unit = {}) {
                             // `sika.csv` tells you nothing about which one to restore.
                             onExport = { exportTo.launch(Backup.fileName(today(ACCRA))) },
                             onImport = { importFrom.launch(BACKUP_TYPES) },
+                            // ⚠ **The real 9pm path, not a stand-in.** `fireNow` is what the
+                            // alarm's receiver calls, so a notification appearing here means
+                            // the count, the channel and the permission are all fine and the
+                            // alarm is the only thing left to suspect. Nothing appearing is
+                            // just as useful: it points the other way.
+                            onTestNudge = { scope.launch { DailyNudge.fireNow(context, ACCRA) } },
                         )
                     }
 

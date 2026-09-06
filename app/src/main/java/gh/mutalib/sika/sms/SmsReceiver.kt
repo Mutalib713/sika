@@ -59,7 +59,7 @@ class SmsReceiver : BroadcastReceiver() {
                     receivedAt,
                     source = "live",
                     // The live route is the only one that prompts — see SmsIngest.ingest.
-                    promptOnCashOut = true,
+                    promptForCategory = true,
                 )
             } catch (t: Throwable) {
                 // Never let a parse or database problem take down the receiver: a crash here

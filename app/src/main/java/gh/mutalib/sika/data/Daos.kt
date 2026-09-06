@@ -208,12 +208,27 @@ interface TransactionDao {
     fun observeUnlabelledCount(): Flow<Int>
 
     /**
+     * The rows just inserted that still carry no category — what [gh.mutalib.sika.ledger.AutoLabel]
+     * looks at, so it works on new money instead of walking the whole ledger every launch.
+     *
+     * `parsedOk = 1` keeps the review queue out of it. A message the parser refused has an
+     * empty counterparty and no amount; auto-labelling it would file a failure under Food.
+     */
+    @Query("SELECT * FROM transactions WHERE id IN (:ids) AND label IS NULL AND parsedOk = 1")
+    suspend fun unlabelledIn(ids: List<Long>): List<TransactionEntity>
+
+    /**
      * How many of one day's transactions still have no category — what the end-of-day
      * nudge counts before deciding whether it has anything worth saying.
+     *
+     * ⚠ **`direction = 'OUT'` matters, and its absence was a real bug.** Money *arriving*
+     * needs no category — the report only ever breaks down spending — so counting incoming
+     * rows made the nudge announce work that does not exist, and disagree with the figure
+     * Home shows for the same day. Home has always counted outgoing only.
      */
     @Query(
         "SELECT COUNT(*) FROM transactions " +
-            "WHERE parsedOk = 1 AND label IS NULL " +
+            "WHERE parsedOk = 1 AND label IS NULL AND direction = 'OUT' " +
             "AND occurredAt >= :fromInclusive AND occurredAt < :toExclusive",
     )
     suspend fun countUnlabelledBetween(fromInclusive: Long, toExclusive: Long): Int

@@ -16,20 +16,34 @@ import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.parser.Shape
 import gh.mutalib.sika.parser.asCedis
 
 /**
- * The cash-out prompt — PLAN task 12, and the answer to Mutalib's own blind spot.
+ * *"What was that for?"*, asked in the notification shade the moment money leaves.
  *
- * **The problem in one line:** a MoMo cash-out says *who* you took money from and never
- * *what you spent it on*, so it is the one transaction the ledger cannot explain by itself.
- * Asking at the moment it happens is the only time the answer is still in your head; a week
- * later "GHS 20 at an agent on the 14th" is unrecoverable.
+ * **The problem in one line:** a MoMo alert says *who* got the money and never *what it was
+ * for*, so the ledger cannot explain its own spending. Asking at the moment it happens is the
+ * only time the answer is still in your head; a week later "GHS 20 at an agent on the 14th"
+ * is unrecoverable.
  *
  * Answering from the shade never opens the app — that is the whole point. One tap in the
  * notification and the row is labelled.
+ *
+ * ## It used to ask about cash-outs only
+ *
+ * PLAN task 12 built this for `CASH_OUT` alone, on the argument that a payment to a shop
+ * needs no question because the ledger already knows who was paid. **Mutalib reported that as
+ * a hole on 2026-09-06** — *"did some transactions the app didnt notify me abt it when there
+ * was no category"* — and he was right on two counts. Knowing *who* is not knowing *what
+ * for*; and the mechanism meant to close the gap quietly, the learn-once rule, turned out
+ * never to run on new transactions at all (see [gh.mutalib.sika.ledger.AutoLabel]).
+ *
+ * So it now asks about **any outgoing transaction nothing else could name**, and the order
+ * matters: auto-labelling runs first, and this only speaks when that came back empty. The
+ * quieter the rules get, the less this interrupts — which is the right way round.
  */
-object CashOutPrompt {
+object CategoryPrompt {
 
     /**
      * One channel, so the prompts can be silenced without silencing the monthly report.
@@ -40,6 +54,14 @@ object CashOutPrompt {
      * would have compiled, run, logged success and changed nothing on the phone. A new id
      * is the only way to ship a new default, and the old one is deleted so it does not sit
      * in Settings as a dead entry.
+     *
+     * ⚠ **The id still says `cash_out` after this stopped being cash-out-only, on purpose.**
+     * Broadening the prompt changed no default — the importance is HIGH either way — so a
+     * `_v3` would buy nothing and cost something real: a brand-new channel arrives with
+     * Android's defaults, discarding whatever Mutalib had already set for this one. The
+     * *name* is what a person reads in Settings, and name and description **are** updatable
+     * on an existing channel; only importance and sound are frozen. So the label moves and
+     * the id does not.
      */
     const val CHANNEL_ID = "cash_out_v2"
     private const val OLD_CHANNEL_ID = "cash_out"
@@ -78,7 +100,7 @@ object CashOutPrompt {
     fun ensureChannel(context: Context) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Cash-out prompts",
+            "What was it for?",
             // ⚠ **HIGH, and the first version being DEFAULT was a real error.**
             //
             // The reasoning for DEFAULT was that a cash-out is not an emergency and a
@@ -90,10 +112,18 @@ object CashOutPrompt {
             // this feature exists to avoid.
             //
             // HIGH makes it a heads-up banner with the buttons on it, at the one moment the
-            // answer is still in his head. Cash-outs are occasional, so this does not nag.
+            // answer is still in his head.
+            //
+            // ⚠ **The old note here said "cash-outs are occasional, so this does not nag",
+            // and that defence died when the prompt broadened to every payment.** What keeps
+            // it honest now is not rarity but silence: nothing is asked about a transaction
+            // AutoLabel could name, so a repeat shop is a banner exactly once — the first
+            // time — and never again. If it still nags after the rules warm up, the answer
+            // is an amount threshold, not a quieter channel: a prompt that arrives collapsed
+            // has no buttons, which is the failure this importance was raised to fix.
             NotificationManager.IMPORTANCE_HIGH,
         ).apply {
-            description = "Asks what a cash-out was for, so it can be categorised."
+            description = "Asks what money you just spent was for, so it can be categorised."
         }
         ContextCompat.getSystemService(context, NotificationManager::class.java)?.apply {
             createNotificationChannel(channel)
@@ -104,8 +134,10 @@ object CashOutPrompt {
     }
 
     /**
-     * Shows the prompt for one cash-out row.
+     * Shows the prompt for one outgoing row that nothing managed to name.
      *
+     * @param shape what kind of transaction it was, which decides the wording. A cash-out
+     * and a payment to a shop are not the same question and must not read as though they are.
      * @param categories the category names in `sortOrder`, as [gh.mutalib.sika.data.CategoryEntity]
      * documents — the first three become the buttons.
      */
@@ -113,19 +145,20 @@ object CashOutPrompt {
         context: Context,
         rowId: Long,
         amount: Long,
+        shape: Shape,
         counterparty: String,
         categories: List<String>,
     ) {
         // Switched off in Settings. Checked before the permission, because a deliberate "no"
         // is not a failure and should not be logged as one.
-        if (!NotificationPrefs.cashOutPrompt(context)) {
-            Log.i(TAG, "cash-out prompt: switched off in Settings")
+        if (!NotificationPrefs.categoryPrompt(context)) {
+            Log.i(TAG, "category prompt: switched off in Settings")
             return
         }
         // POST_NOTIFICATIONS is a runtime permission from Android 13. Without this check
         // `notify` throws nothing and does nothing, so the failure would be invisible.
         if (!canPost(context)) {
-            Log.w(TAG, "cash-out prompt suppressed: POST_NOTIFICATIONS not granted")
+            Log.w(TAG, "category prompt suppressed: POST_NOTIFICATIONS not granted")
             return
         }
         ensureChannel(context)
@@ -133,10 +166,9 @@ object CashOutPrompt {
         val quick = categories.take(MAX_QUICK_CATEGORIES)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            // asCedis() already writes the "GHS " prefix — do not add a second one.
-            .setContentTitle("${amount.asCedis()} cashed out")
+            .setContentTitle(headline(amount, shape, counterparty))
             .setContentText("What was it for?")
-            .setSubText(counterparty.ifBlank { "MoMo agent" })
+            .setSubText(subText(shape, counterparty))
             // PRIORITY_* is the pre-Android-8 equivalent of channel importance and is what
             // older phones read. Set alongside the channel, not instead of it.
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -163,9 +195,9 @@ object CashOutPrompt {
         // than losing the prompt. The row is already saved by this point either way.
         try {
             NotificationManagerCompat.from(context).notify(notificationId(rowId), builder.build())
-            Log.i(TAG, "cash-out prompt shown for row $rowId (${quick.size} quick answers)")
+            Log.i(TAG, "category prompt shown for row $rowId (${quick.size} quick answers)")
         } catch (e: SecurityException) {
-            Log.w(TAG, "cash-out prompt refused by the system for row $rowId", e)
+            Log.w(TAG, "category prompt refused by the system for row $rowId", e)
         }
     }
 
@@ -206,7 +238,7 @@ object CashOutPrompt {
         try {
             NotificationManagerCompat.from(context).notify(notificationId(rowId), builder.build())
         } catch (e: SecurityException) {
-            Log.w(TAG, "cash-out confirm refused by the system for row $rowId", e)
+            Log.w(TAG, "category confirm refused by the system for row $rowId", e)
         }
     }
 
@@ -236,6 +268,46 @@ object CashOutPrompt {
             // point of asking in the shade.
             .setAllowGeneratedReplies(false)
             .build()
+    }
+
+    /**
+     * The line at the top of the notification: how much, and where it went.
+     *
+     * ⚠ **A cash-out gets different words, and that is not decoration.** Every other shape
+     * names a recipient worth reading — *GHS 12.00 to MELCOM* tells you something. A
+     * cash-out's counterparty is the agent who handed over the notes, which tells you nothing
+     * about the spending and would read as though the agent were the shop. So the cash-out
+     * says what happened and leaves the agent to [subText].
+     *
+     * `asCedis()` already writes the "GHS " prefix — do not add a second one.
+     *
+     * Internal rather than private so a unit test can hold the wording still. The strings are
+     * the whole feature here: this notification is the only thing many rows will ever be
+     * judged from.
+     */
+    internal fun headline(amount: Long, shape: Shape, counterparty: String): String = when {
+        shape == Shape.CASH_OUT -> "${amount.asCedis()} cashed out"
+        counterparty.isNotBlank() -> "${amount.asCedis()} to $counterparty"
+        // No recipient in the message at all. Rare, but "GHS 5.00 to " would look broken.
+        else -> "${amount.asCedis()} spent"
+    }
+
+    /**
+     * The small grey line: what kind of transaction this was, in ordinary words.
+     *
+     * It exists so the question is answerable without opening anything. "GHS 5.00 to MTN"
+     * could be airtime, a bundle or a bill; "Airtime or bundle" underneath settles it.
+     */
+    internal fun subText(shape: Shape, counterparty: String): String = when (shape) {
+        // The agent, which the headline deliberately left out. Named here because "who you
+        // took it from" is still the one clue to which cash-out this was.
+        Shape.CASH_OUT -> counterparty.ifBlank { "MoMo agent" }
+        Shape.BILL_AIRTIME -> "Airtime or bundle"
+        Shape.MERCHANT_PAY -> "Paid at a till"
+        Shape.TRANSFER -> "Transfer"
+        // PAYMENT_MADE and PAYMENT_FOR are the same act with two MTN wordings, and the
+        // difference between them is not something worth putting in front of anyone.
+        else -> "MoMo payment"
     }
 
     fun cancel(context: Context, rowId: Long) {
@@ -295,7 +367,7 @@ object CashOutPrompt {
         step: String,
         mutable: Boolean = false,
     ): PendingIntent {
-        val intent = Intent(context, CashOutReplyReceiver::class.java).apply {
+        val intent = Intent(context, CategoryReplyReceiver::class.java).apply {
             putExtra(EXTRA_ROW_ID, rowId)
             putExtra(EXTRA_LABEL, category)
             putExtra(EXTRA_STEP, step)

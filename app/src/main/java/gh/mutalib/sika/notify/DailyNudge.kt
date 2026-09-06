@@ -13,6 +13,8 @@ import androidx.core.content.ContextCompat
 import gh.mutalib.sika.MainActivity
 import gh.mutalib.sika.R
 import gh.mutalib.sika.TAG
+import gh.mutalib.sika.data.SikaDatabase
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -22,15 +24,22 @@ import java.time.ZonedDateTime
  * references or the reference is not useful, alert the user at the close of the day, I mean
  * through notification, to do it"*.
  *
- * **Why the end of the day and not the moment it happens.** A payment to a shop is not worth
- * interrupting anyone for — unlike a cash-out, the ledger already knows who got the money,
- * so nothing is lost by waiting. What *is* lost is the memory of what the money was for, and
- * that fades over days, not hours. One quiet summary at the close of play catches everything
- * while it is still recallable and interrupts nothing.
+ * ⚠ **This used to be the ONLY thing that chased an ordinary payment, and that was the bug.**
+ * The original argument was that a payment to a shop is not worth interrupting for, because
+ * the ledger already knows who got the money — so everything except a cash-out was left to
+ * this one nightly line. Mutalib reported the result on 2026-09-06: transactions with no
+ * category, and nothing ever said so. [CategoryPrompt] now asks at the moment money leaves.
  *
- * ⚠ **It stays silent when there is nothing to ask about**, which is most days once the
- * learn-once rules have warmed up. A daily notification that fires whether or not it has
- * anything to say is one people turn off in a week, and then it is worth nothing.
+ * **So what is this still for?** The catch-up. Android can skip the live receiver under doze
+ * or a battery saver, the phone can be off, and the prompt can be dismissed with a swipe on
+ * the way to something else. The sweep quietly picks those rows up on the next launch and
+ * nothing asks about them, because asking hours later in a burst is worse than not asking.
+ * One line at 9pm is what covers that gap.
+ *
+ * ⚠ **It stays silent when there is nothing to ask about**, which should now be most days —
+ * the prompt catches things first, and the learn-once rules name the repeats. A daily
+ * notification that fires whether or not it has anything to say is one people turn off in a
+ * week, and then it is worth nothing.
  */
 object DailyNudge {
 
@@ -85,6 +94,29 @@ object DailyNudge {
     }
 
     /**
+     * Counts today and shows the reminder — the whole of what 9pm does, in one call.
+     *
+     * ⚠ **This exists so the alarm and the Settings test button cannot drift.** The counting
+     * used to live inside [DailyNudgeReceiver], which meant any hand-test could only ever
+     * re-implement it — and a test that re-implements the thing it is testing proves nothing.
+     * Both callers now run these exact lines.
+     *
+     * @return how many rows it found, so a caller can say what happened even when the
+     * notification stayed quiet.
+     */
+    suspend fun fireNow(context: Context, zone: ZoneId): Int {
+        val today = LocalDate.now(zone)
+        // Half-open, like every other range in this app: a transaction at exactly midnight
+        // belongs to one day, not to both.
+        val from = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        val count = SikaDatabase.get(context).transactions().countUnlabelledBetween(from, to)
+        show(context, count)
+        return count
+    }
+
+    /**
      * Shows the nudge, or nothing at all.
      *
      * @param count how many of the day's transactions still have no category.
@@ -98,7 +130,7 @@ object DailyNudge {
             Log.i(TAG, "daily nudge: switched off in Settings")
             return
         }
-        if (!CashOutPrompt.canPost(context)) {
+        if (!CategoryPrompt.canPost(context)) {
             Log.w(TAG, "daily nudge suppressed: notifications not permitted")
             return
         }

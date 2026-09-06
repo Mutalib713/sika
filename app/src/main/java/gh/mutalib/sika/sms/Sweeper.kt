@@ -7,6 +7,7 @@ import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.warnPrivate
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
+import gh.mutalib.sika.ledger.AutoLabel
 import gh.mutalib.sika.ledger.ReconcilePass
 import gh.mutalib.sika.ledger.ReconcileReport
 import gh.mutalib.sika.data.toEntity
@@ -68,6 +69,19 @@ object Sweeper {
         val insertedIds = dao.insertAll(rows)
         val newlyAdded = insertedIds.count { it != -1L }
 
+        // ⚠ **The sweep never categorised anything until 2026-09-06, and a comment in
+        // SmsIngest said it did.** The keyword guess lived inline in `ingest`, which this
+        // route does not call — it batches its own inserts for speed — so the first-run
+        // backfill of months of history arrived entirely unlabelled, and so did anything the
+        // live receiver missed under doze. The learned rules were worse: nothing applied
+        // those on either route. Both now go through one function, which is the only way the
+        // two paths can be relied on to agree.
+        //
+        // No notification from here, deliberately, for the same reason `ingest` takes a flag:
+        // a sweep re-reads everything, so prompting from it would post hundreds of questions
+        // about money spent months ago. Naming is silent; asking is not.
+        val autoLabelled = AutoLabel.run(context, insertedIds)
+
         // Sacred Rule 3: the check runs on every sweep rather than on request. It is cheap,
         // and a verification you have to remember to trigger is one that stops happening.
         val reconcile = ReconcilePass.run(context)
@@ -93,6 +107,7 @@ object Sweeper {
             notTransactions = notTransactions,
             unrecognised = unrecognised.size,
             newlyAdded = newlyAdded,
+            autoLabelled = autoLabelled,
             oldest = messages.filter { MomoParser.parse(it.body) is ParseResult.Parsed }
                 .minOfOrNull { it.receivedAt },
             newest = messages.filter { MomoParser.parse(it.body) is ParseResult.Parsed }
@@ -104,7 +119,8 @@ object Sweeper {
         ).also {
             Log.i(TAG, "sweep: ${it.found} matched, ${it.parsed} transactions, " +
                 "${it.notTransactions} not transactions, ${it.unrecognised} unrecognised, " +
-                "${it.newlyAdded} new, ${it.totalInLedger} in ledger, ${it.queued} queued for review")
+                "${it.newlyAdded} new, ${it.autoLabelled} auto-labelled, " +
+                "${it.totalInLedger} in ledger, ${it.queued} queued for review")
             // ⚠ **Debug only: these are raw SMS `address` values.** MTN's are shortcodes,
             // but the field holds whatever sent the message, so a person's number can land
             // here the moment anything unexpected parses as a transaction. The count is the
@@ -150,6 +166,8 @@ data class SweepReport(
     val notTransactions: Int,
     val unrecognised: Int,
     val newlyAdded: Int,
+    /** How many of those [AutoLabel] managed to name by itself, with no question asked. */
+    val autoLabelled: Int,
     val oldest: Long?,
     val newest: Long?,
     val totalInLedger: Int,

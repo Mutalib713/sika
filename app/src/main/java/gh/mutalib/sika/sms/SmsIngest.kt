@@ -6,11 +6,10 @@ import gh.mutalib.sika.TAG
 import gh.mutalib.sika.logPrivate
 import gh.mutalib.sika.data.SikaDatabase
 import gh.mutalib.sika.data.TransactionEntity
-import gh.mutalib.sika.data.LabelSource
 import gh.mutalib.sika.data.toEntity
-import gh.mutalib.sika.ledger.Keywords
+import gh.mutalib.sika.ledger.AutoLabel
 import gh.mutalib.sika.ledger.ReconcilePass
-import gh.mutalib.sika.notify.CashOutPrompt
+import gh.mutalib.sika.notify.CategoryPrompt
 import gh.mutalib.sika.notify.GapAlert
 import gh.mutalib.sika.ui.home.ACCRA
 import gh.mutalib.sika.parser.Direction
@@ -30,11 +29,12 @@ import gh.mutalib.sika.parser.Shape
 object SmsIngest {
 
     /**
-     * @param promptOnCashOut ask what a new cash-out was for, via a notification.
+     * @param promptForCategory ask what this spending was for, via a notification, when
+     * nothing has managed to name it automatically.
      *
-     * ⚠ **Only the live route passes true, and that is load-bearing.** The sweep re-reads the
-     * whole inbox on every launch, so a backfill would fire one notification per historic
-     * cash-out — dozens at once on first run, for money spent months ago that nobody can
+     * ⚠ **Only the live route passes true, and that is load-bearing.** The sweep re-reads
+     * the whole inbox on every launch, so a backfill would fire one notification per historic
+     * payment — hundreds at once on first run, for money spent months ago that nobody can
      * remember. The prompt is only worth anything at the moment the money leaves.
      *
      * @return true if this message became a new row.
@@ -44,7 +44,7 @@ object SmsIngest {
         body: String,
         receivedAt: Long,
         source: String,
-        promptOnCashOut: Boolean = false,
+        promptForCategory: Boolean = false,
     ): Boolean {
         val dao = SikaDatabase.get(context).transactions()
 
@@ -69,22 +69,17 @@ object SmsIngest {
         }
         Log.i(TAG, "$source: ${if (isNew) "recorded a" else "already had a"} ${row.shape}")
 
-        // A guess from the words in the reference, for rows nothing else has claimed.
-        // Mutalib's "bread -> Food" question, 2026-08-31. Runs on both routes, unlike the
-        // prompt, because a guess costs nothing and interrupts nobody.
-        if (isNew) {
-            Keywords.categoryFor(row.reference, row.counterparty)?.let { guess ->
-                val filled = dao.setLabelIfUnset(id, guess, LabelSource.AUTO_KEYWORD)
-                if (filled > 0) logPrivate { "$source: guessed '$guess' from the reference" }
-            }
-        }
+        // A learned rule first, then a guess from the words in the reference. Runs on both
+        // routes — genuinely, now: [Sweeper] calls the same function after its batch insert,
+        // where the old inline keyword guess never reached. See AutoLabel for what that cost.
+        if (isNew) AutoLabel.run(context, listOf(id))
 
         // ⚠ **The arithmetic check runs on the live route too, and alerts if it fails.**
         // Mutalib's request, 2026-09-01: "add an alert immediately the balance doesn't tally".
-        // Gated on `promptOnCashOut` — which really means "this message just arrived" — for
+        // Gated on `promptForCategory` — which really means "this message just arrived" — for
         // the same reason the prompt is: the sweep re-reads everything, so alerting from it
         // would post one notification per historic gap on first run.
-        if (isNew && promptOnCashOut) {
+        if (isNew && promptForCategory) {
             val report = ReconcilePass.run(context)
             report.gaps.firstOrNull { it.rowId == id && it.explained == null }?.let { gap ->
                 GapAlert.show(
@@ -98,18 +93,41 @@ object SmsIngest {
             }
         }
 
-        // Only a genuinely new cash-out is worth asking about. `isNew` is what stops a
-        // re-read of the same message asking twice — the dedupe doing double duty.
-        if (isNew && promptOnCashOut && row.shape == Shape.CASH_OUT) {
-            CashOutPrompt.show(
-                context = context,
-                rowId = id,
-                amount = row.amount,
-                counterparty = row.counterparty,
-                // Visible only: a category put away in Settings must not come back as a
-                // button in the shade, which is the one place it cannot be corrected from.
-                categories = SikaDatabase.get(context).categories().visible().map { it.name },
-            )
+        // Ask about anything that spent money and still has no name on it.
+        //
+        // ⚠ **This used to be cash-outs only, and Mutalib reported the hole on 2026-09-06:**
+        // *"did some transactions the app didnt notify me abt it when there was no category"*.
+        // The old reasoning was that a payment to a shop is not worth interrupting for,
+        // because the ledger already knows who got the money — but knowing *who* is not
+        // knowing *what for*, and the thing that was meant to close that gap, the learn-once
+        // rule, was never running on new rows at all (see AutoLabel). So the quiet route
+        // silently dropped every unnamed payment onto a nightly reminder he never received.
+        //
+        // Three gates, each earning its place:
+        //  - `isNew` — the dedupe doing double duty, so a re-read never asks twice.
+        //  - `row.direction == OUT` — money arriving needs no category, only spending does.
+        //  - `parsedOk` — a message the parser refused has no amount and no counterparty;
+        //    it belongs in the review queue, not in a question about groceries.
+        val worthAsking = isNew && promptForCategory && row.parsedOk && row.direction == Direction.OUT
+        if (worthAsking) {
+            // ⚠ **Re-read, do not reuse `row`.** `row` is the object built before the insert
+            // and before AutoLabel ran, so its label is always null. Asking off that would
+            // interrupt him about a transaction the app had just named by itself.
+            val saved = dao.byId(id)
+            if (saved?.label == null) {
+                CategoryPrompt.show(
+                    context = context,
+                    rowId = id,
+                    amount = row.amount,
+                    shape = row.shape,
+                    counterparty = row.counterparty,
+                    // Visible only: a category put away in Settings must not come back as a
+                    // button in the shade, which is the one place it cannot be corrected from.
+                    categories = SikaDatabase.get(context).categories().visible().map { it.name },
+                )
+            } else {
+                logPrivate { "$source: no prompt, already '${saved.label}' (${saved.labelSource})" }
+            }
         }
         return isNew
     }
