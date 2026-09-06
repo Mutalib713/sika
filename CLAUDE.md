@@ -130,6 +130,32 @@ pinned for a reason and they only work together. Measured at PLAN task 1 on 2026
   → toggle **USB debugging off, then on** (that restarts adbd on the phone). If that fails,
   revoke USB debugging authorisations and replug. Set up wireless adb (`adb tcpip 5555`) while
   the link is healthy and this stops mattering.
+  ⚠ **The toggle alone may not finish the job — measured 2026-09-06.** After he toggled USB
+  debugging it still said `offline`; what cleared it was a host-side `adb kill-server &&
+  adb start-server`. The phone-side restart leaves the HOST holding a dead transport and the
+  host never re-handshakes. **Order: toggle on the phone first, then restart the host server.**
+  Each alone failed; together, instant. It also re-drops mid-session on any heavy command (a
+  `uiautomator dump` did it) and can vanish from `adb devices` entirely rather than reading
+  `offline` — same fault, not a different one.
+- ⚠ **`adb shell cat <binary> > file` CORRUPTS the file on Windows.** The PTY turns LF into
+  CRLF, so pulling the 122,880-byte `sika.db` this way produced 123,092 bytes of rubbish that
+  still looked plausible. **Use `adb exec-out`** for anything binary and check the byte count
+  against the phone's own `ls -l`. The safe way to take a copy of the live ledger without
+  touching the app (debug builds only):
+  ```bash
+  adb exec-out run-as gh.mutalib.sika cat databases/sika.db > sika.db
+  ```
+  Pull `sika.db-wal` and `sika.db-shm` too — the WAL held 346 KB of uncommitted rows, so the
+  main file alone is a stale ledger.
+- ⚠ **Git Bash rewrites device paths.** `adb shell uiautomator dump /sdcard/ui.xml` wrote to
+  `/Files/Git/sdcard/ui.xml` ON THE PHONE. Prefix with `MSYS_NO_PATHCONV=1` or double the
+  leading slash (`//sdcard/...`).
+- ⚠ **`./gradlew check` does NOT compile the instrumented tests — it only lints them.**
+  `MigrationTest` called `Cursor.getText()` (the method is `getString`) from commit `2c44bc8`
+  until 2026-09-06 and `check` passed the entire time, so the whole androidTest suite —
+  including the dedupe guarantees Sacred Rule 4 rests on — was un-runnable and nothing said
+  so. `check` now `dependsOn("compileDebugAndroidTestKotlin")`. Running those tests still
+  needs a device; compiling them needs nothing and takes seconds.
 - ⚠ **The emulator opens OFF-SCREEN at `233,-1020` every launch — it is not the AVD config.**
   `emulator-user.ini` already said `window.x/y = 100`, so editing it does nothing. Move it with
   Win32 after boot (PowerShell `Add-Type` + `user32.dll MoveWindow`, see the 2026-09-04 session).
