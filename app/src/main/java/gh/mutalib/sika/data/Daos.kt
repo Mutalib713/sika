@@ -204,9 +204,6 @@ interface TransactionDao {
     @Query("UPDATE transactions SET gapCategory = :category WHERE id = :id AND reconciled = 'GAP'")
     suspend fun setGapCategory(id: Long, category: String?)
 
-    @Query("SELECT COUNT(*) FROM transactions WHERE parsedOk = 1 AND label IS NULL")
-    fun observeUnlabelledCount(): Flow<Int>
-
     /**
      * The rows just inserted that still carry no category — what [gh.mutalib.sika.ledger.AutoLabel]
      * looks at, so it works on new money instead of walking the whole ledger every launch.
