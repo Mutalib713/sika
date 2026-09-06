@@ -84,8 +84,30 @@ adb shell "am broadcast -a gh.mutalib.sika.DEBUG_INJECT_SMS \
 
 ## Screenshots
 
-Not captured yet. See [docs/screenshots/README.md](docs/screenshots/README.md) for how they get
-made and what each one has to show.
+Captured on an emulator with fabricated data, so no real counterparty or balance appears in any
+of them.
+
+### The ledger
+
+| | | |
+|---|---|---|
+| ![Home](docs/screenshots/01-home.png) | ![Report](docs/screenshots/04-report.png) | ![Settings](docs/screenshots/05-settings.png) |
+| **Home.** What you spent, what is left, and how much of it is still unnamed. The amber card is reconciliation: GHS 90.00 left the account that no message explains, and rather than absorb it the app says so and asks what it was. | **Report.** Week, month, semester or all of it, with last month behind this month on the same axis. The breakdown is where the categories earn their keep. | **Settings.** Every notification is a switch, and SMS access says plainly what is being read. |
+
+### Being asked what a payment was for
+
+This is the part worth looking at, because it is the whole argument for the app. MoMo tells you
+who got the money. Only you know what it was for, and only for about a day.
+
+| | |
+|---|---|
+| ![The prompt](docs/screenshots/02-prompt.png) | ![The confirm step](docs/screenshots/03-confirm.png) |
+| A payment lands that no rule and no keyword could name, so it asks, in the shade, without opening the app. | Tapping a category only proposes it. **Always** teaches the shop so it never asks again; **Just once** answers this transaction alone. |
+
+A cash-out gets different wording and never offers *Always*, because its counterparty is the agent
+who handed over the notes rather than whatever you spent them on.
+
+[docs/screenshots/README.md](docs/screenshots/README.md) has the capture recipe.
 
 ## What you are agreeing to when you install it
 

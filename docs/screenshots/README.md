@@ -3,20 +3,36 @@
 Sika shows nothing without MTN MoMo messages, so for most people who open this repo the
 screenshots **are** the app. They are the deliverable here, not decoration.
 
-## What has to be in them
+## What is here
 
-One per row, in this order. The order matters: it walks someone from "what am I looking at" to
-"why is this different from every other expense tracker".
+Captured 2026-09-06 on the `wird_pixel6pro` emulator (Android 14) in demo mode, so every figure
+and every counterparty is fabricated.
 
-| File | Screen | The one thing it has to show |
+| File | Screen | What it carries |
 |---|---|---|
-| `01-home.png` | Home | Real-looking totals (in, out, net, balance) and a list with categories on it. The first shot has to answer "what is this" without a caption. |
-| `02-uncategorised.png` | Home | The *"N still need a category"* line. This is the problem the app is actually solving. |
-| `03-prompt.png` | Notification shade | The category prompt, expanded, with its three buttons visible. **Not collapsed**, because collapsed hides the buttons and the buttons are the point of the shot. |
-| `04-confirm.png` | Notification shade | The second step: *"Just this one, or always MELCOM?"*. Shows that one tap never writes, and that the app offers to learn rather than learning behind your back. |
-| `05-report.png` | Report | A category breakdown with a period selector. Where the money went. |
-| `06-gap.png` | Home or Report | A reconciliation gap, marked *"with no message from MTN"*. Nothing else in this class of app admits it might be missing something. |
-| `07-settings.png` | Settings | The notification switches and SMS access row. Reassures a cautious installer. |
+| `01-home.png` | Home | Totals, the categorised bar, and the amber reconciliation card asking what GHS 90.00 was. Doubles as the "needs a category" shot. |
+| `02-prompt.png` | Notification shade | The category prompt with its three buttons showing. Cropped to the card. |
+| `03-confirm.png` | Notification shade | The second step: *"Just this one, or always MELCOM?"* with Just once / Change / Always. |
+| `04-report.png` | Report | Period selector, week-by-week against last month, and the category breakdown. |
+| `05-settings.png` | Settings | The notification switches, including the renamed prompt row and the tap-to-test reminder. |
+
+Still missing, and worth adding: **a short screen recording of the prompt flow.** The two-step
+pick then confirm is a sequence, and no still can show that one tap never writes anything.
+`adb exec-out screenrecord --output-format=h264 -` captures one; keep it to a few seconds.
+
+## Two things the emulator taught us
+
+⚠ **Android bundles Sika's notifications when more than one is showing**, and a bundled
+notification hides its action buttons. Reaching the category buttons took two expansions: one for
+the app group, one for the notification. A heads-up banner still shows them immediately, so this
+only bites once the prompt has settled into a busy shade — which is exactly where it lives when
+you come back to the phone later.
+
+⚠ **Tapping at the bottom of the screen hits the gesture bar, not the app.** Guessing tab
+coordinates from a screenshot sent the emulator to its launcher and silently killed demo mode,
+which lives in memory and dies with the process. Get real bounds from
+`adb shell uiautomator dump` instead, and prefix the command with `MSYS_NO_PATHCONV=1` or Git Bash
+rewrites `/sdcard/ui.xml` into a Windows path on the device.
 
 ## How to take them without using real money
 
