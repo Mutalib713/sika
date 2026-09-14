@@ -25,7 +25,7 @@ wrong you should only ever have one suspect.
   The designed "Nothing yet this month" empty state from `docs/screens.md`, on the pinned palette.
   No permissions requested, no parser, no SMS access. `TAG = "Sika"` established as the single
   logcat tag for the whole app.
-  **Verified on the real device** (Pixel 6 Pro, `raven`, `1A131FDEE006MD`):
+  **Verified on the real device** (Pixel 6 Pro, `raven`, `<device-serial>`):
   `check: PASS` → `installDebug` exit 0 → `versionName=0.1` installed →
   `topResumedActivity=gh.mutalib.sika/.MainActivity` →
   `I Sika: MainActivity started — no ledger yet, nothing to show`.

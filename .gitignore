@@ -28,16 +28,23 @@ keystore.properties
 *.csv
 /samples/real/
 sika-export-*.csv
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Editors
+# Editors and assistants
 *.swp
 *~
 .vscode/
+.claude/
+.cursor/
 
 # Design exploration sketches — not part of the app
 /design-scratch/
